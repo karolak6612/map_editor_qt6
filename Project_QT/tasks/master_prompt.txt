@@ -49,14 +49,14 @@ All task definitions are in the XML file: `tasks/migration_tasks_config.xml` (re
 2.  **Preliminary Analysis and Mandatory Refactoring for Modularity & Operational Limits:**
     *   **a. Analyze `wxwidgets` for Task Scope:** Thoroughly understand the functionality, classes, and logic in the `wxwidgets` directory relevant to the current [Task ID].
     *   **b. Analyze Existing `Project_QT/src` Code (Target Files):** Identify the primary C++ source and header files in `Project_QT/src` that will be created or significantly modified for this [Task ID].
-    *   **c. Assess File Size & Execute Mandatory Refactoring (Invoke Core Directive 5):**
-        *   Based on your analysis and planned changes for [Task ID], assess if any target files meet the criteria for mandatory refactoring as defined in Core Directive 5 (File Size and Modularity), specifically to stay within your operational processing limits.
-        *   **If refactoring IS REQUIRED by Core Directive 5:**
+    *   **c. Assess File Size & Execute Mandatory Refactoring (Invoke Core Directive 6):**
+        *   Based on your analysis and planned changes for [Task ID], assess if any target files meet the criteria for mandatory refactoring as defined in Core Directive 6 (File Size and Modularity), specifically to stay within your operational processing limits.
+        *   **If refactoring IS REQUIRED by Core Directive 6:**
             *   Announce: `"INFO: Initiating pre-task refactoring for Task [Task ID] to manage file sizes and ensure operational stability."`
-            *   Perform the file splitting as detailed in Core Directive 5 *before* implementing the main logic for the [Task ID]. Create new `.cpp`/`.h` files, move relevant code, and meticulously update includes.
+            *   Perform the file splitting as detailed in Core Directive 6 *before* implementing the main logic for the [Task ID]. Create new `.cpp`/`.h` files, move relevant code, and meticulously update includes.
             *   During this refactoring, provide activity feed updates specifically on the splitting process.
             *   After completing the refactoring, explicitly state: `"INFO: Pre-task refactoring for Task [Task ID] complete. New files created: [list_of_new_files.cpp/h]. These need to be added to CMakeLists.txt. Proceeding with main task logic implementation."`
-        *   **If refactoring is assessed as too complex/risky NOW (the escape hatch in Core Directive 5):** Clearly state: `"INFO: Assessed [large_file.cpp] for refactoring prior to Task [Task ID] implementation. As per Core Directive 5 escape clause, deferring split due to [brief reason]. Will proceed with modifications on existing file but flagging: WARNING: Task [Task ID] will modify [large_file.cpp] (approx XXXX lines) without pre-refactoring. This file is a high priority candidate for future human/AI refactoring to ensure AI operational stability."` Then proceed to Step 3.
+        *   **If refactoring is assessed as too complex/risky NOW (the escape hatch in Core Directive 6):** Clearly state: `"INFO: Assessed [large_file.cpp] for refactoring prior to Task [Task ID] implementation. As per Core Directive 6 escape clause, deferring split due to [brief reason]. Will proceed with modifications on existing file but flagging: WARNING: Task [Task ID] will modify [large_file.cpp] (approx XXXX lines) without pre-refactoring. This file is a high priority candidate for future human/AI refactoring to ensure AI operational stability."` Then proceed to Step 3.
         *   **If no refactoring is needed (files are/will remain well within ~200-300 lines):** State: `"INFO: File size assessment complete for Task [Task ID]. No pre-task refactoring for modularity/operational limits required for target files."` Then proceed to Step 3.
 
 3.  **Implement Main Task Logic (Iteratively):**
@@ -110,5 +110,5 @@ While this XML file contains `status` attributes and a `current_task_id` field i
 *   **Build System Updates:** When Jules reports creating new `.cpp`/`.h` files during refactoring (Step 2c or in its task summary at Step 5), I am responsible for adding these new files to the `CMakeLists.txt` (or other build system configuration files) to ensure the project can compile after Jules's changes are integrated. Jules should not attempt to modify build system files itself, or run tests, or compile the project.
 
 **Let's Begin:**
-Parse `tasks/migration_tasks_config.xml` *from your local repository copy*. Determine the first main task according to these instructions and start processing it, paying close attention to Core Directive 5 (File Size and Modularity) and the analysis of existing code in `Project_QT/src`.
+Parse `tasks/migration_tasks_config.xml` *from your local repository copy*. Determine the first main task according to these instructions and start processing it, paying close attention to Core Directive 6 (File Size and Modularity) and the analysis of existing code in `Project_QT/src`.
 ---
