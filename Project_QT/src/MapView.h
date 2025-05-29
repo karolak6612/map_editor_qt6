@@ -4,13 +4,14 @@
 #include <QGraphicsView>
 #include <QMouseEvent>
 #include <QWheelEvent>
-#include <QKeyEvent> // Added for keyboard events
+#include <QKeyEvent>
 #include <QPointF>
 #include <QEnterEvent>
 #include <QDebug>
 
-// Forward declaration
+// Forward declarations
 class MapViewInputHandler;
+class Brush; // Added forward declaration
 
 // Constants
 const int GROUND_LAYER = 7;
@@ -28,9 +29,15 @@ public:
 
     enum class EditorMode {
         Selection,
-        Drawing
+        Drawing // Renamed from DrawingMode for consistency if it was different
     };
-    EditorMode currentEditorMode_ = EditorMode::Selection;
+    
+    // Editor Mode and Active Brush
+    EditorMode getCurrentEditorMode() const; // Getter for currentEditorMode_
+    void setCurrentEditorMode(EditorMode mode); // Setter if needed, or manage internally
+    
+    void setActiveBrush(Brush* brush);
+    Brush* getActiveBrush() const;
 
     // Configuration
     void setSwitchMouseButtons(bool switched);
@@ -39,13 +46,11 @@ public:
     // Public getters
     double getZoomLevel() const { return zoomLevel_; }
     int getCurrentFloor() const { return currentFloor_; }
-    EditorMode getCurrentEditorMode() const { return currentEditorMode_; }
-
 
     QPointF screenToMap(const QPoint& screenPos) const;
     QPoint mapToScreen(const QPointF& mapTilePos) const;
 
-    // Placeholder methods
+    // Placeholder methods (many are called by MapViewInputHandler via mapView_ pointer)
     void pasteSelection(const QPointF& mapPos);
     void clearSelection();
     void toggleSelectionAt(const QPointF& mapPos);
@@ -56,11 +61,13 @@ public:
     void updateSelectionRectFeedback(const QPointF& startMapPos, const QPointF& currentMapPos);
     void finalizeSelectionRect(const QPointF& startMapPos, const QPointF& endMapPos, Qt::KeyboardModifiers modifiers);
 
-    void startDrawing(const QPointF& mapPos, Qt::KeyboardModifiers modifiers);
-    void continueDrawing(const QPointF& mapPos, Qt::KeyboardModifiers modifiers);
-    void finalizeDrawing(const QPointF& mapPos, Qt::KeyboardModifiers modifiers);
-    void updateDragDrawFeedback(const QPointF& startMapPos, const QPointF& currentMapPos);
-    void finalizeDragDraw(const QPointF& startMapPos, const QPointF& endMapPos, Qt::KeyboardModifiers modifiers);
+    // These drawing related placeholders will be removed from MapView.h/cpp
+    // as brushes will handle their own drawing logic via mouse events.
+    // void startDrawing(const QPointF& mapPos, Qt::KeyboardModifiers modifiers); // To be removed
+    // void continueDrawing(const QPointF& mapPos, Qt::KeyboardModifiers modifiers); // To be removed
+    // void finalizeDrawing(const QPointF& mapPos, Qt::KeyboardModifiers modifiers); // To be removed
+    // void updateDragDrawFeedback(const QPointF& startMapPos, const QPointF& currentMapPos); // To be removed
+    // void finalizeDragDraw(const QPointF& startMapPos, const QPointF& endMapPos, Qt::KeyboardModifiers modifiers); // To be removed
 
     void updateStatusBarWithMapPos(const QPointF& mapPos);
     void updateZoomStatus();
@@ -76,7 +83,6 @@ public:
     void showContextMenuAt(const QPoint& screenPos);
     void resetActionQueueTimer_placeholder();
 
-
 protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
@@ -85,12 +91,15 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;   // Added
-    void keyReleaseEvent(QKeyEvent *event) override; // Added
+    void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
 
 private:
     void changeFloor(int newFloor);
     void updateAndRefreshMapCoordinates(const QPoint& screenPos);
+
+    EditorMode currentEditorMode_ = EditorMode::Selection; // Keep private, use getter/setter
+    Brush* currentBrush_ = nullptr;       // Active brush
 
     double zoomLevel_;
     int currentFloor_;

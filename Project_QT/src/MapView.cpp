@@ -1,10 +1,11 @@
 #include "MapView.h"
 #include "MapViewInputHandler.h"
+#include "Brush.h" // Include Brush.h for Brush type
 #include <QGraphicsScene>
 #include <QScrollBar>
 #include <QDebug>
 #include <QtMath> // For qBound
-#include <QKeyEvent> // Included for QKeyEvent
+#include <QKeyEvent>
 
 // --- Start of Placeholder Implementations ---
 void MapView::pasteSelection(const QPointF& mapPos) { qDebug() << "MapView::pasteSelection at" << mapPos << "(placeholder)"; }
@@ -17,11 +18,7 @@ void MapView::finalizeMoveSelection(const QPointF& delta) { qDebug() << "MapView
 void MapView::updateSelectionRectFeedback(const QPointF& startMapPos, const QPointF& currentMapPos) { qDebug() << "MapView::updateSelectionRectFeedback from" << startMapPos << "to" << currentMapPos << "(placeholder)"; }
 void MapView::finalizeSelectionRect(const QPointF& startMapPos, const QPointF& endMapPos, Qt::KeyboardModifiers modifiers) { qDebug() << "MapView::finalizeSelectionRect from" << startMapPos << "to" << endMapPos << "Modifiers:" << modifiers << "(placeholder)"; }
 
-void MapView::startDrawing(const QPointF& mapPos, Qt::KeyboardModifiers modifiers) { qDebug() << "MapView::startDrawing at" << mapPos << "Modifiers:" << modifiers << "(placeholder)"; }
-void MapView::continueDrawing(const QPointF& mapPos, Qt::KeyboardModifiers modifiers) { qDebug() << "MapView::continueDrawing at" << mapPos << "Modifiers:" << modifiers << "(placeholder)"; }
-void MapView::finalizeDrawing(const QPointF& mapPos, Qt::KeyboardModifiers modifiers) { qDebug() << "MapView::finalizeDrawing at" << mapPos << "Modifiers:" << modifiers << "(placeholder)"; }
-void MapView::updateDragDrawFeedback(const QPointF& startMapPos, const QPointF& currentMapPos) { qDebug() << "MapView::updateDragDrawFeedback from" << startMapPos << "to" << currentMapPos << "(placeholder)"; }
-void MapView::finalizeDragDraw(const QPointF& startMapPos, const QPointF& endMapPos, Qt::KeyboardModifiers modifiers) { qDebug() << "MapView::finalizeDragDraw from" << startMapPos << "to" << endMapPos << "Modifiers:" << modifiers << "(placeholder)"; }
+// Drawing related placeholders are removed as they are now delegated to brushes.
 
 void MapView::updateStatusBarWithMapPos(const QPointF& mapPos) { qDebug() << "MapView::updateStatusBarWithMapPos: Tile(" << mapPos.x() << "," << mapPos.y() << ") Floor:" << currentFloor_ << "Zoom:" << zoomLevel_; }
 void MapView::updateZoomStatus() { qDebug() << "MapView::updateZoomStatus: Zoom:" << zoomLevel_ << "(placeholder)"; }
@@ -33,8 +30,14 @@ void MapView::updateFloorMenu_placeholder() { qDebug() << "MapView::updateFloorM
 
 void MapView::showPropertiesDialogFor(const QPointF& mapPos) { qDebug() << "MapView::showPropertiesDialogFor map" << mapPos << "(placeholder)"; }
 void MapView::switchToSelectionMode() { 
-    qDebug() << "MapView::switchToSelectionMode (placeholder)"; 
+    qDebug() << "MapView::switchToSelectionMode"; 
     currentEditorMode_ = EditorMode::Selection; 
+    // Potentially signal UI or editor manager
+}
+void MapView::setCurrentEditorMode(EditorMode mode) {
+    qDebug() << "MapView::setCurrentEditorMode to" << (mode == EditorMode::Selection ? "Selection" : "Drawing");
+    currentEditorMode_ = mode;
+    // Potentially signal UI or editor manager
 }
 void MapView::endPasting() { qDebug() << "MapView::endPasting (placeholder)"; }
 void MapView::showContextMenuAt(const QPoint& screenPos) { qDebug() << "MapView::showContextMenuAt screen" << screenPos << "(placeholder)"; }
@@ -42,6 +45,8 @@ void MapView::resetActionQueueTimer_placeholder() { qDebug() << "MapView::resetA
 // --- End of Placeholder Implementations ---
 
 MapView::MapView(QWidget *parent) : QGraphicsView(parent),
+    currentEditorMode_(EditorMode::Selection),
+    currentBrush_(nullptr),
     zoomLevel_(1.0),
     currentFloor_(GROUND_LAYER),
     isPanning_(false),
@@ -51,9 +56,9 @@ MapView::MapView(QWidget *parent) : QGraphicsView(parent),
     setScene(new QGraphicsScene(this));
     setMouseTracking(true);
     setTransformationAnchor(QGraphicsView::AnchorViewCenter);
-    setFocusPolicy(Qt::StrongFocus); // Ensure view can receive key events
+    setFocusPolicy(Qt::StrongFocus);
 
-    inputHandler_ = new MapViewInputHandler(this);
+    inputHandler_ = new MapViewInputHandler(this); // `this` is passed to MapViewInputHandler
     updateAndRefreshMapCoordinates(QPoint(width()/2, height()/2));
     updateZoomStatus();
     updateFloorStatus();
@@ -61,6 +66,28 @@ MapView::MapView(QWidget *parent) : QGraphicsView(parent),
 
 MapView::~MapView() {
     delete inputHandler_;
+    // currentBrush_ is not owned by MapView, so no delete here.
+}
+
+MapView::EditorMode MapView::getCurrentEditorMode() const {
+    return currentEditorMode_;
+}
+
+void MapView::setActiveBrush(Brush* brush) {
+    currentBrush_ = brush;
+    qDebug() << "MapView::setActiveBrush to:" << (brush ? brush->name() : "nullptr");
+    // If a brush is set, typically switch to Drawing mode.
+    // This logic might be better handled by an Editor class or UI controller.
+    if (brush) {
+        setCurrentEditorMode(EditorMode::Drawing);
+    } else {
+        // Or switch to selection mode if no brush? Depends on desired UX.
+        // setCurrentEditorMode(EditorMode::Selection); 
+    }
+}
+
+Brush* MapView::getActiveBrush() const {
+    return currentBrush_;
 }
 
 void MapView::setSwitchMouseButtons(bool switched) {
@@ -98,11 +125,11 @@ void MapView::changeFloor(int newFloor) {
 
 void MapView::updateAndRefreshMapCoordinates(const QPoint& screenPos) {
     lastMousePos_ = screenPos;
-    if (scene()) { // Ensure scene is not null
+    if (scene()) { 
         lastMapPos_ = screenToMap(screenPos);
         updateStatusBarWithMapPos(lastMapPos_);
     }
-    if (viewport()) { // Ensure viewport is not null
+    if (viewport()) { 
         viewport()->update();
     }
 }
@@ -110,6 +137,11 @@ void MapView::updateAndRefreshMapCoordinates(const QPoint& screenPos) {
 void MapView::mousePressEvent(QMouseEvent *event) {
     lastMousePos_ = event->pos();
     QPointF mapPos = screenToMap(lastMousePos_);
+
+    // Delegate all press events (except unhandled ones) to inputHandler_
+    // The inputHandler will then decide based on mode (Selection/Drawing)
+    // and for Drawing, it will use the activeBrush.
+    // Panning is also initiated here for now.
 
     if (event->button() == Qt::LeftButton) {
         inputHandler_->handleMousePress(event, currentEditorMode_, mapPos, lastMousePos_);
@@ -149,6 +181,8 @@ void MapView::mouseMoveEvent(QMouseEvent *event) {
         verticalScrollBar()->setValue(verticalScrollBar()->value() - delta.y());
         dragStartScreenPos_ = currentScreenPos;
     } else {
+        // Always delegate to input handler if not panning.
+        // It will check editor mode and active brush.
         inputHandler_->handleMouseMove(event, currentEditorMode_, currentMapPos, currentScreenPos);
     }
     
@@ -162,7 +196,7 @@ void MapView::mouseReleaseEvent(QMouseEvent *event) {
 
     if (event->button() == Qt::LeftButton) {
         inputHandler_->handleMouseRelease(event, currentEditorMode_, mapPos, lastMousePos_);
-        setCursor(Qt::ArrowCursor); 
+        if (!isPanning_) setCursor(Qt::ArrowCursor); // Reset cursor if not panning (panning resets its own)
     }
     else if (event->button() == Qt::MiddleButton) {
         if (switchMouseButtons_) { 
@@ -200,6 +234,8 @@ void MapView::mouseDoubleClickEvent(QMouseEvent *event) {
         if (doubleClickProperties_) { 
             showPropertiesDialogFor(mapPos);
         }
+        // It's possible a brush might want to handle double click too.
+        // If so, this event could be passed to inputHandler and then to the brush.
     }
     updateAndRefreshMapCoordinates(lastMousePos_);
     event->accept();
@@ -221,7 +257,7 @@ void MapView::wheelEvent(QWheelEvent *event) {
         double actualScaleFactor = newZoomLevel / oldZoom;
 
         if (qFuzzyCompare(actualScaleFactor, 1.0)) { 
-            updateAndRefreshMapCoordinates(event->position().toPoint()); // Still update coords for status bar
+            updateAndRefreshMapCoordinates(event->position().toPoint()); 
             event->accept(); return; 
         }
         zoomLevel_ = newZoomLevel;
@@ -258,13 +294,10 @@ void MapView::leaveEvent(QEvent *event) {
 
 void MapView::keyPressEvent(QKeyEvent *event) {
     qDebug() << "MapView::keyPressEvent, key:" << event->key() << "text:" << event->text() << "modifiers:" << event->modifiers();
-    // In future, delegate to an inputHandler_ or specific game logic handler here
-    // e.g., inputHandler_->handleKeyPress(event);
-    QGraphicsView::keyPressEvent(event); // Call base for default behavior (e.g. scrolling with arrow keys if not handled)
+    QGraphicsView::keyPressEvent(event);
 }
 
 void MapView::keyReleaseEvent(QKeyEvent *event) {
     qDebug() << "MapView::keyReleaseEvent, key:" << event->key() << "text:" << event->text() << "modifiers:" << event->modifiers();
-    // e.g., inputHandler_->handleKeyRelease(event);
     QGraphicsView::keyReleaseEvent(event);
 }

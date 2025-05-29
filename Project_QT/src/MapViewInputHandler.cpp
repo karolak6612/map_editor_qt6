@@ -1,15 +1,16 @@
 #include "MapViewInputHandler.h"
-#include "MapView.h" // To call methods on MapView
+#include "MapView.h"   // To call methods on MapView
+#include "Brush.h"     // For Brush type
 #include <QDebug>
+#include <QMouseEvent> // Already included via MapView.h usually, but good for explicitness
 #include <QGuiApplication> // For Qt::ShiftModifier, Qt::ControlModifier
 
 MapViewInputHandler::MapViewInputHandler(MapView* mapView)
     : mapView_(mapView),
       isSelecting_(false),
       isDraggingSelection_(false),
-      isDrawing_(false),
-      isDraggingDraw_(false)
-      // dragStartMapPos_ and clickOriginScreenPos_ are default initialized
+      isDrawing_(false), // This state might become redundant if brushes manage their own drawing state
+      isDraggingDraw_(false) // Same as above
 {
     if (!mapView_) {
         qWarning() << "MapViewInputHandler initialized with a null MapView instance!";
@@ -18,78 +19,78 @@ MapViewInputHandler::MapViewInputHandler(MapView* mapView)
 
 // --- Left Mouse Button Logic ---
 void MapViewInputHandler::handleMousePress(QMouseEvent *event, MapView::EditorMode mode, const QPointF& mapPos, const QPoint& screenPos) {
-    // This is for Left Button actions
-    bool isPasting = false; // Placeholder: would be mapView_->isPasting();
-
-    if (mode == MapView::EditorMode::Selection) {
+    if (mode == MapView::EditorMode::Drawing) {
+        Brush* activeBrush = mapView_->getActiveBrush();
+        if (activeBrush) {
+            // Reset internal drawing states of input handler, brush will manage its own state.
+            isDrawing_ = false; 
+            isDraggingDraw_ = false;
+            activeBrush->mousePressEvent(mapPos, event, mapView_);
+        } else {
+            qDebug() << "DrawingMode active, but no brush selected.";
+        }
+    } else if (mode == MapView::EditorMode::Selection) {
+        // This is for Left Button actions in SelectionMode
+        bool isPasting = false; // Placeholder: would be mapView_->isPasting();
         if (isPasting) {
             mapView_->pasteSelection(mapPos);
-            isDraggingSelection_ = true; // Allow dragging the pasted selection
+            isDraggingSelection_ = true; 
             dragStartMapPos_ = mapPos;
         } else if (event->modifiers() & Qt::ShiftModifier) {
             isSelecting_ = true;
             dragStartMapPos_ = mapPos;
-            // Original logic often clears selection unless Ctrl is also held for adding to selection.
-            // If Ctrl+Shift is for adding, this clear is correct.
             mapView_->clearSelection(); 
         } else if (event->modifiers() & Qt::ControlModifier) {
-            mapView_->toggleSelectionAt(mapPos); // Toggle selection of item at mapPos
-            // Typically, after toggle, no drag operation starts immediately.
-            isDraggingSelection_ = false; // Ensure not dragging after a toggle
+            mapView_->toggleSelectionAt(mapPos); 
+            isDraggingSelection_ = false; 
         } else {
-            // Standard click without modifiers
             if (mapView_->isOnSelection(mapPos)) {
-                isDraggingSelection_ = true; // Start dragging the existing selection
+                isDraggingSelection_ = true; 
                 dragStartMapPos_ = mapPos;
             } else {
                 mapView_->clearSelection();
-                mapView_->selectObjectAt(mapPos); // Select item at mapPos
-                // After selecting, check if an object was actually selected to allow dragging
+                mapView_->selectObjectAt(mapPos); 
                 if (mapView_->isOnSelection(mapPos)) { 
                     isDraggingSelection_ = true;
                     dragStartMapPos_ = mapPos;
                 } else {
-                     // If nothing was selected, start a new selection rectangle
                     isSelecting_ = true;
                     dragStartMapPos_ = mapPos;
                 }
             }
         }
-    } else { // Drawing Mode
-        // Brush* brush = mapView_->getCurrentBrush(); // Placeholder
-        bool brushCanDrag = false; // Placeholder: brush && brush->canDrag();
-
-        if ((event->modifiers() & Qt::ShiftModifier) && brushCanDrag) {
-            isDraggingDraw_ = true;
-            dragStartMapPos_ = mapPos;
-            // mapView_->startDragDrawing(mapPos, event->modifiers()); // Or similar
-        } else {
-            isDrawing_ = true;
-            mapView_->startDrawing(mapPos, event->modifiers());
-        }
     }
 }
 
 void MapViewInputHandler::handleMouseMove(QMouseEvent *event, MapView::EditorMode mode, const QPointF& mapPos, const QPoint& screenPos) {
-    // This is for Left Button related move actions
-    if (mode == MapView::EditorMode::Selection) {
+    if (mode == MapView::EditorMode::Drawing) {
+        Brush* activeBrush = mapView_->getActiveBrush();
+        if (activeBrush) {
+            // The brush's mouseMoveEvent should check event->buttons() if it only wants to act on drag
+            activeBrush->mouseMoveEvent(mapPos, event, mapView_);
+        }
+        // No specific isDrawing_ or isDraggingDraw_ check here anymore, brush handles its logic.
+    } else if (mode == MapView::EditorMode::Selection) {
+        // This is for Left Button related move actions in SelectionMode
         if (isDraggingSelection_) {
             mapView_->updateMoveSelectionFeedback(mapPos - dragStartMapPos_);
         } else if (isSelecting_) {
             mapView_->updateSelectionRectFeedback(dragStartMapPos_, mapPos);
         }
-    } else { // Drawing Mode
-        if (isDrawing_) {
-            mapView_->continueDrawing(mapPos, event->modifiers());
-        } else if (isDraggingDraw_) {
-            mapView_->updateDragDrawFeedback(dragStartMapPos_, mapPos);
-        }
     }
 }
 
 void MapViewInputHandler::handleMouseRelease(QMouseEvent *event, MapView::EditorMode mode, const QPointF& mapPos, const QPoint& screenPos) {
-    // This is for Left Button related release actions
-    if (mode == MapView::EditorMode::Selection) {
+    if (mode == MapView::EditorMode::Drawing) {
+        Brush* activeBrush = mapView_->getActiveBrush();
+        if (activeBrush) {
+            activeBrush->mouseReleaseEvent(mapPos, event, mapView_);
+        }
+        // Reset internal drawing states after brush action, if they were used by this handler
+        isDrawing_ = false;
+        isDraggingDraw_ = false;
+    } else if (mode == MapView::EditorMode::Selection) {
+        // This is for Left Button related release actions in SelectionMode
         if (isDraggingSelection_) {
             mapView_->finalizeMoveSelection(mapPos - dragStartMapPos_);
             isDraggingSelection_ = false;
@@ -97,81 +98,50 @@ void MapViewInputHandler::handleMouseRelease(QMouseEvent *event, MapView::Editor
             mapView_->finalizeSelectionRect(dragStartMapPos_, mapPos, event->modifiers());
             isSelecting_ = false;
         }
-    } else { // Drawing Mode
-        if (isDrawing_) {
-            mapView_->finalizeDrawing(mapPos, event->modifiers());
-            isDrawing_ = false;
-        } else if (isDraggingDraw_) {
-            mapView_->finalizeDragDraw(dragStartMapPos_, mapPos, event->modifiers());
-            isDraggingDraw_ = false;
-        }
     }
 }
 
 // --- Properties (Right/Middle) Mouse Button Logic ---
 void MapViewInputHandler::handlePropertiesClick(QMouseEvent *event, MapView::EditorMode mode, const QPointF& mapPos, const QPoint& screenPos) {
     qDebug() << "MapViewInputHandler::handlePropertiesClick at screen" << screenPos << "map" << mapPos;
-    mapView_->setFocus(); // Ensure view has focus
+    mapView_->setFocus(); 
 
-    // From MapCanvas::OnMousePropertiesClick
-    // if (editor->GetMode() != EditorInterface::MODE_SELECTION) { editor->SetMode(EditorInterface::MODE_SELECTION); }
     if (mapView_->getCurrentEditorMode() != MapView::EditorMode::Selection) {
-        mapView_->switchToSelectionMode(); // Placeholder
+        mapView_->switchToSelectionMode(); 
     }
-    mapView_->endPasting(); // Placeholder
+    mapView_->endPasting(); 
 
-    // Reset selection states from other buttons
-    isSelecting_ = false; 
-    isDraggingSelection_ = false;
-    isDrawing_ = false;
-    isDraggingDraw_ = false;
+    // Reset all interaction states, including drawing ones, as properties click usually means changing context.
+    resetInputStates(); // This now covers all boolean flags.
 
-    clickOriginScreenPos_ = screenPos; // Store for context menu
+    clickOriginScreenPos_ = screenPos; 
 
     if (event->modifiers() & Qt::ShiftModifier) {
-        isSelecting_ = true; // Start bounding box selection with this button
+        isSelecting_ = true; 
         dragStartMapPos_ = mapPos;
-        if (!(event->modifiers() & Qt::ControlModifier)) { // If not also holding Ctrl
+        if (!(event->modifiers() & Qt::ControlModifier)) { 
             mapView_->clearSelection();
         }
     } else if (!(event->modifiers() & Qt::ControlModifier) && !mapView_->isOnSelection(mapPos)) {
-        // If not Shift, not Ctrl, and not clicking on an existing selection, clear current selection
-        // and select the object under the cursor.
         mapView_->clearSelection();
-        mapView_->selectObjectAt(mapPos); // This might select something or not
+        mapView_->selectObjectAt(mapPos); 
     } else if (event->modifiers() & Qt::ControlModifier) {
-        // If Ctrl is held, toggle selection of the item under cursor
-        // This part was missing in the original snippet for properties click, but is common.
-        // For now, let properties click with Ctrl pass through to context menu,
-        // or it could do a toggle like left click with Ctrl.
-        // Let's assume for now Ctrl+RightClick doesn't start a drag selection or clear,
-        // it just modifies the selection state for the context menu.
         mapView_->toggleSelectionAt(mapPos);
     }
-    // No isDraggingSelection_ = true; here, that's for left mouse.
-    // Properties click itself doesn't start a drag, but context menu might operate on selection.
 }
 
 void MapViewInputHandler::handlePropertiesRelease(QMouseEvent *event, MapView::EditorMode mode, const QPointF& mapPos, const QPoint& screenPos) {
     qDebug() << "MapViewInputHandler::handlePropertiesRelease at screen" << screenPos << "map" << mapPos;
 
-    if (isSelecting_) { // If a bounding box selection was made with the properties button
+    if (isSelecting_) { 
         mapView_->finalizeSelectionRect(dragStartMapPos_, mapPos, event->modifiers());
-        isSelecting_ = false;
+        // isSelecting_ will be reset by resetInputStates below or explicitly.
     } else {
-        // It was a regular click (not a drag for bounding box)
-        // Check if the mouse moved significantly, if so, maybe don't show context menu (original didn't have this check here)
-        // QPoint moveDelta = screenPos - clickOriginScreenPos_;
-        // if (moveDelta.manhattanLength() < QApplication::startDragDistance()) {
-             mapView_->showContextMenuAt(clickOriginScreenPos_); // Placeholder
-        // }
+        mapView_->showContextMenuAt(clickOriginScreenPos_); 
     }
     
-    mapView_->resetActionQueueTimer_placeholder(); // Placeholder
-
-    // Ensure states are reset
-    isDraggingSelection_ = false; 
-    isSelecting_ = false;
+    mapView_->resetActionQueueTimer_placeholder(); 
+    resetInputStates(); // Reset all states after properties release action.
 }
 
 
@@ -180,7 +150,7 @@ void MapViewInputHandler::resetInputStates() {
     isDraggingSelection_ = false;
     isDrawing_ = false;
     isDraggingDraw_ = false;
-    dragStartMapPos_ = QPointF(); // Reset drag start position
-    clickOriginScreenPos_ = QPoint(); // Reset click origin
+    dragStartMapPos_ = QPointF(); 
+    clickOriginScreenPos_ = QPoint(); 
     qDebug() << "MapViewInputHandler::resetInputStates called";
 }
