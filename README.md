@@ -1,4 +1,7 @@
 
+
+---
+**`README.md` (Revised to align with latest AI workflow principles)**
 ---
 
 <div align="left">
@@ -79,7 +82,7 @@ This strategic migration prioritizes establishing a single, coherent framework. 
 
 ## ✅ Migration Progress
 
-The `project_qt` codebase reflects an **active and iterative migration process**. Significant architectural shifts have been made, laying a solid foundation for future development. This migration is currently being facilitated by an AI assistant (Jules) following detailed instructions in the `./tasks/` directory.
+The `project_qt` codebase reflects an **active and iterative migration process**. Significant architectural shifts have been made, laying a solid foundation for future development. This migration is currently being facilitated by an AI assistant (Jules) following detailed instructions in the `tasks/` directory.
 
 ---
 
@@ -103,25 +106,27 @@ The project's code is organized into two primary directories, reflecting the mig
 
 ## 📌 Guidance for AI-Assisted Migration (Jules & Other AI)
 
-This section provides guidance for any AI assistant involved in or analyzing the migration of this project. **Our primary AI assistant, Jules, operates under a detailed set of instructions found within the `./tasks/` directory.**
+This section provides guidance for any AI assistant involved in or analyzing the migration of this project. **Our primary AI assistant, Jules, operates under a detailed set of instructions found within the `tasks/` directory.**
 
-1.  **Primary Goal Understanding:** Always refer to the central objective: complete migration of the `wxwidgets` codebase features to `project_qt` using Qt6 exclusively, ensuring feature parity and addressing any existing partial migrations in `project_qt`.
+1.  **Primary Goal Understanding:** Always refer to the central objective: complete migration of the `wxwidgets` codebase features to `project_qt` using Qt6 exclusively. This involves ensuring **100% feature parity and correctness** with the original `wxwidgets` functionality for each defined task, while intelligently working with and **refactoring any existing code in `project_qt`**.
 
 2.  **Authoritative Operational Instructions:**
-    *   **For the AI (Jules) actively performing the migration:** Your primary operational instructions, task execution logic, Git workflow, communication protocols, and interaction model are defined in **`./tasks/master_prompt.txt`**.
-    *   Task definitions and sequence are provided in **`./tasks/migration_tasks_config.xml`**.
-    *   Detailed task elaborations may be found in `[TaskID].md` files within **`./tasks/tasks_definitions/`**.
-    *   You **MUST** prioritize and strictly adhere to the workflow and directives within these files, especially `master_prompt.txt`.
+    *   **For the AI (Jules) actively performing the migration:** Your primary operational instructions, task execution logic, strategy for handling large files (including potential refactoring and splitting), Git workflow, communication protocols, and interaction model are defined in **`tasks/master_prompt.txt`**.
+    *   Task definitions (IDs, detailed descriptions, scope) and overall sequence are provided in **`tasks/migration_tasks_config.xml`**.
+    *   Detailed task elaborations for complex tasks may be found in `[TaskID].md` files within **`tasks/tasks_definitions/`**.
+    *   You **MUST** prioritize and strictly adhere to the workflow and directives within these files, especially `master_prompt.txt`, which orchestrates how you use the other files.
 
-3.  **Nature of Work ("Coder" Role):** The AI performing the migration (Jules) acts as the "Coder." This involves:
-    *   Analyzing original `wxwidgets` code and any existing `project_qt` code relevant to the current task.
-    *   Delivering complete, functional, and ready-to-integrate Qt6 code that meets 100% of the task's requirements.
-    *   Identifying and providing the full content of all affected files within `project_qt`.
-    *   Summarizing work done at the completion of each main task, as detailed in `master_prompt.txt`.
+3.  **Nature of Work ("Coder" Role for Jules):** The AI performing the migration (Jules) acts as the "Coder." This involves:
+    *   Thoroughly analyzing original `wxwidgets` code relevant to the current task.
+    *   Critically analyzing any existing `project_qt` code related to the task, assessing its correctness, completeness, and adherence to Qt6 best practices.
+    *   Delivering complete, functional, and ready-to-integrate Qt6 code that meets 100% of the task's requirements, either by writing new code or by modifying/refactoring/completing existing code.
+    *   **Proactively managing file size:** If working with or creating C++ source/header files anticipated to be excessively large (e.g., >200-300 lines), attempt to refactor the relevant code into smaller, logically coherent modules, creating new `.cpp`/`.h` files as needed while preserving functionality. List any new files created for build system updates.
+    *   Identifying and providing the full content of all affected files (new or modified) within `project_qt/src`.
+    *   Summarizing work done, including any refactoring and new files created, at the completion of each main task, as detailed in `master_prompt.txt`.
 
-4.  **Codebase Context:** Remember you are working with a conceptual copy of the *entire repository*. Paths like `wxwidgets/` or `Project_QT/src/` are relative to the root of this repository copy.
+4.  **Codebase Context (Local VM Copy):** Remember you are working with a conceptual copy of the *entire repository* on your local VM. All specified paths (e.g., `wxwidgets/`, `Project_QT/src/`, `tasks/`) are relative to the root of this repository copy.
 
-5.  **Iterative Feedback:** The active AI assistant (Jules) is designed for an interactive process. Human review and iterative feedback via chat *during* task execution are part of the workflow detailed in `master_prompt.txt`.
+5.  **Interactive and Iterative Process:** The migration process with Jules is designed to be interactive. Human review (by the "Auditor/Reviewer") and iterative feedback via chat *during* task execution are core components of the workflow defined in `master_prompt.txt`, as is a formal approval/rework cycle for each completed main task.
 
 ---
 ## 🚀 Getting Started

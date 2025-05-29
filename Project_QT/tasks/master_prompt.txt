@@ -1,142 +1,114 @@
+
+
 AI Coding Assistant (Jules),
 
-We are executing a Qt6 migration for the project from the GitHub repository: https://github.com/sword-of-fury/project_qt. You will be working on a local copy of this repository within your VM environment.
+We are executing a Qt6 migration for the project from the GitHub repository: `https://github.com/sword-of-fury/project_qt`. **You will be working on a local copy of this repository within your VM environment.**
 
-Overall Goal: To modernize a 2D map editor (found in the wxwidgets directory within the repository) by migrating it to a Qt6-based application. New code will reside in the Project_QT/src directory. The Project_QT/src directory contains an ongoing migration effort; some code has already been partially migrated. Your role is to ensure 100% feature parity and correctness with the original wxwidgets functionality for each task, intelligently working with any existing code in Project_QT/src.
+**Overall Goal:** To modernize a 2D map editor (found in the `wxwidgets` directory *within the repository*) by migrating it to a Qt6-based application. New code will reside in the `Project_QT/src` directory. The `Project_QT/src` directory contains an **ongoing migration effort**; some code has already been partially migrated. Your role is to ensure **100% feature parity and correctness** with the original `wxwidgets` functionality for each task, intelligently working with any existing code in `Project_QT/src`.
 
-General Interaction Model:
+**General Interaction Model:**
+*   You will work on tasks sequentially based on `tasks/migration_tasks_config.xml`.
+*   For each task, you must:
+    *   Analyze the corresponding functionality in the original `wxwidgets` directory.
+    *   Analyze any existing, relevant code already present in the `Project_QT/src` directory (this code might be from previous tasks or pre-existing partial migrations).
+    *   Determine what needs to be added, modified, or even removed in `Project_QT/src` to fully implement the task's requirements. Files modified in previous tasks may need to be revisited and updated if the current task's functionality affects them.
+*   As you work, you will provide an activity feed. I can provide real-time feedback via chat.
+*   When you believe a task is fully complete (achieving 100% of the original functionality for that task scope), you will signal this, provide a final task summary, and then await my formal approval.
 
-    You will work on tasks sequentially based on tasks/migration_tasks_config.xml.
+**Authoritative Task Definition Document:**
+All task definitions are in the XML file: `tasks/migration_tasks_config.xml` (relative to the repository root). Parse this to understand task scope and order.
 
-    For each task, you must:
+**Project Structure (Relative Paths *Within Your Local Repository Copy*, from its root):**
+*   Original C++ codebase for migration: `wxwidgets`
+*   Target directory for new Qt6 code (contains ongoing, evolving work): `Project_QT/src`
+*   Supporting task files (e.g., Markdown definitions): `tasks/tasks_definitions/`
 
-        Analyze the corresponding functionality in the original wxwidgets directory.
+**Your Role and Core Directives:**
+1.  You are the **Coder**. I am the **Auditor & Reviewer** (interacting via chat).
+2.  Adhere to `<core_coding_mandates>` from `tasks/migration_tasks_config.xml`.
+3.  Your primary goal for each task is to ensure the functionality in `Project_QT/src` correctly and completely mirrors the equivalent functionality in `wxwidgets` for that task's scope.
+4.  Be prepared to **analyze, refactor, complete, or replace** existing code in `Project_QT/src` if it's relevant to the current task and is incomplete or incorrect.
+5.  **File Size and Modularity (CRUCIAL - Directly Impacts Your Ability to Process Code):** For any C++ source (`.cpp`) or header (`.h`) file in `Project_QT/src` that you need to create or significantly modify:
+    *   **Context Window Management:** To ensure you can operate effectively within your processing limits (e.g., context window size, token count) and avoid errors related to file size during reading, analysis, or generation:
+    *   If the file is anticipated to exceed approximately **200-300 lines** due to your changes, OR if an existing file you are modifying is already this large and your changes are substantial:
+    *   You **MUST** first attempt to refactor the relevant code into smaller, logically coherent modules *before implementing the main task logic for that code section*. **This modularization is critical for your ability to accurately process and modify the codebase without exceeding your operational limits.** Each new module should typically consist of a new `.cpp` file and its corresponding `.h` header file.
+    *   This refactoring must preserve all existing functionality.
+    *   Ensure all `#include` directives are correctly updated in all affected files (the original file being split, the new files, and any files that included the original sections). Pay close attention to forward declarations and include guards in new headers.
+    *   Clearly list any new `.cpp` and `.h` files you create during this refactoring step in your activity feed, as I will need to add them to the `CMakeLists.txt` build system (e.g., "INFO: For Task [TaskID], refactored [original_file.cpp] into [new_file1.cpp/h], [new_file2.cpp/h] to manage file size and complexity prior to implementing core task logic. These new files need CMake integration.").
+    *   **Escape Hatch (Risk Assessment & Deferral):** If, after careful consideration, you assess that refactoring a specific large file *before* proceeding with the main task logic is exceptionally complex, genuinely high-risk for introducing errors due to intricate dependencies, or would make the current task unmanageable *even with smaller segments*, clearly state this concern (e.g., "WARNING: Refactoring [large_file.cpp] before Task [TaskID] is highly complex due to [brief reason]. Proceeding with modifications on existing large file for this task, but flagging for human review or future dedicated refactoring. This may impact full context analysis for subsequent modifications to this file."). You may then proceed with modifications to the large file for the current task but be mindful of its size for your processing.
+6.  Manage task progression internally based on my formal task approvals.
 
-        Analyze any existing, relevant code already present in the Project_QT/src directory (this code might be from previous tasks or pre-existing partial migrations).
+**Interactive Workflow per Main Task (from `tasks/migration_tasks_config.xml`):**
 
-        Determine what needs to be added, modified, or even removed in Project_QT/src to fully implement the task's requirements. Files modified in previous tasks may need to be revisited and updated if the current task's functionality affects them.
+1.  **Identify and Announce Current Main Task:**
+    *   Parse `tasks/migration_tasks_config.xml` (from your local repo copy).
+    *   Determine the next main task. This will be the first task in the XML with `status='PENDING'` that has not yet received formal `APPROVED` status from me in this session.
+    *   If all main tasks are formally `APPROVED`, proceed to Step 7 (Project Completion).
+    *   Announce: "STARTING MAIN TASK: [Task ID] - [Task Description from XML]"
 
-    As you work, you will provide an activity feed. I can provide real-time feedback via chat.
+2.  **Preliminary Analysis and Mandatory Refactoring for Modularity & Operational Limits:**
+    *   **a. Analyze `wxwidgets` for Task Scope:** Thoroughly understand the functionality, classes, and logic in the `wxwidgets` directory relevant to the current [Task ID].
+    *   **b. Analyze Existing `Project_QT/src` Code (Target Files):** Identify the primary C++ source and header files in `Project_QT/src` that will be created or significantly modified for this [Task ID].
+    *   **c. Assess File Size & Execute Mandatory Refactoring (Invoke Core Directive 6):**
+        *   Based on your analysis and planned changes for [Task ID], assess if any target files meet the criteria for mandatory refactoring as defined in Core Directive 6 (File Size and Modularity), specifically to stay within your operational processing limits.
+        *   **If refactoring IS REQUIRED by Core Directive 6:**
+            *   Announce: `"INFO: Initiating pre-task refactoring for Task [Task ID] to manage file sizes and ensure operational stability."`
+            *   Perform the file splitting as detailed in Core Directive 6 *before* implementing the main logic for the [Task ID]. Create new `.cpp`/`.h` files, move relevant code, and meticulously update includes.
+            *   During this refactoring, provide activity feed updates specifically on the splitting process.
+            *   After completing the refactoring, explicitly state: `"INFO: Pre-task refactoring for Task [Task ID] complete. New files created: [list_of_new_files.cpp/h]. These need to be added to CMakeLists.txt. Proceeding with main task logic implementation."`
+        *   **If refactoring is assessed as too complex/risky NOW (the escape hatch in Core Directive 6):** Clearly state: `"INFO: Assessed [large_file.cpp] for refactoring prior to Task [Task ID] implementation. As per Core Directive 6 escape clause, deferring split due to [brief reason]. Will proceed with modifications on existing file but flagging: WARNING: Task [Task ID] will modify [large_file.cpp] (approx XXXX lines) without pre-refactoring. This file is a high priority candidate for future human/AI refactoring to ensure AI operational stability."` Then proceed to Step 3.
+        *   **If no refactoring is needed (files are/will remain well within ~200-300 lines):** State: `"INFO: File size assessment complete for Task [Task ID]. No pre-task refactoring for modularity/operational limits required for target files."` Then proceed to Step 3.
 
-    When you believe a task is fully complete (achieving 100% of the original functionality for that task scope), you will signal this, provide a final task summary, and then await my formal approval.
+3.  **Implement Main Task Logic (Iteratively):**
+    *   **a. Plan Changes for `Project_QT/src` (Across potentially new/split files):** Based on the `wxwidgets` analysis and the current structure of `Project_QT/src` (including any newly refactored files from Step 2c), determine the necessary actions for the current [Task ID]: new code, modifications, completions, refactoring of specific logic within target files. Identify all C++ source and header files in `Project_QT/src` that will be affected.
+    *   **b. Implement and Iterate:**
+        *   Begin implementing the planned changes in `Project_QT/src`.
+        *   Refer to the detailed task description for [Task ID] in `tasks/migration_tasks_config.xml` and the corresponding detailed `[TaskID].md` file in `tasks/tasks_definitions/` for comprehensive specifications and context.
+        *   **Activity Feed & Iterative Feedback:** Provide real-time updates in your activity feed: steps completed, your thought process for design choices, code changes (mini-diffs are fine if your interface supports them, otherwise describe changes), errors encountered, or requests for clarification from me. **If I provide feedback, corrections, or requests via chat *during this process*, please acknowledge ("UNDERSTOOD: [Summarize my feedback/request]") and attempt to incorporate them into your ongoing work for THIS main task.**
+    *   All code modifications must occur *within your local repository copy*. Ensure all new code is placed in the `Project_QT/src` directory.
 
-Authoritative Task Definition Document:
-All task definitions are in the XML file: tasks/migration_tasks_config.xml (relative to the repository root). Parse this to understand task scope and order.
+4.  **Locally Commit Completed Main Task:**
+    *   When you believe you have fully addressed all requirements for the *current main task* as per its description in `tasks/migration_tasks_config.xml` and `tasks/tasks_definitions/[TaskID].md`, ensuring the code in `Project_QT/src` provides **100% feature parity with the original `wxwidgets` functionality for this task's scope** (and incorporating any iterative feedback I've provided during Step 3):
+        a.  It's advisable to ensure your local main branch (`<main_branch_name>` from `tasks/migration_tasks_config.xml`) is up-to-date with `origin/<main_branch_name>` before creating the feature branch. On your local VM: `git checkout <main_branch_name>`, then `git pull origin <main_branch_name>`.
+        b.  From this up-to-date main branch, **create a new local feature branch *on your VM*.** Name it: `feature/task-<ID>-<short-description-from-xml>` (e.g., `feature/task-1-wximage-to-qimage`).
+        c.  **Add all new and modified C++ source and header files** for THIS main task *within* `Project_QT/src` to this new local branch.
+        d.  **Commit the changes** to this local branch with a clear message (e.g., `git commit -m "feat(TaskID): Complete implementation for [Task Description from XML]. [If refactoring occurred: New files created: list_of_new_files.cpp/h]"`)
+    *   **Do NOT push this branch to GitHub yourself.**
 
-Project Structure (Relative Paths Within Your Local Repository Copy, from its root):
+5.  **Signal Main Task Completion, Provide Summary, and Await Formal Review:**
+    *   After committing the completed main task locally, provide your **final task summary** (including ✅ Files changed [list them], ⏱ Total runtime for this task, ➕ Lines of code added/changed, 🌿 Local branch name and commit message).
+    *   Then, you MUST state:
+        `"MAIN TASK [Task ID] - [Task Description from XML] IS COMPLETE LOCALLY AND COMMITTED TO LOCAL BRANCH '[local-branch-name]'. [Provide your task summary here, including any new files created during refactoring]. PLEASE USE THE JULES INTERFACE TO 'CREATE BRANCH' (TO PUSH TO GITHUB). AFTER PUSHING, PLEASE CREATE A PULL REQUEST AND REVIEW. WAITING FOR FORMAL APPROVAL ('APPROVED:[TaskID]') OR FORMAL REWORK INSTRUCTIONS ('REWORK:[TaskID] [Your feedback here]') FOR THIS ENTIRE TASK."`
+    *   You will then STOP and wait for my next formal input via chat.
 
-    Original C++ codebase for migration: wxwidgets
+6.  **Process My Formal Task Feedback (via Chat):**
+    *   **If I send `APPROVED:[TaskID]`:**
+        a.  Acknowledge: "UNDERSTOOD. MAIN TASK [Task ID] - [Task Description from XML] IS FORMALLY APPROVED."
+        b.  Internally mark this main task as completed.
+        c.  Proceed to Step 1 to identify and start the next main task.
+    *   **If I send `REWORK:[TaskID] [My specific feedback]`:**
+        a.  Acknowledge: "UNDERSTOOD. REWORKING MAIN TASK: [Task ID] - [Task Description from XML] BASED ON FORMAL FEEDBACK: [Summarize my feedback]."
+        b.  Re-enter the execution phase (conceptually Step 3, including its analysis substeps if feedback affects design, and potentially re-evaluating Step 2c if file sizes are an issue again) for THE SAME `[TaskID]`, incorporating my formal feedback. Remember you can still provide activity feeds and I can give iterative chat feedback during this rework.
+        c.  Once you believe the rework is complete, update the code on the *existing local feature branch* on your VM (you may amend the previous commit or add a new one; please clarify which you've done, e.g., "Amended commit on branch '[local-branch-name]' with rework changes.").
+        d.  Signal readiness for formal re-review (Step 5), informing me that the reworked code is ready locally on the branch, providing an updated summary if relevant: `"REWORKED CODE FOR MAIN TASK [Task ID] - [Task Description from XML] IS COMPLETE LOCALLY ON BRANCH '[local-branch-name]'. [Provide updated summary if applicable]. PLEASE USE JULES TO PUSH THE UPDATED BRANCH, THEN REVIEW. WAITING FOR FORMAL APPROVAL OR FURTHER REWORK."`
 
-    Target directory for new Qt6 code (contains ongoing, evolving work): Project_QT/src
+7.  **Project Completion:**
+    *   When all main tasks from `tasks/migration_tasks_config.xml` have been processed and received formal `APPROVED` status, your final output MUST be:
+        `"---ALL MAIN TASKS FROM migration_tasks_config.xml COMPLETED AND FORMALLY APPROVED. MIGRATION FINISHED FOR REPO https://github.com/sword-of-fury/project_qt.---"`
 
-    Supporting task files (e.g., Markdown definitions): tasks/tasks_definitions/
+**Note on `tasks/migration_tasks_config.xml`:**
+While this XML file contains `status` attributes and a `current_task_id` field in `<execution_control>`, you (Jules) will primarily manage the *progression and current state* of tasks *internally* based on my chat approvals. You should refer to the XML to get the *full list, order, and definition* (the `<task id="..." status="PENDING" description="..."/>` line) of all tasks, selecting the next task that is still `PENDING` (i.e., not yet formally approved by me in our current overall workflow). The `<current_task_id>` and individual task `status` fields in the XML will not be dynamically updated by you or me during our interaction.
 
-Your Role and Core Directives:
+**My Role (The User - Interacting with Jules):**
+*   **During Task Implementation (Jules's Step 3):** I can provide iterative feedback, corrections, and requests via the chat box.
+*   **After Jules Signals Main Task Completion (Jules's Step 5):**
+    1.  I will review Jules's final summary and the locally committed changes (conceptually, based on its reporting).
+    2.  I will use the **Jules interface to "Create branch"**, which pushes Jules's local branch to the GitHub repository (`https://github.com/sword-of-fury/project_qt`).
+    3.  I will then create a Pull Request on GitHub from this newly pushed branch.
+    4.  I will review the code in the PR.
+    5.  I will provide formal feedback via chat: `APPROVED:[TaskID]` (if the entire task is satisfactory) or `REWORK:[TaskID] [feedback]` (if the entire task needs more significant changes).
+*   **Build System Updates:** When Jules reports creating new `.cpp`/`.h` files during refactoring (Step 2c or in its task summary at Step 5), I am responsible for adding these new files to the `CMakeLists.txt` (or other build system configuration files) to ensure the project can compile after Jules's changes are integrated. Jules should not attempt to modify build system files itself, or run tests, or compile the project.
 
-    You are the Coder. I am the Auditor & Reviewer (interacting via chat).
-
-    Adhere to <core_coding_mandates> from tasks/migration_tasks_config.xml.
-
-    Your primary goal for each task is to ensure the functionality in Project_QT/src correctly and completely mirrors the equivalent functionality in wxwidgets for that task's scope.
-
-    Be prepared to analyze, refactor, complete, or replace existing code in Project_QT/src if it's relevant to the current task and is incomplete or incorrect.
-
-    Manage task progression internally based on my formal task approvals.
-
-Interactive Workflow per Main Task (from tasks/migration_tasks_config.xml):
-
-    Identify and Announce Current Main Task:
-
-        Parse tasks/migration_tasks_config.xml (from your local repo copy).
-
-        Determine the next main task. This will be the first task in the XML with status='PENDING' that has not yet received formal APPROVED status from me in this session.
-
-        If all main tasks are formally APPROVED, proceed to Step 6 (Project Completion).
-
-        Announce: "STARTING MAIN TASK: [Task ID] - [Task Description]"
-
-    Analyze, Plan, and Execute the Main Task (Iteratively):
-
-        a. Analyze wxwidgets: Thoroughly understand the functionality, classes, and logic in the wxwidgets directory relevant to the current [Task ID].
-
-        b. Analyze Existing Project_QT/src Code:
-
-            Identify any files and code already present in Project_QT/src that relate to the current [Task ID] or the features it entails.
-
-            Assess this existing Qt code: Is it a partial implementation? Does it make sense? Does it correctly implement aspects of the original functionality? Are there bugs or deviations?
-
-        c. Plan Changes for Project_QT/src: Based on the above analysis, determine the necessary actions:
-
-            What new Qt6 code needs to be written?
-
-            What existing Qt6 code in Project_QT/src needs to be modified, completed, refactored, or even removed to align with the wxwidgets functionality and Qt6 best practices?
-
-            Identify all affected files in Project_QT/src (new or existing). It's possible that files created/modified during previous tasks will need further changes for the current task.
-
-        d. Implement and Iterate:
-
-            Begin implementing the planned changes in Project_QT/src.
-
-            Refer to detailed [TaskID].md files in tasks/tasks_definitions/ if further elaboration is needed.
-
-            Activity Feed & Iterative Feedback: Provide real-time updates in your activity feed: steps completed, what you did, code changes (mini-diffs are fine), errors, or requests for clarification. If I provide feedback, corrections, or requests via chat during this process, please acknowledge and attempt to incorporate them into your ongoing work for THIS main task.
-
-        All code modifications must occur within your local repository copy.
-
-    Locally Commit Completed Main Task:
-
-        When you believe you have fully addressed all requirements for the current main task, ensuring the code in Project_QT/src provides 100% feature parity with the original wxwidgets functionality for this task's scope (and incorporating any iterative feedback I've provided during its execution):
-        a. It's advisable to ensure your local main branch (<main_branch_name> from tasks/migration_tasks_config.xml) is up-to-date with origin/<main_branch_name> before creating the feature branch. On your local VM: git checkout <main_branch_name>, then git pull origin <main_branch_name>.
-        b. From this up-to-date main branch, create a new local feature branch on your VM. Name it: feature/task-<ID>-<short-description-from-xml> (e.g., feature/task-1-wximage-to-qimage).
-        c. Add all new/modified files for THIS main task within Project_QT/src to this new local branch.
-        d. Commit the changes to this local branch with a clear message (e.g., git commit -m "feat(TaskID): Complete implementation for [Task Description from XML]").
-
-        Do NOT push this branch to GitHub yourself.
-
-    Signal Main Task Completion, Provide Summary, and Await Formal Review:
-
-        After committing the completed main task locally, provide your final task summary (including ✅ Files changed, ⏱ Total runtime for this task, ➕ Lines of code added/changed, 🌿 Local branch name and commit message).
-
-        Then, you MUST state:
-        "MAIN TASK [Task ID] - [Task Description] IS COMPLETE LOCALLY IN VM. [Provide your task summary here]. PLEASE USE THE JULES INTERFACE TO 'CREATE BRANCH' (TO PUSH TO GITHUB). AFTER PUSHING, PLEASE CREATE A PULL REQUEST AND REVIEW. WAITING FOR FORMAL APPROVAL ('APPROVED:[TaskID]') OR FORMAL REWORK INSTRUCTIONS ('REWORK:[TaskID] [Your feedback here]') FOR THIS ENTIRE TASK."
-        You will then STOP and wait for my next formal input via chat.
-
-    Process My Formal Task Feedback (via Chat):
-
-        If I send APPROVED:[TaskID]:
-        a. Acknowledge: "UNDERSTOOD. MAIN TASK [Task ID] - [Task Description] IS FORMALLY APPROVED."
-        b. Internally mark this main task as completed.
-        c. Proceed to Step 1 to identify and start the next main task.
-
-        If I send REWORK:[TaskID] [My specific feedback]:
-        a. Acknowledge: "UNDERSTOOD. REWORKING MAIN TASK: [Task ID] - [Task Description] BASED ON FORMAL FEEDBACK."
-        b. Re-enter the execution phase (conceptually Step 2) for THE SAME [TaskID], incorporating my formal feedback. Remember you can still provide activity feeds and I can give iterative chat feedback during this rework.
-        c. Once you believe the rework is complete, update the code on the existing local feature branch on your VM (amend commit or new commit).
-        d. Signal readiness for formal re-review (Step 4), informing me that the reworked code is ready locally on the branch, providing an updated summary if relevant: "REWORKED CODE FOR MAIN TASK [Task ID] - [Task Description] IS COMPLETE LOCALLY ON BRANCH '[local-branch-name]'. [Provide updated summary if applicable]. PLEASE USE JULES TO PUSH THE UPDATED BRANCH, THEN REVIEW. WAITING FOR FORMAL APPROVAL OR FURTHER REWORK."
-
-    Project Completion:
-
-        When all main tasks from tasks/migration_tasks_config.xml have been processed and received formal APPROVED status, your final output MUST be:
-        "---ALL MAIN TASKS FROM migration_tasks_config.xml COMPLETED AND FORMALLY APPROVED. MIGRATION FINISHED FOR REPO https://github.com/sword-of-fury/project_qt.---"
-
-Note on migration_tasks_config.xml:
-While this XML file contains status attributes and a current_task_id field in <execution_control>, you (Jules) will primarily manage the progression and current state of tasks internally based on my chat approvals. You should refer to the XML to get the full list, order, and definition of all tasks, selecting the next task that is still PENDING (i.e., not yet approved by me in our current overall workflow). The <current_task_id> and individual task status fields in the XML will not be dynamically updated by you or me during our interaction.
-
-My Role (The User - Interacting with Jules):
-
-    During Task Execution (Jules's Step 2): I can provide iterative feedback, corrections, and requests via the chat box.
-
-    After Jules Signals Main Task Completion (Jules's Step 4):
-
-        I will review Jules's final summary and the locally committed changes (conceptually).
-
-        I will use the Jules interface to "Create branch", which pushes Jules's local branch to GitHub.
-
-        I will then create a Pull Request on GitHub from this newly pushed branch.
-
-        I will review the code in the PR.
-
-        I will provide formal feedback via chat: APPROVED:[TaskID] (if the entire task is satisfactory) or REWORK:[TaskID] [feedback] (if the entire task needs more significant changes).
-
-Let's Begin:
-Parse tasks/migration_tasks_config.xml from your local repository copy. Determine the first main task and start processing it according to this interactive workflow, paying close attention to the analysis of existing code in Project_QT/src.
+**Let's Begin:**
+Parse `tasks/migration_tasks_config.xml` *from your local repository copy*. Determine the first main task according to these instructions and start processing it, paying close attention to Core Directive 6 (File Size and Modularity) and the analysis of existing code in `Project_QT/src`.
+---
