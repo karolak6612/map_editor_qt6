@@ -13,6 +13,7 @@
 #include <QLabel>       
 #include <QPushButton>  
 #include <QDockWidget> // Added for QDockWidget
+#include <QStatusBar>  // Added for QStatusBar
 #include "PlaceholderPaletteWidget.h"   
 #include "PlaceholderMinimapWidget.h"
 #include "PlaceholderPropertiesWidget.h"
@@ -22,6 +23,7 @@
 #include "Selection.h"               // For Selection
 #include <QApplication>             // For future QClipboard access
 #include <QClipboard>               // For future QClipboard access
+#include <QtMath>                   // For qRound
 
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
@@ -33,7 +35,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setupMenuBar();
     setupToolBars(); 
     setupDockWidgets(); // Call setupDockWidgets
-    // setupStatusBar(); 
+    setupStatusBar();
     
     // restoreLayoutState(); // Call this after all toolbars and docks are created.
     qDebug() << "MainWindow created. Menu, toolbars, and docks setup initiated.";
@@ -133,6 +135,50 @@ void MainWindow::setupDockWidgets() {
     // tabifyDockWidget(minimapDock_, propertiesDock_);
 
     qDebug() << "Dock widgets setup.";
+}
+
+void MainWindow::setupStatusBar() {
+    QStatusBar *sb = statusBar(); // QMainWindow::statusBar() creates one if it doesn't exist
+    if (!sb) {
+        qWarning("MainWindow: Could not get or create QStatusBar.");
+        return;
+    }
+
+    // Initialize and add labels as permanent widgets
+    // Permanent widgets are typically added from right to left
+
+    currentLayerLabel_ = new QLabel(this);
+    currentLayerLabel_->setText(tr("Floor: 7"));
+    currentLayerLabel_->setToolTip(tr("Current map floor/layer"));
+    sb->addPermanentWidget(currentLayerLabel_);
+
+    zoomLevelLabel_ = new QLabel(this);
+    zoomLevelLabel_->setText(tr("Zoom: 100%"));
+    zoomLevelLabel_->setToolTip(tr("Current map zoom level"));
+    sb->addPermanentWidget(zoomLevelLabel_);
+
+    itemInfoLabel_ = new QLabel(this);
+    itemInfoLabel_->setText(tr("Item: None")); // Placeholder
+    itemInfoLabel_->setToolTip(tr("Information about the selected item or item under cursor"));
+    itemInfoLabel_->setMinimumWidth(200); // Give it some space
+    sb->addPermanentWidget(itemInfoLabel_);
+
+    brushInfoLabel_ = new QLabel(this);
+    brushInfoLabel_->setText(tr("Brush: None")); // Placeholder
+    brushInfoLabel_->setToolTip(tr("Current active brush"));
+    sb->addPermanentWidget(brushInfoLabel_);
+
+    // mouseCoordsLabel_ will be a normal message shown with showMessage, or a temporary widget.
+    // For persistent coordinate display, it can also be a permanent widget. Let's make it permanent for now.
+    mouseCoordsLabel_ = new QLabel(this);
+    mouseCoordsLabel_->setText(tr("X: -, Y: -, Z: -"));
+    mouseCoordsLabel_->setToolTip(tr("Current map coordinates under mouse cursor"));
+    mouseCoordsLabel_->setMinimumWidth(150); // Give it some space
+    sb->addPermanentWidget(mouseCoordsLabel_);
+
+    // Main status messages will appear on the left, temporary messages.
+    sb->showMessage(tr("Ready"), 2000); // Example temporary message
+    qDebug() << "Status bar setup complete.";
 }
 
 
@@ -745,4 +791,46 @@ MapPos MainWindow::getPasteTargetPosition() const {
     qDebug("MainWindow::getPasteTargetPosition (stub) - returning (0,0,0) for now."); 
     // This should return the current cursor position on the map, or a designated paste target.
     return MapPos(0,0,0); 
+}
+
+// --- Status Bar Update Method Implementations ---
+
+void MainWindow::updateMouseMapCoordinates(const QPointF& mapPos, int floor) {
+    if (mouseCoordsLabel_) {
+        // Round mapPos coordinates for display if they are very precise
+        mouseCoordsLabel_->setText(QString("X: %1, Y: %2, Z: %3")
+                                     .arg(qRound(mapPos.x()))
+                                     .arg(qRound(mapPos.y()))
+                                     .arg(floor));
+    }
+}
+
+void MainWindow::updateZoomLevel(double zoom) {
+    if (zoomLevelLabel_) {
+        zoomLevelLabel_->setText(QString("Zoom: %1%").arg(static_cast<int>(zoom * 100)));
+    }
+}
+
+void MainWindow::updateCurrentLayer(int layer) {
+    if (currentLayerLabel_) {
+        currentLayerLabel_->setText(QString("Floor: %1").arg(layer));
+    }
+    // This slot might also be connected to the layerComboBox_ valueChanged if needed
+    // and zCoordSpinBox_ valueChanged.
+}
+
+void MainWindow::updateCurrentBrush(const QString& brushName) {
+    if (brushInfoLabel_) {
+        brushInfoLabel_->setText(QString("Brush: %1").arg(brushName.isEmpty() ? "None" : brushName));
+    }
+}
+
+void MainWindow::updateSelectedItemInfo(const QString& itemInfo) {
+    if (itemInfoLabel_) {
+        itemInfoLabel_->setText(itemInfo.isEmpty() ? "Item: None" : itemInfo);
+    }
+}
+
+void MainWindow::showTemporaryStatusMessage(const QString& message, int timeout) {
+    statusBar()->showMessage(message, timeout);
 }

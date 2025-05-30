@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QPointF> // Required for QPointF parameter
 
 // Forward declarations
 class QMenuBar;
@@ -16,10 +17,12 @@ class QDockWidget;                  // Added
 class PlaceholderPaletteWidget;     // Added
 class PlaceholderMinimapWidget;     // Added
 class PlaceholderPropertiesWidget;  // Added
+class QStatusBar;                   // Added for statusBar_ member or statusBar() usage
 class AutomagicSettingsDialog; // Forward declaration
 class ClipboardData;           // Forward declaration for clipboard
 class Map;                     // Already forward declared in Map.h, but good practice if Map.h isn't fully included here
 class Selection;               // Already forward declared in Selection.h, but good practice
+class MapPos;                  // Required for updateMouseMapCoordinates if Map.h doesn't bring it transitively
 
 
 class MainWindow : public QMainWindow {
@@ -32,8 +35,22 @@ public:
     // Clipboard methods
     void handleCopy();
     void handleCut();
-    void handlePaste();
+    // Ensure MapPos is known for updateMouseMapCoordinates, include Map.h if not already via other includes
+    // Map.h includes MapPos, and MainWindow.h already includes Map.h (forward declaration)
+    // For QPointF, <QPointF> is included by QMainWindow or other Qt headers typically.
+
+public slots: // Making them public slots for potential connection from other UI elements or MapView
+    void updateMouseMapCoordinates(const QPointF& mapPos, int floor);
+    void updateZoomLevel(double zoom);
+    void updateCurrentLayer(int layer);
+    void showTemporaryStatusMessage(const QString& message, int timeout = 0); // For general messages
+    void handlePaste(); // Moved here as it's a slot now in the diff, was public method
+    // bool canPaste() const; // canPaste is not a slot, remains public method
+
+public: // Public methods for other status updates if not slots (canPaste kept here)
     bool canPaste() const;
+    void updateCurrentBrush(const QString& brushName);
+    void updateSelectedItemInfo(const QString& itemInfo);
 
     // Automagic settings methods
     void openAutomagicSettingsDialog();
@@ -61,7 +78,7 @@ private:
     void setupMenuBar();
     void setupToolBars(); 
     void setupDockWidgets(); // Added
-    // void setupStatusBar(); 
+    void setupStatusBar();
 
     // Helper method for creating actions
     QAction* createAction(const QString& text, const QString& objectName, const QString& shortcut = "", const QString& statusTip = "", bool checkable = false, bool checked = false);
@@ -138,6 +155,13 @@ private:
     QAction* viewPaletteDockAction_;    // Added
     QAction* viewMinimapDockAction_;    // Added
     QAction* viewPropertiesDockAction_; // Added
+
+    // Status Bar Labels
+    QLabel* mouseCoordsLabel_ = nullptr;
+    QLabel* itemInfoLabel_ = nullptr;
+    QLabel* zoomLevelLabel_ = nullptr;
+    QLabel* currentLayerLabel_ = nullptr;
+    QLabel* brushInfoLabel_ = nullptr;
 
     // Internal clipboard
     ClipboardData* internalClipboard_ = nullptr;
