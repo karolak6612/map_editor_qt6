@@ -1,102 +1,23 @@
 #include "Sprite.h"
-#include <QBuffer>
-#include <QColor>
-#include <QPainter>
-#include <QPixmap> // For getPixmap() implementation
 
-Sprite::Sprite() {
-    m_image = QImage(1, 1, QImage::Format_ARGB32_Premultiplied);
-    m_image.fill(Qt::transparent);
-}
+// Sprite.cpp for the abstract Sprite interface.
 
-Sprite::~Sprite() {
-}
-
-bool Sprite::load(const QString& path) {
-    if (m_image.load(path)) {
-        return true;
-    }
-    return false;
-}
-
-bool Sprite::loadFromData(const QByteArray& data, const char* format) {
-    if (m_image.loadFromData(data, format)) {
-        return true;
-    }
-    return false;
-}
-
-QImage Sprite::getImage() const {
-    return m_image;
-}
-
-void Sprite::setImage(const QImage& image) {
-    m_image = image;
-    if (m_image.isNull()){
-        m_image = QImage(1, 1, QImage::Format_ARGB32_Premultiplied);
-        m_image.fill(Qt::transparent);
-    }
-}
-
-QPixmap Sprite::getPixmap() const {
-    if (m_image.isNull()) {
-        return QPixmap(); 
-    }
-    return QPixmap::fromImage(m_image);
-}
-
-QImage Sprite::scale(const QSize& size, Qt::AspectRatioMode aspectRatioMode, Qt::TransformationMode transformMode) {
-    if (m_image.isNull()) {
-        return QImage(); 
-    }
-    return m_image.scaled(size, aspectRatioMode, transformMode);
-}
-
-void Sprite::setTransparency(int alpha) {
-    if (m_image.isNull()) { 
-        m_image = QImage(1,1,QImage::Format_ARGB32_Premultiplied); 
-        m_image.fill(Qt::transparent);
-    }
-    
-    if (!m_image.hasAlphaChannel()) {
-        m_image = m_image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-    }
-
-    QImage tempImage = QImage(m_image.size(), QImage::Format_ARGB32_Premultiplied);
-    tempImage.fill(Qt::transparent); 
-
-    QPainter painter(&tempImage);
-    painter.setCompositionMode(QPainter::CompositionMode_Source);
-    double opacity = qBound(0.0, static_cast<double>(alpha) / 255.0, 1.0);
-    painter.setOpacity(opacity);
-    painter.drawImage(0, 0, m_image);
-    painter.end();
-
-    m_image = tempImage;
-}
-
-void Sprite::setMaskColor(const QColor& color, bool enable) {
-    if (m_image.isNull()) {
-        return;
-    }
-
-    if (enable) {
-        if (!m_image.hasAlphaChannel()) {
-            m_image = m_image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-        }
-        QImage new_image = m_image.convertToFormat(QImage::Format_ARGB32_Premultiplied); 
-        for (int y = 0; y < new_image.height(); ++y) {
-            for (int x = 0; x < new_image.width(); ++x) {
-                if (QColor(new_image.pixel(x, y)) == color) {
-                    new_image.setPixelColor(x, y, Qt::transparent);
-                }
-            }
-        }
-        m_image = new_image;
-
-    } else {
-        if (m_image.hasAlphaChannel()) {
-             m_image = m_image.convertToFormat(QImage::Format_RGB32); 
-        }
-    }
-}
+// Since Sprite is an abstract class where:
+// - Constructor is defaulted: Sprite() = default; (in header)
+// - Destructor is virtual and defaulted: virtual ~Sprite() = default; (in header)
+// - All other core methods are pure virtual.
+// - Copy/move operations are deleted.
+//
+// This .cpp file is primarily to ensure the class's compilation unit exists
+// and to provide a location for potential out-of-line definitions of
+// static members or non-pure virtual methods if they were added to Sprite in the future.
+//
+// For a defaulted virtual destructor in C++, if it's not defined inline in the header
+// (e.g. `virtual ~Sprite() = default;` inside the class body), it requires an out-of-line
+// definition, even if it's just `= default;`. Some compilers/linkers might require this
+// for the vtable. Given `= default;` is in the header, this is often treated as inline.
+//
+// If linking issues were to arise related to ~Sprite, an out-of-line defaulted destructor would be:
+// Sprite::~Sprite() = default;
+//
+// For now, this minimal content is sufficient.
