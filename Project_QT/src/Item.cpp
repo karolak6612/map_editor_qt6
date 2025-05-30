@@ -291,7 +291,7 @@ void Item::draw(QPainter* painter, const QRectF& targetRect, const DrawingOption
     
     painter->fillRect(targetRect, QColor(itemColor.red(), itemColor.green(), itemColor.blue(), 128)); // Semi-transparent
     painter->setPen(Qt::black); // Explicitly set pen for outline after fillRect might change it
-    painter->drawRect(targetRect); 
+    painter->drawRect(targetRect);
 
     if (options.drawDebugInfo) {
         painter->save();

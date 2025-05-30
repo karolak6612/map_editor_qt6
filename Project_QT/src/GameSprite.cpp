@@ -43,7 +43,7 @@ void GameSprite::setAnimationLayout(int layers, int patternsX, int patternsY, in
     m_patternY = qMax(1, patternsY);
     m_patternZ = qMax(1, patternsZ);
     m_framesPerPattern = qMax(1, framesPerPattern);
-    
+
     // Reconfigure animator based on new layout (total frames for one pattern combination)
     // The animator itself doesn't know about patterns, just total frames for its current sequence
     m_animator.setup(m_framesPerPattern, -1, 0, false); // Default setup, can be reconfigured by configureAnimator
@@ -81,7 +81,7 @@ void GameSprite::drawTo(QPainter* painter, const QRect& targetScreenRect, const 
     if (sourceSpriteRect.isNull() || !sourceSpriteRect.isValid()) {
         int currentFrame = m_animator.getCurrentFrameIndex();
         // Assuming default pattern/layer for this generic call
-        QRect calculatedSourceRect = calculateFrameRect(currentFrame, 0, 0, 0, 0); 
+        QRect calculatedSourceRect = calculateFrameRect(currentFrame, 0, 0, 0, 0);
         if (calculatedSourceRect.isValid()) {
             painter->drawPixmap(targetScreenRect, m_spriteSheet, calculatedSourceRect);
         }
@@ -103,7 +103,7 @@ void GameSprite::drawTo(QPainter* painter, const QPoint& targetPos, int sourceX,
         int currentFrame = m_animator.getCurrentFrameIndex();
         sourceRect = calculateFrameRect(currentFrame, 0, 0, 0, 0);
     }
-    
+
     if (sourceRect.isValid()) {
         QPoint finalTargetPos = targetPos + QPoint(m_drawOffsetX, m_drawOffsetY);
         painter->drawPixmap(finalTargetPos, m_spriteSheet, sourceRect);
@@ -111,7 +111,7 @@ void GameSprite::drawTo(QPainter* painter, const QPoint& targetPos, int sourceX,
 }
 
 // GameSprite specific drawing
-void GameSprite::drawAnimated(QPainter* painter, const QPoint& targetPos, 
+void GameSprite::drawAnimated(QPainter* painter, const QPoint& targetPos,
                               int patternX, int patternY, int patternZ, int layer) {
     if (!painter || m_spriteSheet.isNull() || m_frameWidth == 0 || m_frameHeight == 0) {
         return;
@@ -167,7 +167,7 @@ QRect GameSprite::calculateFrameRect(int frameIndex, int patternX, int patternY,
     // This means 'width_in_sprites' and 'height_in_sprites' were the dimensions of one single sprite image (usually 1x1 for items/creatures).
     // 'frames' was total frames for one pattern.
     // 'height' and 'width' members of GameSprite were number of sprite *images* (usually 1x1).
-    
+
     // Let's assume the sprite sheet is laid out as a grid of frames.
     // Total frames horizontally on the sheet: m_spriteSheet.width() / m_frameWidth
     // Total frames vertically on the sheet: m_spriteSheet.height() / m_frameHeight
@@ -175,7 +175,7 @@ QRect GameSprite::calculateFrameRect(int frameIndex, int patternX, int patternY,
     // Simplified calculation assuming sprite sheet contains frames for ONE specific combination
     // of (layer, patternZ, patternY, patternX) arranged in a grid, and framesPerPattern refers to this.
     // Or, if framesPerPattern is the number of frames in one "row" of the sprite sheet for this pattern.
-    
+
     // More robust: The sheet contains ALL patterns, layers, frames.
     // Indexing similar to original:
     // Start with the base index for the pattern and layer
@@ -184,7 +184,7 @@ QRect GameSprite::calculateFrameRect(int frameIndex, int patternX, int patternY,
     //                      safePatternZ * m_patternY * m_patternX +
     //                      safePatternY * m_patternX +
     //                      safePatternX) * m_framesPerPattern;
-    
+
     // Let total_patterns_per_layer = m_patternX * m_patternY * m_patternZ
     // Let total_frames_per_layer = total_patterns_per_layer * m_framesPerPattern
     // base_frame_offset_for_layer = safeLayer * total_frames_per_layer

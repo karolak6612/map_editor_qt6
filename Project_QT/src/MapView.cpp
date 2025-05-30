@@ -293,8 +293,92 @@ void MapView::leaveEvent(QEvent *event) {
 }
 
 void MapView::keyPressEvent(QKeyEvent *event) {
-    qDebug() << "MapView::keyPressEvent, key:" << event->key() << "text:" << event->text() << "modifiers:" << event->modifiers();
-    QGraphicsView::keyPressEvent(event);
+    bool accepted = true; // Assume we handle the event unless specified otherwise
+    switch (event->key()) {
+        case Qt::Key_Up:
+        case Qt::Key_W: // Adding WASD as alternative for panning
+            verticalScrollBar()->setValue(verticalScrollBar()->value() - TILE_SIZE);
+            break;
+        case Qt::Key_Down:
+        case Qt::Key_S:
+            verticalScrollBar()->setValue(verticalScrollBar()->value() + TILE_SIZE);
+            break;
+        case Qt::Key_Left: // Key_A removed for panning, now assigned to Automagic
+            horizontalScrollBar()->setValue(horizontalScrollBar()->value() - TILE_SIZE);
+            break;
+        case Qt::Key_Right:
+        case Qt::Key_D:
+            horizontalScrollBar()->setValue(horizontalScrollBar()->value() + TILE_SIZE);
+            break;
+        case Qt::Key_PageUp:
+        case Qt::Key_Plus: // Also using Plus for floor up, can be context-dependent
+            if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_Plus) { // Ctrl+Plus for Zoom In
+                // Simulate a wheel event for zooming in
+                QWheelEvent zoomInEvent(QPointF(), QPointF(), QPoint(), QPoint(0, 120), Qt::NoButton, Qt::NoModifier, Qt::ScrollUpdate, false);
+                wheelEvent(&zoomInEvent);
+            } else if (event->key() == Qt::Key_PageUp || event->key() == Qt::Key_Plus) { // PageUp or Plus (no ctrl) for Floor Up
+                changeFloor(currentFloor_ - 1);
+            } else {
+                accepted = false;
+            }
+            break;
+        case Qt::Key_PageDown:
+        case Qt::Key_Minus: // Also using Minus for floor down
+            if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_Minus) { // Ctrl+Minus for Zoom Out
+                // Simulate a wheel event for zooming out
+                QWheelEvent zoomOutEvent(QPointF(), QPointF(), QPoint(), QPoint(0, -120), Qt::NoButton, Qt::NoModifier, Qt::ScrollUpdate, false);
+                wheelEvent(&zoomOutEvent);
+            } else if (event->key() == Qt::Key_PageDown || event->key() == Qt::Key_Minus) { // PageDown or Minus (no ctrl) for Floor Down
+                changeFloor(currentFloor_ + 1);
+            } else {
+                accepted = false;
+            }
+            break;
+        // Direct command/tool related keys (placeholders for now)
+        case Qt::Key_BracketLeft: // '[' for decrease brush size
+            qDebug() << "MapView: Placeholder for Decrease Brush Size action (Key: '[')";
+            // TODO: Call brush manager or editor command
+            break;
+        case Qt::Key_BracketRight: // ']' for increase brush size
+            qDebug() << "MapView: Placeholder for Increase Brush Size action (Key: ']')";
+            // TODO: Call brush manager or editor command
+            break;
+        case Qt::Key_Space:
+            qDebug() << "MapView: Placeholder for Mode Switch action (Key: Space)";
+            // TODO: Call editor mode manager (e.g., toggle currentEditorMode_)
+            // setCurrentEditorMode(currentEditorMode_ == EditorMode::Selection ? EditorMode::Drawing : EditorMode::Selection);
+            break;
+        case Qt::Key_Delete:
+            qDebug() << "MapView: Placeholder for Delete Selection action (Key: Delete)";
+            // TODO: Call editor command to delete selection
+            break;
+        case Qt::Key_Z:
+            qDebug() << "MapView: Placeholder for Brush Variation/Rotate CCW action (Key: Z)";
+            // TODO: Call brush manager or active tool
+            break;
+        case Qt::Key_X:
+            qDebug() << "MapView: Placeholder for Brush Variation/Rotate CW action (Key: X)";
+            // TODO: Call brush manager or active tool
+            break;
+        case Qt::Key_Q:
+            qDebug() << "MapView: Placeholder for Quick Select Previous Brush action (Key: Q)";
+            // TODO: Call brush manager
+            break;
+        case Qt::Key_A:
+            qDebug() << "MapView: Placeholder for Toggle Automagic action (Key: A)";
+            // TODO: Call editor settings or command
+            break;
+        default:
+            accepted = false;
+            QGraphicsView::keyPressEvent(event);
+            return;
+    }
+
+    if (accepted) {
+        event->accept();
+    }
+    // updateAndRefreshMapCoordinates might be needed if not covered by scrollbar signals etc.
+    // For now, assume scrollbar changes trigger necessary updates.
 }
 
 void MapView::keyReleaseEvent(QKeyEvent *event) {

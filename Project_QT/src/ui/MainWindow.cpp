@@ -501,8 +501,11 @@ void MainWindow::onMenuActionTriggered() {
     }
 
     QString actionName = action->objectName();
-    qDebug() << "Action triggered: Name =" << actionName << ", Text =" << action->text() 
-             << ", Checkable:" << action->isCheckable() << ", Checked:" << action->isChecked();
+    QString actionText = action->text(); // Use text for more user-friendly logging at times
+    // bool isCheckable = action->isCheckable(); // Not used in this version
+    // bool isChecked = action->isChecked(); // Used for dock/toolbar visibility
+
+    qDebug() << "Action triggered: Name =" << actionName << ", Text =" << actionText << ", Shortcut:" << action->shortcut().toString();
 
     if (actionName == QLatin1String("EXIT")) {
         close();
@@ -542,10 +545,40 @@ void MainWindow::onMenuActionTriggered() {
             action->setChecked(propertiesDock_->isVisible());
         }
     }
+    // Placeholder command handlers for common actions from menubar.xml
+    else if (actionName == QLatin1String("NEW")) { qDebug() << "Placeholder: File -> New action triggered."; }
+    else if (actionName == QLatin1String("OPEN")) { qDebug() << "Placeholder: File -> Open action triggered."; }
+    else if (actionName == QLatin1String("SAVE")) { qDebug() << "Placeholder: File -> Save action triggered."; }
+    else if (actionName == QLatin1String("SAVE_AS")) { qDebug() << "Placeholder: File -> Save As action triggered."; }
+    else if (actionName == QLatin1String("UNDO")) { qDebug() << "Placeholder: Edit -> Undo action triggered."; }
+    else if (actionName == QLatin1String("REDO")) { qDebug() << "Placeholder: Edit -> Redo action triggered."; }
+    else if (actionName == QLatin1String("CUT")) { qDebug() << "Placeholder: Edit -> Cut action triggered."; handleCut(); } // Existing call
+    else if (actionName == QLatin1String("COPY")) { qDebug() << "Placeholder: Edit -> Copy action triggered."; handleCopy(); } // Existing call
+    else if (actionName == QLatin1String("PASTE")) { qDebug() << "Placeholder: Edit -> Paste action triggered."; handlePaste(); } // Existing call
+    else if (actionName == QLatin1String("ZOOM_IN")) {
+        qDebug() << "Placeholder: Editor -> Zoom In action triggered. (MapView should handle actual zoom via Ctrl++)";
+        // TODO: Find MapView instance and call a zoomIn method or simulate key event if MainWindow needs to drive this.
+    } else if (actionName == QLatin1String("ZOOM_OUT")) {
+        qDebug() << "Placeholder: Editor -> Zoom Out action triggered. (MapView should handle actual zoom via Ctrl+-)";
+        // TODO: Find MapView instance and call a zoomOut method or simulate key event.
+    } else if (actionName == QLatin1String("ZOOM_NORMAL")) {
+        qDebug() << "Placeholder: Editor -> Zoom Normal action triggered.";
+        // TODO: Find MapView instance and call a zoomNormal method.
+    } else if (actionName.startsWith("FLOOR_")) { // Example for floor actions from Navigate menu
+        bool ok;
+        int floor = actionName.mid(6).toInt(&ok);
+        if (ok) {
+            qDebug() << "Placeholder: Navigate -> Floor" << floor << "action triggered. (MapView should handle actual floor change)";
+            // TODO: Find MapView instance and call changeFloor(floor)
+            // Example: if (mapViewInstance_) mapViewInstance_->changeFloor(floor);
+        }
+    }
     // else {
-        // qDebug() << "Action" << actionName << "not specifically handled for visibility/direct action yet.";
+        // If no specific handler, you might log it, or it might be a checkable action handled by its own toggle slot.
+        // qDebug() << "Action" << actionName << "not specifically handled for direct action in onMenuActionTriggered.";
     // }
 }
+
 
 // ... (other slots remain the same) ...
 void MainWindow::onPositionGo() {

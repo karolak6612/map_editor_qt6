@@ -78,7 +78,7 @@ void EditorSprite::drawTo(QPainter* painter, const QRect& targetScreenRect, cons
     }
 
     // If sourceSpriteRect is invalid or full, use the whole pixmap
-    if (sourceSpriteRect.isNull() || sourceSpriteRect.width() <= 0 || sourceSpriteRect.height() <= 0 || 
+    if (sourceSpriteRect.isNull() || sourceSpriteRect.width() <= 0 || sourceSpriteRect.height() <= 0 ||
         (sourceSpriteRect.width() == bestPixmap->width() && sourceSpriteRect.height() == bestPixmap->height() && sourceSpriteRect.topLeft() == QPoint(0,0) )) {
         painter->drawPixmap(targetScreenRect, *bestPixmap);
     } else {
@@ -96,7 +96,7 @@ void EditorSprite::drawTo(QPainter* painter, const QPoint& targetPos, int source
         qWarning() << "EditorSprite::drawTo (QPoint, int...): No suitable pixmap found for default size.";
         return;
     }
-    
+
     QRect sourceRect;
     if (sourceWidth > 0 && sourceHeight > 0) {
         sourceRect.setRect(sourceX, sourceY, sourceWidth, sourceHeight);
@@ -171,19 +171,19 @@ const QPixmap* EditorSprite::getBestFitPixmap(SpriteSize requestedSize) const {
         // that can cache scaled pixmaps.
         // For now, we'll just return the best available *unscaled* direct match or a reasonable fallback.
         // The drawTo method will need to be smart.
-        
+
         // The original wxEditorSprite::DrawTo scaled a 32x32 to 64x64 if 64x64 was missing.
         // This means the getBestFitPixmap should probably just return the 32x32 one in this case,
         // and the drawTo method will perform the scaling.
         return &m_pixmaps.value(SPRITE_SIZE_32x32);
     }
-    
+
     // General fallback: try default, then 32, then 16, then first available
     if (m_pixmaps.contains(m_defaultSize)) return &m_pixmaps.value(m_defaultSize);
     if (m_pixmaps.contains(SPRITE_SIZE_32x32)) return &m_pixmaps.value(SPRITE_SIZE_32x32);
     if (m_pixmaps.contains(SPRITE_SIZE_16x16)) return &m_pixmaps.value(SPRITE_SIZE_16x16);
     if (!m_pixmaps.isEmpty()) return &m_pixmaps.first();
-    
+
     return nullptr; // No pixmap available
 }
 

@@ -26,7 +26,7 @@ void Animator::setup(int frameCount, int startFrame, int loopCount, bool isAsync
     if (m_frameCount > 0 && m_frameDurations.size() != m_frameCount) {
         m_frameDurations.resize(m_frameCount); // Default FrameDuration constructor will be used
     }
-    
+
     m_totalAnimationTimeNonAsync = 0;
     if (!m_isAsync && m_frameCount > 0) {
         for (const auto& fd : m_frameDurations) {
@@ -97,7 +97,7 @@ void Animator::update(qint64 elapsedTimeMs) {
         // For now, we'll make it behave like async if not driven by calculateSynchronousAnimation.
         // The original calculateSynchronous() was based on total_duration and global time.
         // This simplified update() assumes elapsedTimeMs is a delta.
-        
+
         // Simplified: treat sync like async for delta updates for now.
         // Proper synchronous might involve calculateSynchronousAnimation(totalTime).
          m_timeToNextFrame -= elapsedTimeMs;
@@ -108,7 +108,7 @@ void Animator::update(qint64 elapsedTimeMs) {
                 m_currentFrameIndex = calculateNextFrameLoop();
             }
 
-            if (m_isComplete) { 
+            if (m_isComplete) {
                 break;
             }
             m_timeToNextFrame += getCurrentFrameDuration();

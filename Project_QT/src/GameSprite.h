@@ -32,21 +32,21 @@ public:
     // --- Configuration Methods (called by SpriteManager or similar) ---
     void setSpriteSheet(const QPixmap& sheet);
     void setSpriteSheet(const QString& path); // Loads from file/resource
-    
+
     void setFrameDimensions(int width, int height);
     void setAnimationLayout(int layers, int patternsX, int patternsY, int patternsZ, int framesPerPattern); // framesPerPattern means total frames for one x/y/z pattern combination
     void setDrawingAttributes(qint16 drawHeight, qint16 drawOffsetX, qint16 drawOffsetY);
     void setSpriteLight(const SpriteLight& light);
     void configureAnimator(int startFrame, int loopCount, bool isAsync, const QVector<Animator::FrameDuration>& durations);
-    
+
     // --- Overridden from Sprite ---
     void drawTo(QPainter* painter, const QRect& targetScreenRect, const QRect& sourceSpriteRect) override;
     void drawTo(QPainter* painter, const QPoint& targetPos, int sourceX = 0, int sourceY = 0, int sourceWidth = -1, int sourceHeight = -1) override;
-    
+
     // GameSprite specific drawing, includes animation frame selection
     // Corresponds to original GameSprite::DrawTo, but parameters are more Qt-like
     // patternX, patternY, patternZ are for selecting which animation sequence (e.g. direction, addon)
-    void drawAnimated(QPainter* painter, const QPoint& targetPos, 
+    void drawAnimated(QPainter* painter, const QPoint& targetPos,
                       int patternX = 0, int patternY = 0, int patternZ = 0, int layer = 0);
 
     // TODO: Add DrawOutfit method equivalent if needed, taking an Outfit struct

@@ -45,7 +45,7 @@ public:
 
     void update(qint64 elapsedTimeMs); // Call this periodically to update the animation
     void reset();
-    
+
     int getCurrentFrameIndex() const { return m_currentFrameIndex; }
     void setCurrentFrameIndex(int frameIndex); // For manual setting
 
