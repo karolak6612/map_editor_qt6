@@ -6,6 +6,8 @@
 #include <QWheelEvent>
 #include <QKeyEvent>
 #include <QPointF>
+#include <QRectF>   // Added for drawBackground
+#include <QPainter> // Added for drawBackground
 #include <QEnterEvent>
 #include <QDebug>
 
@@ -94,6 +96,7 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
 
+    void drawBackground(QPainter* painter, const QRectF& rect) override;
 private:
     void changeFloor(int newFloor);
     void updateAndRefreshMapCoordinates(const QPoint& screenPos);

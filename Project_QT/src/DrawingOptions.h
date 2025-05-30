@@ -22,6 +22,7 @@ struct DrawingOptions {
     float creatureOpacity = 1.0f;
     
     bool highlightSelectedTile = true; // If the tile itself should indicate selection
+    bool drawDebugInfo = false;      // For drawing bounding boxes, IDs, etc.
 
     // Default constructor
     DrawingOptions() {
@@ -39,6 +40,7 @@ struct DrawingOptions {
         itemOpacity = 1.0f;
         creatureOpacity = 1.0f;
         highlightSelectedTile = true;
+        drawDebugInfo = false;
     }
 };
 

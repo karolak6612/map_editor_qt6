@@ -301,3 +301,12 @@ void MapView::keyReleaseEvent(QKeyEvent *event) {
     qDebug() << "MapView::keyReleaseEvent, key:" << event->key() << "text:" << event->text() << "modifiers:" << event->modifiers();
     QGraphicsView::keyReleaseEvent(event);
 }
+
+void MapView::drawBackground(QPainter* painter, const QRectF& rect) {
+    // Call base class implementation first (important for scene backgroundBrush, etc.)
+    QGraphicsView::drawBackground(painter, rect);
+
+    // Draw a custom placeholder background color over the default scene background
+    // This ensures a visible placeholder even if scene background is transparent or not set.
+    painter->fillRect(rect, QColor(30, 30, 30)); // Dark gray placeholder background
+}

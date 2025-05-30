@@ -290,12 +290,27 @@ void Item::draw(QPainter* painter, const QRectF& targetRect, const DrawingOption
     itemColor.setHsv(((serverId_ * 37) % 360), 200, 220); 
     
     painter->fillRect(targetRect, QColor(itemColor.red(), itemColor.green(), itemColor.blue(), 128)); // Semi-transparent
-    painter->drawRect(targetRect); // Draw an outline
-    
-    // Optional: Use options to decide whether to draw text, etc.
-    // if (options.showItemDetails) { /* draw more details */ }
+    painter->setPen(Qt::black); // Explicitly set pen for outline after fillRect might change it
+    painter->drawRect(targetRect); 
 
-    // qDebug() << "Item::draw() called for ID:" << serverId_ << "at" << targetRect;
+    if (options.drawDebugInfo) {
+        painter->save();
+        // Draw bounding box (already drawn above, but could be a different color for debug)
+        QPen debugPen(Qt::magenta);
+        debugPen.setStyle(Qt::DotLine);
+        painter->setPen(debugPen);
+        painter->drawRect(targetRect);
+
+        // Draw Server ID
+        QString idText = QString("ID:%1").arg(serverId_);
+        QFont font = painter->font();
+        font.setPointSize(8); // Small font for debug info
+        painter->setFont(font);
+        painter->setPen(Qt::white); // Ensure text is visible
+        // Position text inside the box, e.g., top-left
+        painter->drawText(targetRect.adjusted(2, 2, -2, -2), Qt::AlignTop | Qt::AlignLeft | Qt::TextDontClip, idText);
+        painter->restore();
+    }
 }
 
 // --- New Dedicated Property Getters and Setters ---
