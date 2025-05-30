@@ -9,6 +9,7 @@
 
 #include <QRectF> // For draw method targetRect
 #include "DrawingOptions.h" // For draw method options
+#include "ItemManager.h" // For ItemGroup_t, ItemTypes_t
 
 // Forward declarations
 class QPainter;
@@ -103,10 +104,48 @@ public:
 
 
     // Other methods
-    virtual QString getDescription() const; 
+    virtual QString getDescription() const; // Now a dedicated member, getter remains.
     virtual void drawText(QPainter* painter, const QRectF& targetRect, const QMap<QString, QVariant>& options); // Changed QVariantMap to QMap
     virtual void draw(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
     virtual Item* deepCopy() const; 
+
+    // New dedicated property getters
+    QString descriptionText() const; // Renamed to avoid conflict with virtual getDescription
+    QString editorSuffix() const;
+    ItemGroup_t itemGroup() const;
+    ItemTypes_t itemType() const;
+    float weight() const;
+    qint16 attack() const;
+    qint16 defense() const;
+    qint16 armor() const;
+    quint16 charges() const;
+    quint16 maxTextLen() const;
+    quint16 rotateTo() const;
+    quint16 volume() const;
+    quint32 slotPosition() const;
+    quint8 weaponType() const;
+    quint16 lightLevel() const;
+    quint16 lightColor() const;
+    quint16 classification() const;
+
+    // New dedicated property setters
+    void setDescriptionText(const QString& description); // Renamed
+    void setEditorSuffix(const QString& suffix);
+    void setItemGroup(ItemGroup_t group);
+    void setItemType(ItemTypes_t type);
+    void setWeight(float weight);
+    void setAttack(qint16 attack);
+    void setDefense(qint16 defense);
+    void setArmor(qint16 armor);
+    void setCharges(quint16 charges);
+    void setMaxTextLen(quint16 len);
+    void setRotateTo(quint16 id);
+    void setVolume(quint16 volume);
+    void setSlotPosition(quint32 slotPos);
+    void setWeaponType(quint8 type);
+    void setLightLevel(quint16 level);
+    void setLightColor(quint16 color);
+    void setClassification(quint16 classification);
 
 signals:
     void attributeChanged(const QString& key, const QVariant& newValue);
@@ -139,6 +178,26 @@ private:
     bool hasHookSouth_ = false;
     bool hasHookEast_ = false;
     bool hasHeight_ = false;
+
+    // New dedicated members
+    QString description_; // For the item's look description
+    QString editorSuffix_;
+    ItemGroup_t itemGroup_ = ITEM_GROUP_NONE;
+    ItemTypes_t itemType_ = ITEM_TYPE_NONE; 
+    
+    float weight_ = 0.0f;
+    qint16 attack_ = 0;
+    qint16 defense_ = 0;
+    qint16 armor_ = 0;
+    quint16 charges_ = 0; 
+    quint16 maxTextLen_ = 0;
+    quint16 rotateTo_ = 0; 
+    quint16 volume_ = 0;   
+    quint32 slotPosition_ = 0; 
+    quint8 weaponType_ = 0;  
+    quint16 lightLevel_ = 0;
+    quint16 lightColor_ = 0;
+    quint16 classification_ = 0;
 };
 
 #endif // ITEM_H
