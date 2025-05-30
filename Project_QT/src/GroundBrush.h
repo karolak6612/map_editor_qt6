@@ -46,6 +46,14 @@ public:
 
     // Convenience method (already existed, good to keep)
     bool isGround() const override;
+
+    // --- Methods for managing the ground item ID ---
+    void setCurrentGroundItemId(quint16 itemId);
+    quint16 getCurrentGroundItemId() const;
+
+private:
+    quint16 currentGroundItemId_ = 0;
+    // Add a known default if possible, e.g. common grass ID, otherwise 0 indicates "not set".
 };
 
 #endif // GROUNDBRUSH_H

@@ -24,32 +24,66 @@ Brush::Type GroundBrush::type() const {
 
 // Core action method stubs
 bool GroundBrush::canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext) const {
-    Q_UNUSED(map);
-    Q_UNUSED(tilePos);
-    Q_UNUSED(drawingContext);
-    // Basic implementation: GroundBrush can always attempt to draw.
-    // qDebug() << "GroundBrush::canDraw called at" << tilePos;
+    Q_UNUSED(tilePos);      // Not used in this very basic check
+    Q_UNUSED(drawingContext); // Not used in this very basic check
+
+    if (!map) {
+        qWarning() << "GroundBrush::canDraw: Map pointer is null.";
+        return false;
+    }
+
+    // Basic check: A ground brush can attempt to draw if there's a map.
+    // More advanced checks could involve:
+    // - if currentGroundItemId_ is valid (not 0) for an apply operation.
+    // - if the tile at tilePos is not obstructed for ground placement by other items.
+    // - ground_equivalent checks with neighbors (deferred).
+    // - if drawingContext provides a specific item, check if it's a valid ground type.
+
+    // This method is more about "can this TYPE of brush operate here in general".
+    // The specific configured item ID (currentGroundItemId_) is checked in applyBrush.
+    // For removeBrush, it can generally always attempt to act.
     return true;
 }
 
+#include "SetGroundItemCommand.h" // Added include
+
 QUndoCommand* GroundBrush::applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
-    Q_UNUSED(map);
-    Q_UNUSED(drawingContext);
-    Q_UNUSED(parentCommand);
-    // Placeholder: Actual ground drawing logic will create a specific command.
-    qDebug() << "GroundBrush::applyBrush called for tile:" << tilePos << "(No actual command created yet)";
-    // Example: return new PlaceGroundCommand(map, tilePos, m_itemIdToPlace, parentCommand);
-    return nullptr;
+    Q_UNUSED(drawingContext); // Not used in this basic implementation
+
+    if (!map) {
+        qWarning() << "GroundBrush::applyBrush: Map pointer is null.";
+        return nullptr;
+    }
+
+    quint16 groundItemIdToPlace = getCurrentGroundItemId();
+    // currentGroundItemId_ is a member, accessible via getCurrentGroundItemId()
+
+    if (groundItemIdToPlace == 0) {
+        // If currentGroundItemId_ is 0, it could mean "erase ground" or "brush not configured".
+        // For applyBrush, it's more likely it means the brush is not configured to place anything specific.
+        // The removeBrush method should be used for explicit erasure.
+        // So, if groundItemIdToPlace is 0 here, it implies the brush is not properly set up to *place* a ground.
+        qWarning() << "GroundBrush::applyBrush: currentGroundItemId_ is 0. Brush may not be configured to place a specific ground. No action taken.";
+        return nullptr;
+    }
+
+    qDebug() << "GroundBrush::applyBrush: Attempting to place ground ID" << groundItemIdToPlace << "at" << tilePos;
+    return new SetGroundItemCommand(map, tilePos, groundItemIdToPlace, parentCommand);
 }
 
 QUndoCommand* GroundBrush::removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
-    Q_UNUSED(map);
-    Q_UNUSED(drawingContext);
-    Q_UNUSED(parentCommand);
-    // Placeholder: Actual ground removal logic.
-    qDebug() << "GroundBrush::removeBrush called for tile:" << tilePos << "(No actual command created yet)";
-    // Example: return new RemoveGroundCommand(map, tilePos, parentCommand);
-    return nullptr;
+    Q_UNUSED(drawingContext); // Not typically used for a generic ground removal
+
+    if (!map) {
+        qWarning() << "GroundBrush::removeBrush: Map pointer is null.";
+        return nullptr;
+    }
+
+    // To remove ground, we pass an item ID of 0 to SetGroundItemCommand.
+    // The command's redo() will see newGroundItemId_ == 0 and call map->removeGround().
+    // Its undo() will restore whatever was there before (captured by its first redo).
+    qDebug() << "GroundBrush::removeBrush: Attempting to remove ground at" << tilePos;
+    return new SetGroundItemCommand(map, tilePos, 0, parentCommand); // 0 signifies ground removal
 }
 
 // Brush geometry methods
@@ -64,6 +98,19 @@ Brush::BrushShape GroundBrush::getBrushShape() const {
     // This should also come from global settings or BrushManager.
     // qDebug() << "GroundBrush::getBrushShape() - returning placeholder Square";
     return Brush::BrushShape::Square;
+}
+
+// --- Methods for managing the ground item ID ---
+void GroundBrush::setCurrentGroundItemId(quint16 itemId) {
+    currentGroundItemId_ = itemId;
+    // Optionally, if the brush's lookId should reflect the item, update it here.
+    // This might involve looking up item properties if lookId_ is e.g. a client sprite ID.
+    // For now, just setting the ID.
+    qDebug() << "GroundBrush: Set currentGroundItemId to" << currentGroundItemId_;
+}
+
+quint16 GroundBrush::getCurrentGroundItemId() const {
+    return currentGroundItemId_;
 }
 
 // Cancel operation
