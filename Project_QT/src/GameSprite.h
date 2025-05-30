@@ -1,75 +1,101 @@
-#ifndef GAMESPRITE_H
-#define GAMESPRITE_H
+#ifndef QT_GAMESPRITE_H
+#define QT_GAMESPRITE_H
 
-#include "Sprite.h"
-#include <QVector>
-#include <QMap> // For potential caching or complex structures
-#include <QColor>
-#include <QPoint> // For QPoint
+#include "Sprite.h"     // Base class
+#include "Animator.h"   // For m_animator
+#include "SpriteLight.h" // For m_spriteLight
+#include <QPixmap>
+#include <QString>
+#include <QVector> // For potential animation data storage if not all in Animator
 
-// Forward declarations if needed (e.g. for Outfit class if it's complex)
-// For now, assume Outfit might be a simpler struct or basic class
-struct Outfit {
-    int lookType = 0;
-    int lookHead = 0;
-    int lookBody = 0;
-    int lookLegs = 0;
-    int lookFeet = 0;
-    // Add other relevant members from wxwidgets version
-    uint32_t getColorHash() const { // Example hash function
-        return (lookHead << 24) | (lookBody << 16) | (lookLegs << 8) | lookFeet;
-    }
-};
-
+// Forward declarations
+class QPainter;
+struct Outfit; // Assuming Outfit struct will be defined elsewhere, similar to wxwidgets
 
 class GameSprite : public Sprite {
+    Q_OBJECT
+
 public:
-    GameSprite();
+    // Constructor might take sprite sheet path, dimensions, animation layout, etc.
+    // For now, a basic one. Detailed loading will be handled by a SpriteManager later.
+    explicit GameSprite(QObject *parent = nullptr);
+    // A more complete constructor might look like:
+    // explicit GameSprite(const QString& spriteSheetPath,
+    //                     int frameWidth, int frameHeight,
+    //                     int numFrames, int numLayers, int numPatternsX, int numPatternsY, int numPatternsZ,
+    //                     const SpriteLight& lightInfo, qint16 drawHeight, qint16 drawOffsetX, qint16 drawOffsetY,
+    //                     const Animator::FrameDuration& defaultFrameDuration, // Or QVector<Animator::FrameDuration>
+    //                     QObject *parent = nullptr);
+
     ~GameSprite() override;
 
-    void draw(QPainter* painter, int x, int y, int width = -1, int height = -1) override;
-    virtual void drawOutfit(QPainter* painter, int x, int y, const Outfit& outfit, int width = -1, int height = -1);
+    // --- Configuration Methods (called by SpriteManager or similar) ---
+    void setSpriteSheet(const QPixmap& sheet);
+    void setSpriteSheet(const QString& path); // Loads from file/resource
+    
+    void setFrameDimensions(int width, int height);
+    void setAnimationLayout(int layers, int patternsX, int patternsY, int patternsZ, int framesPerPattern); // framesPerPattern means total frames for one x/y/z pattern combination
+    void setDrawingAttributes(qint16 drawHeight, qint16 drawOffsetX, qint16 drawOffsetY);
+    void setSpriteLight(const SpriteLight& light);
+    void configureAnimator(int startFrame, int loopCount, bool isAsync, const QVector<Animator::FrameDuration>& durations);
+    
+    // --- Overridden from Sprite ---
+    void drawTo(QPainter* painter, const QRect& targetScreenRect, const QRect& sourceSpriteRect) override;
+    void drawTo(QPainter* painter, const QPoint& targetPos, int sourceX = 0, int sourceY = 0, int sourceWidth = -1, int sourceHeight = -1) override;
+    
+    // GameSprite specific drawing, includes animation frame selection
+    // Corresponds to original GameSprite::DrawTo, but parameters are more Qt-like
+    // patternX, patternY, patternZ are for selecting which animation sequence (e.g. direction, addon)
+    void drawAnimated(QPainter* painter, const QPoint& targetPos, 
+                      int patternX = 0, int patternY = 0, int patternZ = 0, int layer = 0);
 
-    int getDrawHeight() const;
-    QPoint getDrawOffset() const; 
-    QRgb getMiniMapColor() const; 
+    // TODO: Add DrawOutfit method equivalent if needed, taking an Outfit struct
+    // virtual void drawOutfit(QPainter* painter, const QPoint& targetPos, const Outfit& outfit, int patternX = 0, ...);
 
-    bool hasLight() const;
-    // SpriteLight getLight() const; // Define SpriteLight struct if needed
+    void unload() override;
 
-    // GameSprite specific properties from wxwidgets version
-    uint8_t height = 0; 
-    uint8_t width = 0;  
-    uint8_t layers = 0; 
-    uint8_t pattern_x = 0; 
-    uint8_t pattern_y = 0; 
-    uint8_t pattern_z = 0; 
-    uint8_t frames = 1; // Default to 1 frame to avoid division by zero
-    uint32_t numsprites = 0;
+    int width() const override;  // Width of a single sprite frame
+    int height() const override; // Height of a single sprite frame
 
-    uint16_t draw_height_offset = 0; 
-    QPoint draw_offset; 
+    // --- GameSprite Specific Methods ---
+    Animator* getAnimator() { return &m_animator; } // Allow external access if needed
+    const Animator* getAnimator() const { return &m_animator; }
 
-    QRgb minimap_color_val = qRgb(0,0,0); 
+    SpriteLight getLightInfo() const { return m_spriteLight; }
+    qint16 getDrawHeight() const { return m_drawHeight; }
+    qint16 getDrawOffsetX() const { return m_drawOffsetX; }
+    qint16 getDrawOffsetY() const { return m_drawOffsetY; }
 
-    bool m_has_light = false;
-    // SpriteLight light_properties; 
+    int getFrameWidth() const { return m_frameWidth; }
+    int getFrameHeight() const { return m_frameHeight; }
+    int getLayers() const { return m_layers; }
+    int getPatternXCount() const { return m_patternX; }
+    int getPatternYCount() const { return m_patternY; }
+    int getPatternZCount() const { return m_patternZ; }
+    int getFramesPerPattern() const { return m_framesPerPattern; } // Total frames for one X,Y,Z pattern
 
-    QVector<QImage> sprite_parts; 
+protected:
+    QRect calculateFrameRect(int frameIndex, int patternX, int patternY, int patternZ, int layer) const;
 
-    QImage getSpritePart(int x_offset, int y_offset, int layer_offset, int pattern_x_offset, int pattern_y_offset, int pattern_z_offset, int frame_num) const;
-    int getIndex(int w, int h, int l, int px, int py, int pz, int fr) const;
+private:
+    QPixmap m_spriteSheet;
+    Animator m_animator;
 
-    bool loadFromSpriteSheet(const QImage& spriteSheet, int sheet_total_width, int sheet_total_height, int part_width, int part_height);
-    bool loadIndividualSpriteParts(const QStringList& filePaths); 
+    // Sprite sheet layout and properties
+    int m_frameWidth = 0;
+    int m_frameHeight = 0;
+    int m_layers = 1;          // Number of blend layers
+    int m_patternX = 1;        // e.g., creature directions
+    int m_patternY = 1;        // e.g., creature addons
+    int m_patternZ = 1;        // e.g., other variations
+    int m_framesPerPattern = 1; // Number of animation frames for a single pattern combination
 
-    QImage colorizeSpritePart(const QImage& part, const Outfit& outfit) const;
+    // Drawing attributes
+    qint16 m_drawHeight = 0;    // For Z-ordering or elevation effect
+    qint16 m_drawOffsetX = 0;
+    qint16 m_drawOffsetY = 0;
 
-public: 
-    void colorizePixel(const QColor& outfit_color_base, QColor& target_pixel_color) const; // Removed const Outfit& outfit from here, it's not used
-    static const QVector<QRgb> TemplateOutfitLookupTable; 
-private: 
-    static QVector<QRgb> initializeLookupTable();
+    SpriteLight m_spriteLight;
 };
 
-#endif // GAMESPRITE_H
+#endif // QT_GAMESPRITE_H

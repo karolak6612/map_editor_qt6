@@ -1,233 +1,221 @@
 #include "GameSprite.h"
 #include <QPainter>
-#include <QBitmap> // For mask operations if needed
+#include <QDebug> // For warnings
 
-// Initialize static member
-const QVector<QRgb> GameSprite::TemplateOutfitLookupTable = GameSprite::initializeLookupTable();
-
-QVector<QRgb> GameSprite::initializeLookupTable() {
-    // Copied from wxwidgets/graphics.cpp TemplateOutfitLookupTable
-    // Qt uses ARGB for QRgb, so 0xFF prefix for opaque alpha might be needed if directly used as QRgb.
-    // However, this table seems to store RGB values, which QColor can handle.
-    // For direct QRgb, ensure format matches or convert.
-    // Using QColor to parse hex and then to QRgb ensures correctness.
-    QVector<QRgb> table;
-    const uint32_t rawTable[] = {
-        0xFFFFFF, 0xFFD4BF, 0xFFE9BF, 0xFFFFBF, 0xE9FFBF, 0xD4FFBF, 0xBFFFBF, 0xBFFFD4,
-        0xBFFFE9, 0xBFFFFF, 0xBFE9FF, 0xBFD4FF, 0xBFBFFF, 0xD4BFFF, 0xE9BFFF, 0xFFBFFF,
-        0xFFBFE9, 0xFFBFD4, 0xFFBFBF, 0xDADADA, 0xBF9F8F, 0xBFAF8F, 0xBFBF8F, 0xAFBF8F,
-        0x9FBF8F, 0x8FBF8F, 0x8FBF9F, 0x8FBFAF, 0x8FBFBF, 0x8FAFBF, 0x8F9FBF, 0x8F8FBF,
-        0x9F8FBF, 0xAF8FBF, 0xBF8FBF, 0xBF8FAF, 0xBF8F9F, 0xBF8F8F, 0xB6B6B6, 0xBF7F5F,
-        0xBFAF8F, 0xBFBF5F, 0x9FBF5F, 0x7FBF5F, 0x5FBF5F, 0x5FBF7F, 0x5FBF9F, 0x5FBFBF,
-        0x5F9FBF, 0x5F7FBF, 0x5F5FBF, 0x7F5FBF, 0x9F5FBF, 0xBF5FBF, 0xBF5F9F, 0xBF5F7F,
-        0xBF5F5F, 0x919191, 0xBF6A3F, 0xBF943F, 0xBFBF3F, 0x94BF3F, 0x6ABF3F, 0x3FBF3F,
-        0x3FBF6A, 0x3FBF94, 0x3FBFBF, 0x3F94BF, 0x3F6ABF, 0x3F3FBF, 0x6A3FBF, 0x943FBF,
-        0xBF3FBF, 0xBF3F94, 0xBF3F6A, 0xBF3F3F, 0x6D6D6D, 0xFF5500, 0xFFAA00, 0xFFFF00,
-        0xAAFF00, 0x54FF00, 0x00FF00, 0x00FF54, 0x00FFAA, 0x00FFFF, 0x00A9FF, 0x0055FF,
-        0x0000FF, 0x5500FF, 0xA900FF, 0xFE00FF, 0xFF00AA, 0xFF0055, 0xFF0000, 0x484848,
-        0xBF3F00, 0xBF7F00, 0xBFBF00, 0x7FBF00, 0x3FBF00, 0x00BF00, 0x00BF3F, 0x00BF7F,
-        0x00BFBF, 0x007FBF, 0x003FBF, 0x0000BF, 0x3F00BF, 0x7F00BF, 0xBF00BF, 0xBF007F,
-        0xBF003F, 0xBF0000, 0x242424, 0x7F2A00, 0x7F5500, 0x7F7F00, 0x557F00, 0x2A7F00,
-        0x007F00, 0x007F2A, 0x007F55, 0x007F7F, 0x00547F, 0x002A7F, 0x00007F, 0x2A007F,
-        0x54007F, 0x7F007F, 0x7F0055, 0x7F002A, 0x7F0000,
-    };
-    for (uint32_t val : rawTable) {
-        table.append(qRgb( (val >> 16) & 0xFF, (val >> 8) & 0xFF, val & 0xFF ));
-    }
-    return table;
-}
-
-
-GameSprite::GameSprite() : Sprite() {
-    // Initialize members
-    // animator = nullptr; // Or initialize with a default animator if applicable
+// Basic constructor
+GameSprite::GameSprite(QObject *parent)
+    : Sprite(parent),
+      m_animator(this), // Animator is a QObject, set parent if desired or manage lifetime separately
+      m_frameWidth(0), m_frameHeight(0),
+      m_layers(1), m_patternX(1), m_patternY(1), m_patternZ(1), m_framesPerPattern(1),
+      m_drawHeight(0), m_drawOffsetX(0), m_drawOffsetY(0) {
+    // m_spriteLight is default constructed
 }
 
 GameSprite::~GameSprite() {
-    // delete animator;
-    // sprite_parts will be cleared automatically
+    unload();
 }
 
-void GameSprite::draw(QPainter* painter, int x, int y, int width_override, int height_override) {
-    if (!painter ) { 
-        if (m_image.isNull()) return; 
-        // Call base class draw method if this one cannot proceed (e.g. no sprite_parts)
-        // This assumes Sprite::draw is not pure virtual or GameSprite always has a drawable state.
-        // Since Sprite::draw is pure virtual, this path should ideally not be taken
-        // or GameSprite ensures it always has something to draw if it doesn't override fully.
-        // For now, if sprite_parts is empty, it relies on m_image from Sprite.
-        // If m_image is also just the default 1x1, it will draw that.
-        painter->drawImage(QRect(x,y, width_override == -1 ? m_image.width() : width_override, height_override == -1 ? m_image.height() : height_override), m_image);
+// --- Configuration Methods ---
+void GameSprite::setSpriteSheet(const QPixmap& sheet) {
+    m_spriteSheet = sheet;
+    // Potentially reset animator or update based on new sheet, if layout changes
+}
+
+void GameSprite::setSpriteSheet(const QString& path) {
+    if (!path.isEmpty()) {
+        if (!m_spriteSheet.load(path)) {
+            qWarning() << "GameSprite: Failed to load sprite sheet from" << path;
+        }
+    } else {
+        m_spriteSheet = QPixmap(); // Clear if path is empty
+    }
+}
+
+void GameSprite::setFrameDimensions(int width, int height) {
+    m_frameWidth = qMax(0, width);
+    m_frameHeight = qMax(0, height);
+}
+
+void GameSprite::setAnimationLayout(int layers, int patternsX, int patternsY, int patternsZ, int framesPerPattern) {
+    m_layers = qMax(1, layers); // Must have at least 1 layer
+    m_patternX = qMax(1, patternsX);
+    m_patternY = qMax(1, patternsY);
+    m_patternZ = qMax(1, patternsZ);
+    m_framesPerPattern = qMax(1, framesPerPattern);
+    
+    // Reconfigure animator based on new layout (total frames for one pattern combination)
+    // The animator itself doesn't know about patterns, just total frames for its current sequence
+    m_animator.setup(m_framesPerPattern, -1, 0, false); // Default setup, can be reconfigured by configureAnimator
+}
+
+void GameSprite::setDrawingAttributes(qint16 drawHeight, qint16 drawOffsetX, qint16 drawOffsetY) {
+    m_drawHeight = drawHeight;
+    m_drawOffsetX = drawOffsetX;
+    m_drawOffsetY = drawOffsetY;
+}
+
+void GameSprite::setSpriteLight(const SpriteLight& light) {
+    m_spriteLight = light;
+}
+
+void GameSprite::configureAnimator(int startFrame, int loopCount, bool isAsync, const QVector<Animator::FrameDuration>& durations) {
+    m_animator.setup(m_framesPerPattern, startFrame, loopCount, isAsync);
+    if (!durations.isEmpty()) {
+        m_animator.setFrameDurations(durations);
+    }
+}
+
+// --- Overridden from Sprite ---
+
+// Generic drawTo - tries to draw the current animated frame if possible, or a default portion.
+// This might be too ambiguous for GameSprite. drawAnimated is more specific.
+void GameSprite::drawTo(QPainter* painter, const QRect& targetScreenRect, const QRect& sourceSpriteRect) {
+    if (!painter || m_spriteSheet.isNull() || m_frameWidth == 0 || m_frameHeight == 0) {
         return;
     }
-    if (sprite_parts.isEmpty()){ 
-         if (m_image.isNull()) return; 
-        painter->drawImage(QRect(x,y, width_override == -1 ? m_image.width() : width_override, height_override == -1 ? m_image.height() : height_override), m_image);
+    // This version of drawTo is a bit tricky for an animated sprite if sourceSpriteRect is arbitrary
+    // and not aligned with animation frames.
+    // For simplicity, let's assume sourceSpriteRect refers to a portion of the *entire spritesheet*,
+    // or if it's empty, we draw the current animated frame scaled to targetScreenRect.
+    if (sourceSpriteRect.isNull() || !sourceSpriteRect.isValid()) {
+        int currentFrame = m_animator.getCurrentFrameIndex();
+        // Assuming default pattern/layer for this generic call
+        QRect calculatedSourceRect = calculateFrameRect(currentFrame, 0, 0, 0, 0); 
+        if (calculatedSourceRect.isValid()) {
+            painter->drawPixmap(targetScreenRect, m_spriteSheet, calculatedSourceRect);
+        }
+    } else {
+        painter->drawPixmap(targetScreenRect, m_spriteSheet, sourceSpriteRect);
+    }
+}
+
+// Generic drawTo - similar ambiguity. Let's draw the top-left frame or current animated one.
+void GameSprite::drawTo(QPainter* painter, const QPoint& targetPos, int sourceX, int sourceY, int sourceWidth, int sourceHeight) {
+    if (!painter || m_spriteSheet.isNull() || m_frameWidth == 0 || m_frameHeight == 0) {
         return;
     }
 
-    const QImage& current_part = sprite_parts.at(0); // Simplification!
-    if (current_part.isNull()) return;
-
-    int w = (width_override == -1) ? current_part.width() : width_override;
-    int h = (height_override == -1) ? current_part.height() : height_override;
-    
-    painter->drawImage(QRect(x, y, w, h), current_part);
-}
-
-void GameSprite::drawOutfit(QPainter* painter, int x, int y, const Outfit& outfit, int width_override, int height_override) {
-     if (!painter) return; 
-
-    QImage base_image_to_use;
-
-    if (!sprite_parts.isEmpty()) {
-        base_image_to_use = getSpritePart(0,0,0,0,0,0,0); 
-        if(base_image_to_use.isNull()){ 
-            base_image_to_use = sprite_parts.at(0);
-        }
-    } else if (!m_image.isNull()) { 
-        base_image_to_use = m_image;
-    } else {
-        return; 
+    QRect sourceRect;
+    if (sourceWidth > 0 && sourceHeight > 0) {
+        sourceRect.setRect(sourceX, sourceY, sourceWidth, sourceHeight);
+    } else { // Draw current animated frame of default pattern
+        int currentFrame = m_animator.getCurrentFrameIndex();
+        sourceRect = calculateFrameRect(currentFrame, 0, 0, 0, 0);
     }
     
-    if (base_image_to_use.isNull()) return;
-
-
-    QImage colorized_part = colorizeSpritePart(base_image_to_use, outfit);
-    if (colorized_part.isNull()) return;
-
-    int w = (width_override == -1) ? colorized_part.width() : width_override;
-    int h = (height_override == -1) ? colorized_part.height() : height_override;
-
-    painter->drawImage(QRect(x, y, w, h), colorized_part);
-}
-
-
-int GameSprite::getDrawHeight() const {
-    return draw_height_offset;
-}
-
-QPoint GameSprite::getDrawOffset() const {
-    return draw_offset;
-}
-
-QRgb GameSprite::getMiniMapColor() const {
-    return minimap_color_val;
-}
-
-bool GameSprite::hasLight() const {
-    return m_has_light;
-}
-
-int GameSprite::getIndex(int w, int h, int l, int px, int py, int pz, int fr) const {
-    if (this->frames == 0) return 0; 
-    return ((((((fr % this->frames) * this->pattern_z + pz) * this->pattern_y + py) * this->pattern_x + px) * this->layers + l) * this->height + h) * this->width + w;
-}
-
-
-QImage GameSprite::getSpritePart(int x_offset, int y_offset, int layer_offset, int pattern_x_offset, int pattern_y_offset, int pattern_z_offset, int frame_num) const {
-    if (sprite_parts.isEmpty()) {
-        return m_image; 
+    if (sourceRect.isValid()) {
+        QPoint finalTargetPos = targetPos + QPoint(m_drawOffsetX, m_drawOffsetY);
+        painter->drawPixmap(finalTargetPos, m_spriteSheet, sourceRect);
     }
-    int calculated_index = getIndex(x_offset, y_offset, layer_offset, pattern_x_offset, pattern_y_offset, pattern_z_offset, frame_num);
-
-    if (calculated_index >= 0 && calculated_index < sprite_parts.size()) {
-        return sprite_parts.at(calculated_index);
-    }
-    return QImage(); 
 }
 
-
-bool GameSprite::loadFromSpriteSheet(const QImage& spriteSheet, int sheet_total_width, int sheet_total_height, int part_width, int part_height) {
-    if (spriteSheet.isNull() || part_width <= 0 || part_height <= 0) {
-        return false;
+// GameSprite specific drawing
+void GameSprite::drawAnimated(QPainter* painter, const QPoint& targetPos, 
+                              int patternX, int patternY, int patternZ, int layer) {
+    if (!painter || m_spriteSheet.isNull() || m_frameWidth == 0 || m_frameHeight == 0) {
+        return;
     }
-    sprite_parts.clear();
-    this->width = sheet_total_width / part_width; 
-    this->height = sheet_total_height / part_height; 
 
-    for (int y_coord = 0; y_coord < sheet_total_height; y_coord += part_height) {
-        for (int x_coord = 0; x_coord < sheet_total_width; x_coord += part_width) {
-            if (x_coord + part_width <= sheet_total_width && y_coord + part_height <= sheet_total_height) {
-                sprite_parts.append(spriteSheet.copy(x_coord, y_coord, part_width, part_height));
-            }
-        }
-    }
-    numsprites = sprite_parts.size();
-    if (!sprite_parts.isEmpty()) {
-         Sprite::setImage(sprite_parts.at(0)); 
+    // Note: The Animator currently is configured for m_framesPerPattern.
+    // If different patterns could have different frame counts or timings, Animator would need
+    // to be reconfigured or GameSprite would need multiple Animator instances.
+    // For now, assume one Animator configuration applies to all patterns.
+    int currentFrame = m_animator.getCurrentFrameIndex();
+    QRect sourceRect = calculateFrameRect(currentFrame, patternX, patternY, patternZ, layer);
+
+    if (sourceRect.isValid()) {
+        QPoint finalTargetPos = targetPos + QPoint(m_drawOffsetX, m_drawOffsetY);
+        painter->drawPixmap(finalTargetPos, m_spriteSheet, sourceRect);
     } else {
-        Sprite::setImage(QImage(1,1,QImage::Format_ARGB32_Premultiplied)); // Ensure base image is not null
+        //qWarning() << "GameSprite::drawAnimated: Calculated invalid sourceRect";
     }
-    return !sprite_parts.isEmpty();
 }
 
-bool GameSprite::loadIndividualSpriteParts(const QStringList& filePaths) {
-    sprite_parts.clear();
-    for (const QString& path : filePaths) {
-        QImage part;
-        if (part.load(path)) {
-            sprite_parts.append(part);
-        } else {
-            sprite_parts.clear();
-            return false;
-        }
-    }
-    numsprites = sprite_parts.size();
-    if (!sprite_parts.isEmpty()) {
-         Sprite::setImage(sprite_parts.at(0)); 
-    } else {
-        Sprite::setImage(QImage(1,1,QImage::Format_ARGB32_Premultiplied)); 
-    }
-    return !sprite_parts.isEmpty();
+void GameSprite::unload() {
+    m_spriteSheet = QPixmap(); // Release pixmap data
 }
 
-
-QImage GameSprite::colorizeSpritePart(const QImage& part, const Outfit& outfit) const {
-    if (part.isNull()) return part;
-    // No colorization if no specific outfit colors are set
-    if (outfit.lookHead == 0 && outfit.lookBody == 0 && outfit.lookLegs == 0 && outfit.lookFeet == 0) {
-        return part; 
-    }
-
-    QImage colorizedImage = part.convertToFormat(QImage::Format_ARGB32_Premultiplied); 
-
-    for (int y = 0; y < colorizedImage.height(); ++y) {
-        for (int x = 0; x < colorizedImage.width(); ++x) {
-            QColor originalPixelColor = colorizedImage.pixelColor(x, y);
-            QColor templateColor = originalPixelColor; 
-            QColor finalPixelColor = originalPixelColor; 
-            
-            if (templateColor.red() == 255 && templateColor.green() == 255 && templateColor.blue() == 0 && outfit.lookHead > 0 && outfit.lookHead < TemplateOutfitLookupTable.size()) {
-                colorizePixel(QColor(TemplateOutfitLookupTable[outfit.lookHead]), finalPixelColor);
-            }
-            else if (templateColor.red() == 255 && templateColor.green() == 0 && templateColor.blue() == 0 && outfit.lookBody > 0 && outfit.lookBody < TemplateOutfitLookupTable.size()) {
-                 colorizePixel(QColor(TemplateOutfitLookupTable[outfit.lookBody]), finalPixelColor);
-            }
-            else if (templateColor.red() == 0 && templateColor.green() == 255 && templateColor.blue() == 0 && outfit.lookLegs > 0 && outfit.lookLegs < TemplateOutfitLookupTable.size()) {
-                colorizePixel(QColor(TemplateOutfitLookupTable[outfit.lookLegs]), finalPixelColor);
-            }
-            else if (templateColor.red() == 0 && templateColor.green() == 0 && templateColor.blue() == 255 && outfit.lookFeet > 0 && outfit.lookFeet < TemplateOutfitLookupTable.size()) {
-                colorizePixel(QColor(TemplateOutfitLookupTable[outfit.lookFeet]), finalPixelColor);
-            }
-
-            colorizedImage.setPixelColor(x, y, finalPixelColor);
-        }
-    }
-    return colorizedImage;
+int GameSprite::width() const {
+    return m_frameWidth;
 }
 
-void GameSprite::colorizePixel(const QColor& outfit_color_base, QColor& target_pixel_color) const {
-    float ro = outfit_color_base.redF();
-    float go = outfit_color_base.greenF();
-    float bo = outfit_color_base.blueF();
+int GameSprite::height() const {
+    return m_frameHeight;
+}
 
-    float current_r = target_pixel_color.redF();
-    float current_g = target_pixel_color.greenF();
-    float current_b = target_pixel_color.blueF();
+// Protected helper method
+QRect GameSprite::calculateFrameRect(int frameIndex, int patternX, int patternY, int patternZ, int layer) const {
+    if (m_spriteSheet.isNull() || m_frameWidth == 0 || m_frameHeight == 0 ||
+        m_framesPerPattern == 0 || m_patternX == 0 || m_patternY == 0 || m_patternZ == 0 || m_layers == 0) {
+        return QRect(); // Invalid setup
+    }
 
-    target_pixel_color.setRedF(current_r * ro);
-    target_pixel_color.setGreenF(current_g * go);
-    target_pixel_color.setBlueF(current_b * bo);
+    // Validate inputs to prevent going out of bounds
+    int safeLayer = qBound(0, layer, m_layers - 1);
+    int safePatternZ = qBound(0, patternZ, m_patternZ - 1);
+    int safePatternY = qBound(0, patternY, m_patternY - 1);
+    int safePatternX = qBound(0, patternX, m_patternX - 1);
+    int safeFrameIndex = qBound(0, frameIndex, m_framesPerPattern - 1);
+
+    // Calculate how many full "animation strips" (one full animation for one pattern x/y/z/layer)
+    // are on the sheet horizontally before our target pattern begins.
+    // This assumes a sprite sheet layout where animations for different patterns/layers are laid out sequentially.
+    // The exact layout of the sprite sheet (how layers, patterns, and frames are arranged) is critical.
+    // Original wxGameSprite::getIndex implies a specific order:
+    // ((((((frame % frames) * pattern_z + p_z) * pattern_y + p_y) * pattern_x + p_x) * layers + l) * height_in_sprites + h_idx) * width_in_sprites + w_idx
+    // This means 'width_in_sprites' and 'height_in_sprites' were the dimensions of one single sprite image (usually 1x1 for items/creatures).
+    // 'frames' was total frames for one pattern.
+    // 'height' and 'width' members of GameSprite were number of sprite *images* (usually 1x1).
+    
+    // Let's assume the sprite sheet is laid out as a grid of frames.
+    // Total frames horizontally on the sheet: m_spriteSheet.width() / m_frameWidth
+    // Total frames vertically on the sheet: m_spriteSheet.height() / m_frameHeight
+
+    // Simplified calculation assuming sprite sheet contains frames for ONE specific combination
+    // of (layer, patternZ, patternY, patternX) arranged in a grid, and framesPerPattern refers to this.
+    // Or, if framesPerPattern is the number of frames in one "row" of the sprite sheet for this pattern.
+    
+    // More robust: The sheet contains ALL patterns, layers, frames.
+    // Indexing similar to original:
+    // Start with the base index for the pattern and layer
+    long patternStartIndex = 0;
+    // patternStartIndex = (safeLayer * m_patternZ * m_patternY * m_patternX +
+    //                      safePatternZ * m_patternY * m_patternX +
+    //                      safePatternY * m_patternX +
+    //                      safePatternX) * m_framesPerPattern;
+    
+    // Let total_patterns_per_layer = m_patternX * m_patternY * m_patternZ
+    // Let total_frames_per_layer = total_patterns_per_layer * m_framesPerPattern
+    // base_frame_offset_for_layer = safeLayer * total_frames_per_layer
+    // base_frame_offset_for_pattern_z = safePatternZ * m_patternY * m_patternX * m_framesPerPattern
+    // base_frame_offset_for_pattern_y = safePatternY * m_patternX * m_framesPerPattern
+    // base_frame_offset_for_pattern_x = safePatternX * m_framesPerPattern
+    // global_frame_index = base_for_layer + base_for_pz + base_for_py + base_for_px + safeFrameIndex
+
+    // This calculation matches the original GameSprite::getIndex logic if width=1, height=1 (i.e. each "sprite" is one frame)
+    // and GameSprite::frames was m_framesPerPattern.
+    // GameSprite::height/width (num sprite images) are m_frameHeight/m_frameWidth in pixels for Qt.
+    // GameSprite::layers, pattern_x/y/z, frames are m_layers, m_patternX/Y/Z, m_framesPerPattern.
+
+    long globalFrameIndex = 0;
+    globalFrameIndex += safeLayer;
+    globalFrameIndex = globalFrameIndex * m_patternZ + safePatternZ;
+    globalFrameIndex = globalFrameIndex * m_patternY + safePatternY;
+    globalFrameIndex = globalFrameIndex * m_patternX + safePatternX;
+    globalFrameIndex = globalFrameIndex * m_framesPerPattern + safeFrameIndex;
+
+
+    int framesPerRow = m_spriteSheet.width() / m_frameWidth;
+    if (framesPerRow == 0) return QRect(); // Cannot determine layout
+
+    int frameX = (globalFrameIndex % framesPerRow) * m_frameWidth;
+    int frameY = (globalFrameIndex / framesPerRow) * m_frameHeight;
+
+    if (frameX + m_frameWidth > m_spriteSheet.width() || frameY + m_frameHeight > m_spriteSheet.height()) {
+        //qWarning() << "GameSprite::calculateFrameRect: Calculated frame is out of sprite sheet bounds.";
+        return QRect(); // Out of bounds
+    }
+
+    return QRect(frameX, frameY, m_frameWidth, m_frameHeight);
 }
