@@ -2,6 +2,9 @@
 #include "Item.h"
 #include "Creature.h"
 #include "Spawn.h"
+#include "DrawingOptions.h" // Already included via Tile.h but good for clarity
+#include <QPainter>
+#include <QColor>
 #include <QDebug>
 #include <algorithm> // For std::sort for zoneIds, and potentially std::find if needed
 
@@ -325,4 +328,91 @@ void Tile::update() {
     setStateFlag(TileStateFlag::Blocking, newBlockingState);
     
     emit visualChanged(x_, y_, z_); // Always emit visual changed after an update
+}
+
+void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const DrawingOptions& options) const {
+    if (!painter) return;
+
+    // 0. Optional: Highlight selected tile (as per DrawingOptions)
+    if (options.highlightSelectedTile && isSelected()) {
+        painter->save();
+        // Use a distinct color for selection, e.g., yellow or a bright semi-transparent overlay
+        QColor selectionColor = Qt::yellow;
+        selectionColor.setAlpha(80); // Semi-transparent overlay
+        painter->fillRect(targetScreenRect, selectionColor);
+
+        QPen pen(Qt::yellow, 1); // Thin border for selected tile
+        pen.setStyle(Qt::DotLine);
+        painter->setPen(pen);
+        painter->drawRect(targetScreenRect);
+        painter->restore();
+    }
+
+    // 1. Draw Ground
+    if (options.showGround && ground_) {
+        ground_->draw(painter, targetScreenRect, options);
+    } else if (options.showGround) {
+        // Placeholder for empty ground: a very dark, almost black, slightly transparent color
+        // This helps visualize empty parts of the map if needed.
+        // painter->fillRect(targetScreenRect, QColor(5, 5, 5, 128));
+    }
+
+    // 2. Draw Items (items_ should be in correct visual order: bottom-most first)
+    if (options.showItems) {
+        for (Item* item : items_) {
+            if (item) {
+                // TODO: Future checks based on options.showInvisibleItems and item properties
+                item->draw(painter, targetScreenRect, options);
+            }
+        }
+    }
+
+    // 3. Draw Creature
+    if (options.showCreatures && creature_) {
+        // TODO: Future checks based on options.showInvisibleItems (if creatures can be invisible)
+        creature_->draw(painter, targetScreenRect, options);
+    }
+
+    // 4. Draw Spawn Indicator (placeholder)
+    if (options.showSpawns && spawn_) {
+        painter->save();
+        painter->setBrush(QColor(128, 0, 128, 100)); // Semi-transparent purple
+        painter->setPen(Qt::NoPen);
+        // Draw a small circle or symbol for spawn in a corner or center
+        // Example: small circle at the top-left corner
+        painter->drawEllipse(targetScreenRect.topLeft() + QPointF(2,2), 4, 4); 
+        // Or centered: painter->drawEllipse(targetScreenRect.center(), targetScreenRect.width() / 5, targetScreenRect.height() / 5);
+        painter->restore();
+        // qDebug() << "Tile::draw() Spawn indicator for tile at" << x_ << y_ << z_;
+    }
+    
+    // 5. Draw Tile Flags (e.g., PZ text)
+    if (options.showTileFlags) {
+        QString flagsText;
+        if (hasMapFlag(TileMapFlag::ProtectionZone)) {
+            flagsText += "PZ ";
+        }
+        if (hasMapFlag(TileMapFlag::NoPVP)) {
+            flagsText += "NoPvP ";
+        }
+        if (hasMapFlag(TileMapFlag::PVPZone)) {
+            flagsText += "PvP ";
+        }
+        // Add more flags as needed, e.g., NoLogout, ZoneBrush (if it has text)
+        
+        if (!flagsText.isEmpty()) {
+            painter->save();
+            painter->setPen(Qt::white); // Text color for flags
+            // Adjust font size if needed
+            QFont font = painter->font();
+            font.setPointSize(font.pointSize() - 2 > 0 ? font.pointSize() - 2 : 6); // Smaller font
+            painter->setFont(font);
+            // Draw text at bottom of tile, centered or left-aligned
+            painter->drawText(targetScreenRect, Qt::AlignBottom | Qt::AlignHCenter, flagsText.trimmed());
+            painter->restore();
+            // qDebug() << "Tile::draw() Flags:" << flagsText.trimmed() << "for tile at" << x_ << y_ << z_;
+        }
+    }
+    
+    // Future: Draw effects (if options.showEffects)
 }

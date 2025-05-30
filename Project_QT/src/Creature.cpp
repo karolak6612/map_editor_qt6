@@ -1,6 +1,9 @@
 #include "Creature.h"
 #include "Brush.h" // For Brush* type
+#include <QPainter> // For draw method
+#include <QColor>   // For draw method placeholder
 #include <QDebug>
+// DrawingOptions.h is included via Creature.h
 
 Creature::Creature(const QString& name, QObject *parent) : QObject(parent),
     name_(name),
@@ -256,4 +259,29 @@ Creature* Creature::deepCopy() const {
     // newCreature->currentSprite_ = nullptr; // Sprites are not deeply copied here, handled by sprite manager
 
     return newCreature;
+}
+
+void Creature::draw(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter) return;
+
+    // Placeholder: Draw a semi-transparent reddish rectangle for a creature
+    QColor creatureColor = Qt::red;
+    // Vary color based on lookType_
+    if (lookType_ != 0) { 
+        creatureColor.setHsv(((lookType_ * 45) % 360), 255, 210); // Adjusted multiplier for more variance
+    }
+
+    painter->fillRect(targetRect, QColor(creatureColor.red(), creatureColor.green(), creatureColor.blue(), 128)); // Semi-transparent
+    painter->drawRect(targetRect); // Draw an outline
+
+    // Optional: Use options to decide whether to draw name, health bar, etc.
+    // if (options.showCreatureNames && !name_.isEmpty()) { 
+    //     painter->save();
+    //     painter->setPen(Qt::white); // Example: white text for names
+    //     // Basic text centering (approximate)
+    //     painter->drawText(targetRect, Qt::AlignCenter, name_);
+    //     painter->restore();
+    // }
+    
+    // qDebug() << "Creature::draw() called for:" << name_ << "at" << targetRect;
 }

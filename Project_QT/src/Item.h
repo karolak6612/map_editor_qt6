@@ -7,9 +7,12 @@
 #include <QVariant>
 #include <QtGlobal> // For quint16
 
-// Forward declarations for drawText parameters
+#include <QRectF> // For draw method targetRect
+#include "DrawingOptions.h" // For draw method options
+
+// Forward declarations
 class QPainter;
-class QRectF;
+// QRectF is included above via #include <QRectF>
 // QVariantMap is typedef for QMap<QString, QVariant> - no need to forward declare if QMap is included
 
 class Item : public QObject {
@@ -102,6 +105,7 @@ public:
     // Other methods
     virtual QString getDescription() const; 
     virtual void drawText(QPainter* painter, const QRectF& targetRect, const QMap<QString, QVariant>& options); // Changed QVariantMap to QMap
+    virtual void draw(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
     virtual Item* deepCopy() const; 
 
 signals:

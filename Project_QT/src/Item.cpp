@@ -1,8 +1,10 @@
 #include "Item.h"
 #include <QDebug>
-#include <QPainter> // For drawText
-#include <QRectF>   // For drawText
+#include <QPainter> // For drawText and draw
+#include <QRectF>   // For drawText and draw
+#include <QColor>   // For draw method placeholder
 // QMap and QVariant are included via Item.h
+// DrawingOptions.h is included via Item.h
 
 Item::Item(quint16 serverId, QObject *parent) : QObject(parent),
     serverId_(serverId),
@@ -256,4 +258,23 @@ Item* Item::deepCopy() const {
     newItem->hasHeight_ = this->hasHeight_;
     
     return newItem;
+}
+
+void Item::draw(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter) return;
+    
+    // Placeholder: Draw a semi-transparent blueish rectangle for a generic item
+    QColor itemColor = Qt::blue;
+    // Use serverId_ for varied color, it's a quint16
+    // To make it more visually distinct, ensure serverId_ doesn't map to similar hues too often.
+    // A simple way is to multiply by a prime or a number that distributes well across 360 degrees.
+    itemColor.setHsv(((serverId_ * 37) % 360), 200, 220); 
+    
+    painter->fillRect(targetRect, QColor(itemColor.red(), itemColor.green(), itemColor.blue(), 128)); // Semi-transparent
+    painter->drawRect(targetRect); // Draw an outline
+    
+    // Optional: Use options to decide whether to draw text, etc.
+    // if (options.showItemDetails) { /* draw more details */ }
+
+    // qDebug() << "Item::draw() called for ID:" << serverId_ << "at" << targetRect;
 }
