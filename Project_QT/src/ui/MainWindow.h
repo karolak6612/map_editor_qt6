@@ -16,6 +16,7 @@ class QDockWidget;                  // Added
 class PlaceholderPaletteWidget;     // Added
 class PlaceholderMinimapWidget;     // Added
 class PlaceholderPropertiesWidget;  // Added
+class AutomagicSettingsDialog; // Forward declaration
 
 
 class MainWindow : public QMainWindow {
@@ -24,6 +25,18 @@ class MainWindow : public QMainWindow {
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
+
+    // Automagic settings methods
+    void openAutomagicSettingsDialog();
+    bool mainGetAutomagicEnabled() const;
+    bool mainGetSameGroundTypeBorderEnabled() const;
+    bool mainGetWallsRepelBordersEnabled() const;
+    bool mainGetLayerCarpetsEnabled() const;
+    bool mainGetBorderizeDeleteEnabled() const;
+    bool mainGetCustomBorderEnabled() const;
+    int mainGetCustomBorderId() const;
+    void mainUpdateAutomagicSettings(bool automagicEnabled, bool sameGround, bool wallsRepel, bool layerCarpets, bool borderizeDelete, bool customBorder, int customBorderId);
+    void mainTriggerMapOrUIRefreshForAutomagic();
 
 private slots:
     void onMenuActionTriggered(); 

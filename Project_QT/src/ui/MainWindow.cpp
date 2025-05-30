@@ -16,6 +16,7 @@
 #include "PlaceholderPaletteWidget.h"   
 #include "PlaceholderMinimapWidget.h"
 #include "PlaceholderPropertiesWidget.h"
+#include "AutomagicSettingsDialog.h" // Include for AutomagicSettingsDialog
 
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
@@ -563,4 +564,62 @@ void MainWindow::onLayerControlChanged(int index) {
     if(zCoordSpinBox_ && index != zCoordSpinBox_->value()){
         zCoordSpinBox_->setValue(index);
     }
+}
+
+// Automagic Settings Placeholder Implementations
+
+void MainWindow::openAutomagicSettingsDialog() {
+    AutomagicSettingsDialog dialog(this);
+
+    // Load current settings into the dialog (using placeholder getters from MainWindow)
+    dialog.setSettings(
+        mainGetAutomagicEnabled(),
+        mainGetSameGroundTypeBorderEnabled(),
+        mainGetWallsRepelBordersEnabled(),
+        mainGetLayerCarpetsEnabled(),
+        mainGetBorderizeDeleteEnabled(),
+        mainGetCustomBorderEnabled(),
+        mainGetCustomBorderId()
+    );
+
+    if (dialog.exec() == QDialog::Accepted) {
+        // Apply new settings from the dialog (using placeholder updater in MainWindow)
+        mainUpdateAutomagicSettings(
+            dialog.isAutomagicEnabled(),
+            dialog.isSameGroundTypeBorderEnabled(),
+            dialog.isWallsRepelBordersEnabled(),
+            dialog.isLayerCarpetsEnabled(),
+            dialog.isBorderizeDeleteEnabled(),
+            dialog.isCustomBorderEnabled(),
+            dialog.getCustomBorderId()
+        );
+    }
+}
+
+bool MainWindow::mainGetAutomagicEnabled() const { qDebug("MainWindow::mainGetAutomagicEnabled (stub)"); return false; }
+bool MainWindow::mainGetSameGroundTypeBorderEnabled() const { qDebug("MainWindow::mainGetSameGroundTypeBorderEnabled (stub)"); return true; } // Default true based on common use
+bool MainWindow::mainGetWallsRepelBordersEnabled() const { qDebug("MainWindow::mainGetWallsRepelBordersEnabled (stub)"); return true; } // Default true
+bool MainWindow::mainGetLayerCarpetsEnabled() const { qDebug("MainWindow::mainGetLayerCarpetsEnabled (stub)"); return true; } // Default true
+bool MainWindow::mainGetBorderizeDeleteEnabled() const { qDebug("MainWindow::mainGetBorderizeDeleteEnabled (stub)"); return false; }
+bool MainWindow::mainGetCustomBorderEnabled() const { qDebug("MainWindow::mainGetCustomBorderEnabled (stub)"); return false; }
+int MainWindow::mainGetCustomBorderId() const { qDebug("MainWindow::mainGetCustomBorderId (stub)"); return 1; }
+
+void MainWindow::mainUpdateAutomagicSettings(bool automagicEnabled, bool sameGround, bool wallsRepel, bool layerCarpets, bool borderizeDelete, bool customBorder, int customBorderId) {
+    qDebug() << "MainWindow::mainUpdateAutomagicSettings (stub) called with values:";
+    qDebug() << "  Automagic:" << automagicEnabled;
+    qDebug() << "  Same Ground:" << sameGround;
+    qDebug() << "  Walls Repel:" << wallsRepel;
+    qDebug() << "  Layer Carpets:" << layerCarpets;
+    qDebug() << "  Borderize Delete:" << borderizeDelete;
+    qDebug() << "  Custom Border:" << customBorder;
+    qDebug() << "  Custom Border ID:" << customBorderId;
+    
+    // In a real scenario, this would update some internal state or call a settings manager
+    // And then potentially trigger a refresh
+    mainTriggerMapOrUIRefreshForAutomagic();
+}
+
+void MainWindow::mainTriggerMapOrUIRefreshForAutomagic() {
+    qDebug() << "MainWindow::mainTriggerMapOrUIRefreshForAutomagic (stub) called.";
+    // This would eventually call methods on MapView or other relevant UI components
 }
