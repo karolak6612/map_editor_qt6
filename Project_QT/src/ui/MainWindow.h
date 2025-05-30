@@ -5,9 +5,15 @@
 
 // Forward declarations
 class QMenuBar;
-class QMenu; // Added for helper return types
+class QMenu;
 class QAction;
-// class MapView; // Example
+class QToolBar; 
+class QSpinBox;    // Added
+class QComboBox;   // Added
+class QLabel;      // Added
+class QActionGroup;// Added
+
+// class MapView; 
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -18,47 +24,86 @@ public:
 
 private slots:
     void onMenuActionTriggered(); 
+    void onPositionGo();
+    void onPositionXChanged(int value);
+    void onPositionYChanged(int value);
+    void onPositionZChanged(int value);
+    void onZoomControlChanged(int value);   // Added
+    void onLayerControlChanged(int index); // Added
 
 private:
+    // Main setup methods
     void setupMenuBar();
+    void setupToolBars(); 
+    // void setupDockWidgets(); 
+    // void setupStatusBar(); 
+
+    // Helper method for creating actions (used by menu and toolbar setup)
+    QAction* createAction(const QString& text, const QString& objectName, const QString& shortcut = "", const QString& statusTip = "", bool checkable = false, bool checked = false);
 
     // Helper methods for creating top-level menus
     QMenu* createFileMenu();
     QMenu* createEditMenu();
-    QMenu* createEditorMenu(); // Renamed from createViewMenu based on XML structure "Editor" (for view related like zoom, new view)
-    QMenu* createSearchMenu(); // Added based on XML
+    QMenu* createEditorMenu(); 
+    QMenu* createSearchMenu(); 
     QMenu* createMapMenu();
     QMenu* createSelectionMenu();
-    QMenu* createViewMenu();   // This is for visibility options like "Show all Floors", "Show Grid", etc. (XML "View")
-    QMenu* createShowMenu();   // This is for "Show Animation", "Show Light", etc. (XML "Show")
+    QMenu* createViewMenu();   
+    QMenu* createShowMenu();   
     QMenu* createNavigateMenu();
     QMenu* createWindowMenu();
     QMenu* createExperimentalMenu();
-    QMenu* createAboutMenu(); // For "About..." etc. (XML "About")
-    QMenu* createServerMenu(); // Added based on XML
-    QMenu* createIdlerMenu();  // Added based on XML
+    QMenu* createAboutMenu(); 
+    QMenu* createServerMenu(); 
+    QMenu* createIdlerMenu();  
 
-    // Placeholder for actions that might need to be accessed later (e.g., for enabling/disabling)
-    // File Menu Actions
-    // QAction *newAction_;
-    // QAction *openAction_;
-    // QAction *saveAction_;
-    // QAction *saveAsAction_;
-    // QAction *generateMapAction_;
-    // QAction *closeMapAction_;
-    // QAction *exitAction_;
-    // QAction *preferencesAction_;
+    // Helper methods for creating toolbars
+    QToolBar* createStandardToolBar();   
+    QToolBar* createBrushesToolBar();    
+    QToolBar* createPositionToolBar();   
+    QToolBar* createSizesToolBar();      
 
-    // Edit Menu Actions
-    // QAction *undoAction_;
-    // QAction *redoAction_;
-    // QAction *cutAction_;
-    // QAction *copyAction_;
-    // QAction *pasteAction_;
-    
-    // ... Add more QAction members as needed if they require dynamic updates ...
-
+    // UI Member Variables
     QMenuBar *menuBar_; 
+
+    // Toolbar Member Variables
+    QToolBar* standardToolBar_;   
+    QToolBar* brushesToolBar_;    
+    QToolBar* positionToolBar_;   
+    QToolBar* sizesToolBar_;      
+
+    // Common QAction members (shared between menu and toolbars)
+    QAction* newAction_;
+    QAction* openAction_;
+    QAction* saveAction_;
+    QAction* undoAction_;
+    QAction* redoAction_;
+    QAction* cutAction_;
+    QAction* copyAction_;
+    QAction* pasteAction_;
+
+    // Position Toolbar Controls
+    QSpinBox* xCoordSpinBox_;
+    QSpinBox* yCoordSpinBox_;
+    QSpinBox* zCoordSpinBox_;
+
+    // Sizes Toolbar Controls
+    QAction* rectangularBrushShapeAction_;
+    QAction* circularBrushShapeAction_;
+    QActionGroup* brushShapeActionGroup_; 
+
+    QAction* brushSize1Action_;
+    QAction* brushSize2Action_;
+    QAction* brushSize3Action_;
+    QAction* brushSize4Action_;
+    QAction* brushSize5Action_;
+    QAction* brushSize6Action_;
+    QAction* brushSize7Action_;
+    QActionGroup* brushSizeActionGroup_; 
+
+    // Standard Toolbar Controls (Zoom and Layer)
+    QSpinBox* zoomSpinBox_;     // Added
+    QComboBox* layerComboBox_;  // Added
 };
 
 #endif // MAINWINDOW_H

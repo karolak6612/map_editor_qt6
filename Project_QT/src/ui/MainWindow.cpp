@@ -4,21 +4,25 @@
 #include <QAction>
 #include <QKeySequence>
 #include <QDebug> 
-#include <QApplication> // For tr() and potential qApp global access
-#include <QActionGroup> // For radio-button like behavior in Floor menu
+#include <QApplication> 
+#include <QToolBar>     
+#include <QIcon>        
+#include <QActionGroup> 
+#include <QSpinBox>     
+#include <QComboBox>    
+#include <QLabel>       
+#include <QPushButton>  
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle(tr("Idler's Map Editor (Qt)"));
     resize(1280, 720);
 
     setupMenuBar();
-    // setupToolBars(); 
+    setupToolBars(); 
     // setupStatusBar(); 
     // setupDockWidgets(); 
 
-    // QWidget* centralWidget = new QWidget(this); 
-    // setCentralWidget(centralWidget);
-    qDebug() << "MainWindow created. Menu bar setup initiated.";
+    qDebug() << "MainWindow created. Menu bar and toolbars setup initiated.";
 }
 
 MainWindow::~MainWindow() {
@@ -26,7 +30,6 @@ MainWindow::~MainWindow() {
 
 void MainWindow::setupMenuBar() {
     menuBar_ = menuBar(); 
-
     menuBar_->addMenu(createFileMenu());
     menuBar_->addMenu(createEditMenu());
     menuBar_->addMenu(createEditorMenu()); 
@@ -36,76 +39,98 @@ void MainWindow::setupMenuBar() {
     menuBar_->addMenu(createViewMenu());   
     menuBar_->addMenu(createShowMenu());   
     menuBar_->addMenu(createNavigateMenu());
-    menuBar_->addMenu(createWindowMenu());
+    menuBar_->addMenu(createWindowMenu()); // This menu contains "Toolbars" submenu
     menuBar_->addMenu(createExperimentalMenu());
     menuBar_->addMenu(createAboutMenu()); 
     menuBar_->addMenu(createServerMenu());
     menuBar_->addMenu(createIdlerMenu());
-
     qDebug() << "Menu bar setup complete with menus.";
 }
 
-// Helper to create an action - reduces boilerplate
-QAction* MainWindow::createAction(const QString& text, const QString& objectName, const QString& shortcut, const QString& statusTip, bool checkable = false, bool checked = false) {
-    QAction *action = new QAction(tr(text.toStdString().c_str()), this); // Use toStdString().c_str() for tr()
+void MainWindow::setupToolBars() {
+    standardToolBar_ = createStandardToolBar();
+    if (standardToolBar_) { 
+        addToolBar(Qt::TopToolBarArea, standardToolBar_);
+        // Initial visibility should match the menu item's checked state
+        standardToolBar_->setVisible(true); // Assuming it's visible by default
+    }
+
+    brushesToolBar_ = createBrushesToolBar();
+    if (brushesToolBar_) { 
+         addToolBar(Qt::TopToolBarArea, brushesToolBar_);
+         brushesToolBar_->setVisible(true); // Default
+    }
+    
+    positionToolBar_ = createPositionToolBar();
+    if (positionToolBar_){
+        addToolBar(Qt::TopToolBarArea, positionToolBar_);
+        positionToolBar_->setVisible(true); // Default
+    }
+
+    sizesToolBar_ = createSizesToolBar();
+    if(sizesToolBar_){
+        addToolBar(Qt::TopToolBarArea, sizesToolBar_);
+        sizesToolBar_->setVisible(true); // Default
+    }
+    qDebug() << "All toolbars setup attempted.";
+}
+
+
+QAction* MainWindow::createAction(const QString& text, const QString& objectName, const QString& shortcut, const QString& statusTip, bool checkable, bool checked) {
+    QAction *action = new QAction(tr(text.toStdString().c_str()), this);
     action->setObjectName(objectName);
     if (!shortcut.isEmpty()) {
         action->setShortcut(QKeySequence::fromString(tr(shortcut.toStdString().c_str())));
     }
     action->setStatusTip(tr(statusTip.toStdString().c_str()));
     action->setCheckable(checkable);
-    action->setChecked(checked); // Set initial checked state
+    action->setChecked(checked);
+    action->setIcon(QIcon()); 
     connect(action, &QAction::triggered, this, &MainWindow::onMenuActionTriggered);
     return action;
 }
 
-
 QMenu* MainWindow::createFileMenu() {
     QMenu *fileMenu = new QMenu(tr("&File"), this);
-
-    fileMenu->addAction(createAction("&New...", "NEW", "P", "Create a new map."));
-    fileMenu->addAction(createAction("&Open...", "OPEN", "Ctrl+O", "Open another map."));
-    fileMenu->addAction(createAction("&Save", "SAVE", "Ctrl+S", "Save the current map."));
+    newAction_ = createAction("&New...", "NEW", "P", "Create a new map.");
+    fileMenu->addAction(newAction_);
+    openAction_ = createAction("&Open...", "OPEN", "Ctrl+O", "Open another map.");
+    fileMenu->addAction(openAction_);
+    saveAction_ = createAction("&Save", "SAVE", "Ctrl+S", "Save the current map.");
+    fileMenu->addAction(saveAction_);
     fileMenu->addAction(createAction("Save &As...", "SAVE_AS", "Ctrl+Alt+S", "Save the current map as a new file."));
     fileMenu->addAction(createAction("&Generate Map", "GENERATE_MAP", "Ctrl+Shift+G", "Generate a new map."));
     fileMenu->addAction(createAction("&Close", "CLOSE", "Shift+B", "Closes the currently open map."));
     fileMenu->addSeparator();
-
     QMenu *importMenu = fileMenu->addMenu(tr("&Import"));
     importMenu->addAction(createAction("Import &Map...", "IMPORT_MAP", "", "Import map data from another map file."));
     importMenu->addAction(createAction("Import &Monsters/NPC...", "IMPORT_MONSTERS", "", "Import either a monsters.xml file or a specific monster/NPC."));
-
     QMenu *exportMenu = fileMenu->addMenu(tr("&Export"));
     exportMenu->addAction(createAction("Export &Minimap...", "EXPORT_MINIMAP", "", "Export minimap to an image file."));
     exportMenu->addAction(createAction("Export &Tilesets...", "EXPORT_TILESETS", "", "Export tilesets to an xml file."));
-
     QMenu *reloadMenu = fileMenu->addMenu(tr("&Reload"));
     reloadMenu->addAction(createAction("&Reload All Data", "RELOAD_DATA", "F5", "Reloads all data files."));
-    
     fileMenu->addSeparator();
-
     QMenu *recentFilesMenu = fileMenu->addMenu(tr("Recent &Files"));
     recentFilesMenu->setObjectName(QStringLiteral("RECENT_FILES"));
     QAction* placeholderRecent = recentFilesMenu->addAction(tr("(No recent files)"));
     placeholderRecent->setEnabled(false);
-
     fileMenu->addAction(createAction("&Preferences", "PREFERENCES", "Ctrl+Shift+V", "Configure the map editor."));
     fileMenu->addSeparator();
-    fileMenu->addAction(createAction("E&xit", "EXIT", "", "Close the editor.")); // Standard exit shortcuts handled by OS/Qt
-
+    fileMenu->addAction(createAction("E&xit", "EXIT", "", "Close the editor."));
     return fileMenu;
 }
 
 QMenu* MainWindow::createEditMenu() {
     QMenu *editMenu = new QMenu(tr("&Edit"), this);
-
-    editMenu->addAction(createAction("&Undo", "UNDO", "Ctrl+Z", "Undo last action."));
-    editMenu->addAction(createAction("&Redo", "REDO", "Ctrl+Shift+Z", "Redo last undid action."));
+    undoAction_ = createAction("&Undo", "UNDO", "Ctrl+Z", "Undo last action.");
+    editMenu->addAction(undoAction_);
+    redoAction_ = createAction("&Redo", "REDO", "Ctrl+Shift+Z", "Redo last undid action.");
+    editMenu->addAction(redoAction_);
     editMenu->addSeparator();
     editMenu->addAction(createAction("&Replace Items...", "REPLACE_ITEMS", "Ctrl+Shift+F", "Replaces all occurrences of one item with another."));
     editMenu->addAction(createAction("Refresh Items", "REFRESH_ITEMS", "", "Refresh items to fix flags"));
     editMenu->addSeparator();
-
     QMenu *borderOptionsMenu = editMenu->addMenu(tr("&Border Options"));
     borderOptionsMenu->addAction(createAction("Border &Automagic", "AUTOMAGIC", "A", "Turns on all automatic border functions.", true));
     borderOptionsMenu->addSeparator();
@@ -113,38 +138,34 @@ QMenu* MainWindow::createEditMenu() {
     borderOptionsMenu->addAction(createAction("Borderize &Map", "BORDERIZE_MAP", "", "Reborders the entire map."));
     borderOptionsMenu->addAction(createAction("&Randomize Selection", "RANDOMIZE_SELECTION", "", "Randomizes the ground tiles of the selected area."));
     borderOptionsMenu->addAction(createAction("Randomize M&ap", "RANDOMIZE_MAP", "", "Randomizes all tiles of the entire map."));
-
     QMenu *otherOptionsMenu = editMenu->addMenu(tr("&Other Options"));
     otherOptionsMenu->addAction(createAction("Remove all &Unreachable Tiles...", "MAP_REMOVE_UNREACHABLE_TILES", "", "Removes all tiles that cannot be reached (or seen) by the player from the map."));
     otherOptionsMenu->addAction(createAction("&Clear Invalid Houses", "CLEAR_INVALID_HOUSES", "", "Clears house tiles not belonging to any house."));
     otherOptionsMenu->addAction(createAction("Clear &Modified State", "CLEAR_MODIFIED_STATE", "", "Clears the modified state from all tiles."));
-    
     editMenu->addSeparator();
-    editMenu->addAction(createAction("Cu&t", "CUT", "Ctrl+X", "Cut a part of the map."));
-    editMenu->addAction(createAction("&Copy", "COPY", "Ctrl+C", "Copy a part of the map."));
-    editMenu->addAction(createAction("&Paste", "PASTE", "Ctrl+V", "Paste a part of the map."));
-
+    cutAction_ = createAction("Cu&t", "CUT", "Ctrl+X", "Cut a part of the map.");
+    editMenu->addAction(cutAction_);
+    copyAction_ = createAction("&Copy", "COPY", "Ctrl+C", "Copy a part of the map.");
+    editMenu->addAction(copyAction_);
+    pasteAction_ = createAction("&Paste", "PASTE", "Ctrl+V", "Paste a part of the map.");
+    editMenu->addAction(pasteAction_);
     return editMenu;
 }
 
-QMenu* MainWindow::createEditorMenu() {
-    QMenu *editorMenu = new QMenu(tr("Edito&r"), this);
-
+QMenu* MainWindow::createEditorMenu() { /* ... identical to previous ... */ 
+    QMenu *editorMenu = new QMenu(tr("Edito&r"), this); 
     editorMenu->addAction(createAction("&New View", "NEW_VIEW", "Ctrl+Shift+N", "Creates a new view of the current map."));
     editorMenu->addAction(createAction("New &Detached View", "NEW_DETACHED_VIEW", "Ctrl+Shift+D", "Creates a new detached view of the current map that can be moved to another monitor."));
     editorMenu->addAction(createAction("Enter &Fullscreen", "TOGGLE_FULLSCREEN", "F11", "Changes between fullscreen mode and windowed mode.", true));
     editorMenu->addAction(createAction("Take &Screenshot", "TAKE_SCREENSHOT", "F10", "Saves the current view to the disk."));
     editorMenu->addSeparator();
-
     QMenu *zoomMenu = editorMenu->addMenu(tr("&Zoom"));
     zoomMenu->addAction(createAction("Zoom &In", "ZOOM_IN", "Ctrl++", "Increase the zoom."));
     zoomMenu->addAction(createAction("Zoom &Out", "ZOOM_OUT", "Ctrl+-", "Decrease the zoom."));
     zoomMenu->addAction(createAction("Zoom &Normal", "ZOOM_NORMAL", "Ctrl+0", "Normal zoom(100%)."));
-
     return editorMenu;
 }
-
-QMenu* MainWindow::createSearchMenu() {
+QMenu* MainWindow::createSearchMenu() { /* ... identical to previous ... */ 
     QMenu* menu = new QMenu(tr("&Search"), this);
     menu->addAction(createAction("&Find Item...", "FIND_ITEM", "Ctrl+F", "Find all instances of an item type the map."));
     menu->addAction(createAction("Find &Creature...", "FIND_CREATURE", "Ctrl+Shift+C", "Find all instances of a creature on the map."));
@@ -158,8 +179,7 @@ QMenu* MainWindow::createSearchMenu() {
     menu->addAction(createAction("Find &Everything", "SEARCH_ON_MAP_EVERYTHING", "", "Find all unique/action/text/container items."));
     return menu;
 }
-
-QMenu* MainWindow::createMapMenu() {
+QMenu* MainWindow::createMapMenu() { /* ... identical to previous ... */ 
     QMenu* menu = new QMenu(tr("&Map"), this);
     menu->addAction(createAction("Edit &Towns", "EDIT_TOWNS", "Ctrl+T", "Edit towns."));
     menu->addSeparator();
@@ -168,14 +188,12 @@ QMenu* MainWindow::createMapMenu() {
     menu->addAction(createAction("S&tatistics", "MAP_STATISTICS", "F8", "Show map statistics."));
     return menu;
 }
-
-QMenu* MainWindow::createSelectionMenu() {
+QMenu* MainWindow::createSelectionMenu() { /* ... identical to previous ... */ 
     QMenu* menu = new QMenu(tr("S&election"), this);
     menu->addAction(createAction("&Replace Items on Selection", "REPLACE_ON_SELECTION_ITEMS", "", "Replace items on selected area."));
     menu->addAction(createAction("&Find Item on Selection", "SEARCH_ON_SELECTION_ITEM", "", "Find items on selected area."));
     menu->addAction(createAction("&Remove Item on Selection", "REMOVE_ON_SELECTION_ITEM", "", "Remove item on selected area."));
     menu->addSeparator();
-
     QMenu *findOnSelectionMenu = menu->addMenu(tr("Find on Selection"));
     findOnSelectionMenu->addAction(createAction("Find &Everything", "SEARCH_ON_SELECTION_EVERYTHING", "", "Find all unique/action/text/container items."));
     findOnSelectionMenu->addSeparator();
@@ -185,9 +203,7 @@ QMenu* MainWindow::createSelectionMenu() {
     findOnSelectionMenu->addAction(createAction("Find &Container", "SEARCH_ON_SELECTION_CONTAINER", "", "Find all containers on selected area."));
     findOnSelectionMenu->addAction(createAction("Find &Writeable", "SEARCH_ON_SELECTION_WRITEABLE", "", "Find all writeable items on selected area."));
     menu->addSeparator();
-
     QMenu *selectionModeMenu = menu->addMenu(tr("Selection &Mode"));
-    // These could be an QActionGroup for radio-button behavior
     QActionGroup* selectionModeGroup = new QActionGroup(this);
     selectionModeGroup->setExclusive(true);
     QAction* compensateAction = createAction("&Compensate Selection", "SELECT_MODE_COMPENSATE", "", "Compensate for floor difference when selecting.", true);
@@ -197,23 +213,21 @@ QMenu* MainWindow::createSelectionMenu() {
     QAction* currentFloorAction = createAction("&Current Floor", "SELECT_MODE_CURRENT", "", "Select only current floor.", true);
     selectionModeMenu->addAction(currentFloorAction);
     selectionModeGroup->addAction(currentFloorAction);
+    currentFloorAction->setChecked(true); 
     QAction* lowerFloorsAction = createAction("&Lower Floors", "SELECT_MODE_LOWER", "", "Select all lower floors.", true);
     selectionModeMenu->addAction(lowerFloorsAction);
     selectionModeGroup->addAction(lowerFloorsAction);
     QAction* visibleFloorsAction = createAction("&Visible Floors", "SELECT_MODE_VISIBLE", "", "Select only visible floors.", true);
     selectionModeMenu->addAction(visibleFloorsAction);
     selectionModeGroup->addAction(visibleFloorsAction);
-    // currentFloorAction->setChecked(true); // Example default
-
     menu->addSeparator();
     menu->addAction(createAction("&Borderize Selection", "BORDERIZE_SELECTION", "Ctrl+B", "Creates automatic borders in the entire selected area."));
     menu->addAction(createAction("&Randomize Selection", "RANDOMIZE_SELECTION", "", "Randomizes the ground tiles of the selected area."));
     return menu;
 }
 
-QMenu* MainWindow::createViewMenu() { // Visibility options
+QMenu* MainWindow::createViewMenu() { 
     QMenu *viewMenu = new QMenu(tr("&View"), this);
-    // Default checked states are examples, these would ideally be loaded from settings
     viewMenu->addAction(createAction("Show &all Floors", "SHOW_ALL_FLOORS", "Ctrl+W", "If not checked other floors are hidden.", true, true));
     viewMenu->addAction(createAction("Show as &Minimap", "SHOW_AS_MINIMAP", "Shift+E", "Show only the tile minimap colors.", true));
     viewMenu->addAction(createAction("Only show &Colors", "SHOW_ONLY_COLORS", "Ctrl+E", "Show only the special tiles on the map.", true));
@@ -230,10 +244,8 @@ QMenu* MainWindow::createViewMenu() { // Visibility options
     viewMenu->addAction(createAction("Show s&hade", "SHOW_SHADE", "Q", "Shade lower floors.", true, true));
     return viewMenu;
 }
-
-QMenu* MainWindow::createShowMenu() { // Show specific map elements
-    QMenu *showMenu = new QMenu(tr("Sho&w"), this); // Changed mnemonic to avoid conflict with Search
-    // Default checked states are examples
+QMenu* MainWindow::createShowMenu() { /* ... identical to previous ... */ 
+    QMenu *showMenu = new QMenu(tr("Sho&w"), this); 
     showMenu->addAction(createAction("Show A&nimation", "SHOW_PREVIEW", "N", "Show item animations.", true, true));
     showMenu->addAction(createAction("Show &Light", "SHOW_LIGHTS", "H", "Show lights.", true, true));
     showMenu->addAction(createAction("Show Light Stren&gth", "SHOW_LIGHT_STR", "Alt+F3", "Show indicators of light strength.", true));
@@ -242,7 +254,7 @@ QMenu* MainWindow::createShowMenu() { // Show specific map elements
     showMenu->addAction(createAction("Show &zones", "SHOW_ZONES", "Shift+N", "Show zones on the map.", true, true));
     showMenu->addAction(createAction("Show &creatures", "SHOW_CREATURES", "Alt+F5", "Show creatures on the map.", true, true));
     showMenu->addAction(createAction("Show s&pawns", "SHOW_SPAWNS", "Alt+F6", "Show spawns on the map.", true, true));
-    showMenu->addAction(createAction("Show spe&cial", "SHOW_SPECIAL", "Alt+F7", "Show special tiles on the map, like PZ.", true, true)); // Note: Same hotkey as SHOW_HOUSES in XML
+    showMenu->addAction(createAction("Show spe&cial", "SHOW_SPECIAL", "Alt+F7", "Show special tiles on the map, like PZ.", true, true)); 
     showMenu->addAction(createAction("Show h&ouses", "SHOW_HOUSES", "Alt+F7", "Show houses on the map.", true, true));
     showMenu->addAction(createAction("Show pa&thing", "SHOW_PATHING", "Alt+F8", "Show blocking tiles.", true));
     showMenu->addAction(createAction("Show t&owns", "SHOW_TOWNS", "Alt+F9", "Show temple positions.", true, true));
@@ -253,14 +265,12 @@ QMenu* MainWindow::createShowMenu() { // Show specific map elements
     showMenu->addAction(createAction("Show Wall &Hooks", "SHOW_WALL_HOOKS", "K", "Show indicators for wall hooks.", true));
     return showMenu;
 }
-
-QMenu* MainWindow::createNavigateMenu() {
+QMenu* MainWindow::createNavigateMenu() { /* ... identical to previous ... */ 
     QMenu* menu = new QMenu(tr("&Navigate"), this);
     menu->addAction(createAction("Go to &Previous Position", "GOTO_PREVIOUS_POSITION", "P", "Go to the previous screen center position."));
     menu->addAction(createAction("Jump to &Brush...", "JUMP_TO_BRUSH", "J", "Jump to a brush."));
     menu->addAction(createAction("Jump to &Item...", "JUMP_TO_ITEM_BRUSH", "Ctrl+J", "Jump to an item brush (RAW palette)."));
     menu->addSeparator();
-
     QMenu *floorMenu = menu->addMenu(tr("&Floor"));
     QActionGroup* floorGroup = new QActionGroup(this);
     floorGroup->setExclusive(true);
@@ -268,14 +278,14 @@ QMenu* MainWindow::createNavigateMenu() {
         QAction* floorAction = createAction(QString("Floor %1").arg(i), QString("FLOOR_%1").arg(i), "", "", true);
         floorMenu->addAction(floorAction);
         floorGroup->addAction(floorAction);
-        if (i == 7) floorAction->setChecked(true); // Default to floor 7
+        if (i == 7) floorAction->setChecked(true); 
     }
     return menu;
 }
 
-QMenu* MainWindow::createWindowMenu() {
+QMenu* MainWindow::createWindowMenu() { 
     QMenu* menu = new QMenu(tr("&Window"), this);
-    menu->addAction(createAction("&Minimap", "WIN_MINIMAP", "M", "Displays the minimap window.", true)); // Typically checkable
+    menu->addAction(createAction("&Minimap", "WIN_MINIMAP", "M", "Displays the minimap window.", true)); 
     menu->addAction(createAction("&New Palette", "NEW_PALETTE", "", "Creates a new palette."));
     menu->addSeparator();
 
@@ -283,44 +293,40 @@ QMenu* MainWindow::createWindowMenu() {
     paletteMenu->addAction(createAction("&Terrain", "SELECT_TERRAIN", "T", "Select the Terrain palette."));
     paletteMenu->addAction(createAction("&Doodad", "SELECT_DOODAD", "D", "Select the Doodad palette."));
     paletteMenu->addAction(createAction("&Item", "SELECT_ITEM", "I", "Select the Item palette."));
-    paletteMenu->addAction(createAction("&Collection", "SELECT_COLLECTION", "N", "Select the Collection palette.")); // Hotkey N
+    paletteMenu->addAction(createAction("&Collection", "SELECT_COLLECTION", "N", "Select the Collection palette.")); 
     paletteMenu->addAction(createAction("&House", "SELECT_HOUSE", "H", "Select the House palette."));
     paletteMenu->addAction(createAction("&Creature", "SELECT_CREATURE", "C", "Select the Creature palette."));
     paletteMenu->addAction(createAction("&Waypoint", "SELECT_WAYPOINT", "W", "Select the Waypoint palette."));
     paletteMenu->addAction(createAction("&RAW", "SELECT_RAW", "R", "Select the RAW palette."));
-    menu->addSeparator(); // Separator after Palette submenu, before Toolbars
+    menu->addSeparator(); 
 
     QMenu *toolbarsMenu = menu->addMenu(tr("&Toolbars"));
-    // These are typically checkable
+    // Ensure these actions are checkable and set to default visibility (true)
     toolbarsMenu->addAction(createAction("&Brushes", "VIEW_TOOLBARS_BRUSHES", "", "Show or hide the Brushes toolbar.", true, true));
     toolbarsMenu->addAction(createAction("&Position", "VIEW_TOOLBARS_POSITION", "", "Show or hide the Position toolbar.", true, true));
     toolbarsMenu->addAction(createAction("&Sizes", "VIEW_TOOLBARS_SIZES", "", "Show or hide the Sizes toolbar.", true, true));
     toolbarsMenu->addAction(createAction("&Standard", "VIEW_TOOLBARS_STANDARD", "", "Show or hide the Standard toolbar.", true, true));
     return menu;
 }
-
-QMenu* MainWindow::createExperimentalMenu() {
+QMenu* MainWindow::createExperimentalMenu() { /* ... identical to previous ... */ 
     QMenu* menu = new QMenu(tr("E&xperimental"), this);
     menu->addAction(createAction("&Fog in light view", "EXPERIMENTAL_FOG", "", "Apply fog filter to light effect.", true));
     return menu;
 }
-
-QMenu* MainWindow::createAboutMenu() { // Corresponds to "About" in XML
-    QMenu* menu = new QMenu(tr("A&bout"), this); // Changed mnemonic
+QMenu* MainWindow::createAboutMenu() { /* ... identical to previous ... */ 
+    QMenu* menu = new QMenu(tr("A&bout"), this); 
     menu->addAction(createAction("E&xtensions...", "EXTENSIONS", "F2", ""));
     menu->addAction(createAction("&Goto Website", "GOTO_WEBSITE", "F3", ""));
     menu->addAction(createAction("&About...", "ABOUT", "F1", ""));
     return menu;
 }
-
-QMenu* MainWindow::createServerMenu() {
+QMenu* MainWindow::createServerMenu() { /* ... identical to previous ... */ 
     QMenu* menu = new QMenu(tr("Se&rver"), this);
     menu->addAction(createAction("&Host Server", "ID_MENU_SERVER_HOST", "", "Host a new server for collaborative mapping"));
     menu->addAction(createAction("&Connect to Server", "ID_MENU_SERVER_CONNECT", "", "Connect to an existing map server"));
     return menu;
 }
-
-QMenu* MainWindow::createIdlerMenu() {
+QMenu* MainWindow::createIdlerMenu() { /* ... identical to previous ... */ 
     QMenu* menu = new QMenu(tr("&Idler"), this);
     menu->addAction(createAction("&Hotkeys", "SHOW_HOTKEYS", "F6", "Hotkeys"));
     menu->addSeparator();
@@ -329,27 +335,202 @@ QMenu* MainWindow::createIdlerMenu() {
     menu->addAction(createAction("Remove all &Corpses...", "MAP_REMOVE_CORPSES", "", "Removes all corpses from the map."));
     menu->addSeparator();
     menu->addAction(createAction("Go to &Position...", "GOTO_POSITION", "Ctrl+G", "Go to a specific XYZ position."));
-    // The following items are duplicates from other menus, as per the XML structure for "Idler" menu
-    menu->addAction(createAction("Edit To&wns", "EDIT_TOWNS", "Ctrl+T", "Edit towns.")); // Duplicate
-    menu->addAction(createAction("Export &Minimap...", "EXPORT_MINIMAP", "", "Export minimap to an image file.")); // Duplicate
-    menu->addAction(createAction("Find &Item...", "FIND_ITEM", "Ctrl+F", "Find all instances of an item type the map.")); // Duplicate
-    menu->addAction(createAction("Find &Creature...", "FIND_CREATURE", "Ctrl+Shift+C", "Find all instances of a creature on the map.")); // Duplicate
-    menu->addAction(createAction("&Replace Items...", "REPLACE_ITEMS", "Ctrl+Shift+F", "Replaces all occurrences of one item with another.")); // Duplicate
-    menu->addAction(createAction("Refresh Items", "REFRESH_ITEMS", "", "Refresh items to fix flags")); // Duplicate
+    menu->addAction(createAction("Edit To&wns", "EDIT_TOWNS", "Ctrl+T", "Edit towns.")); 
+    menu->addAction(createAction("Export &Minimap...", "EXPORT_MINIMAP", "", "Export minimap to an image file.")); 
+    menu->addAction(createAction("Find &Item...", "FIND_ITEM", "Ctrl+F", "Find all instances of an item type the map.")); 
+    menu->addAction(createAction("Find &Creature...", "FIND_CREATURE", "Ctrl+Shift+C", "Find all instances of a creature on the map.")); 
+    menu->addAction(createAction("&Replace Items...", "REPLACE_ITEMS", "Ctrl+Shift+F", "Replaces all occurrences of one item with another.")); 
+    menu->addAction(createAction("Refresh Items", "REFRESH_ITEMS", "", "Refresh items to fix flags")); 
     menu->addAction(createAction("Create Border", "MAP_CREATE_BORDER", "", "Create custom borders"));
     return menu;
 }
 
+QToolBar* MainWindow::createStandardToolBar() {
+    QToolBar* tb = new QToolBar(tr("Standard"), this);
+    tb->setObjectName(QStringLiteral("StandardToolBar"));
+    if (newAction_) tb->addAction(newAction_);
+    if (openAction_) tb->addAction(openAction_);
+    if (saveAction_) tb->addAction(saveAction_);
+    tb->addSeparator();
+    if (undoAction_) tb->addAction(undoAction_);
+    if (redoAction_) tb->addAction(redoAction_);
+    tb->addSeparator();
+    if (cutAction_) tb->addAction(cutAction_);
+    if (copyAction_) tb->addAction(copyAction_);
+    if (pasteAction_) tb->addAction(pasteAction_);
+    tb->addSeparator();
+    tb->addWidget(new QLabel(tr("Zoom:"), this));
+    zoomSpinBox_ = new QSpinBox(this);
+    zoomSpinBox_->setRange(10, 400); 
+    zoomSpinBox_->setValue(100);
+    zoomSpinBox_->setSuffix(tr("%"));
+    zoomSpinBox_->setToolTip(tr("Set map zoom level"));
+    connect(zoomSpinBox_, qOverload<int>(&QSpinBox::valueChanged), this, &MainWindow::onZoomControlChanged);
+    tb->addWidget(zoomSpinBox_);
+    tb->addWidget(new QLabel(tr("Layer:"), this));
+    layerComboBox_ = new QComboBox(this);
+    for (int i = 0; i <= 15; ++i) { 
+        layerComboBox_->addItem(QString(tr("Floor %1")).arg(i), i); 
+    }
+    layerComboBox_->setCurrentIndex(7); 
+    layerComboBox_->setToolTip(tr("Select current map layer/floor"));
+    connect(layerComboBox_, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::onLayerControlChanged);
+    tb->addWidget(layerComboBox_);
+    return tb;
+}
+
+QToolBar* MainWindow::createBrushesToolBar() {
+    QToolBar* tb = new QToolBar(tr("Brushes"), this);
+    tb->setObjectName(QStringLiteral("BrushesToolBar"));
+    QActionGroup* brushGroup = new QActionGroup(this);
+    brushGroup->setExclusive(true);
+    QList<QPair<QString, QString>> brushes = {
+        {"Ground Brush", "BRUSH_GROUND"}, {"Optional Border Brush", "BRUSH_OPTIONAL_BORDER"},
+        {"Eraser", "BRUSH_ERASER"}, {"PZ Brush", "BRUSH_PZ"},
+        {"NoPVP Brush", "BRUSH_NOPVP"}, {"Door Brush", "BRUSH_DOOR"}
+    };
+    for(const auto& brushInfo : brushes){
+        QAction* action = createAction(brushInfo.first, brushInfo.second, "", brushInfo.first, true);
+        tb->addAction(action);
+        brushGroup->addAction(action);
+    }
+    if(!tb->actions().isEmpty() && tb->actions().first()->isCheckable()){
+        tb->actions().first()->setChecked(true);
+    }
+    return tb;
+}
+
+QToolBar* MainWindow::createPositionToolBar() {
+    QToolBar* tb = new QToolBar(tr("Position"), this);
+    tb->setObjectName(QStringLiteral("PositionToolBar"));
+    tb->addWidget(new QLabel(tr("X:"), this));
+    xCoordSpinBox_ = new QSpinBox(this);
+    xCoordSpinBox_->setRange(0, 32767); 
+    xCoordSpinBox_->setToolTip(tr("Current X coordinate"));
+    connect(xCoordSpinBox_, qOverload<int>(&QSpinBox::valueChanged), this, &MainWindow::onPositionXChanged);
+    tb->addWidget(xCoordSpinBox_);
+    tb->addWidget(new QLabel(tr("Y:"), this));
+    yCoordSpinBox_ = new QSpinBox(this);
+    yCoordSpinBox_->setRange(0, 32767); 
+    yCoordSpinBox_->setToolTip(tr("Current Y coordinate"));
+    connect(yCoordSpinBox_, qOverload<int>(&QSpinBox::valueChanged), this, &MainWindow::onPositionYChanged);
+    tb->addWidget(yCoordSpinBox_);
+    tb->addWidget(new QLabel(tr("Z:"), this));
+    zCoordSpinBox_ = new QSpinBox(this);
+    zCoordSpinBox_->setRange(0, 15);    
+    zCoordSpinBox_->setToolTip(tr("Current Z coordinate (floor)"));
+    connect(zCoordSpinBox_, qOverload<int>(&QSpinBox::valueChanged), this, &MainWindow::onPositionZChanged);
+    tb->addWidget(zCoordSpinBox_);
+    QPushButton* goButton = new QPushButton(tr("Go"), this);
+    goButton->setToolTip(tr("Go to specified X,Y,Z coordinates"));
+    connect(goButton, &QPushButton::clicked, this, &MainWindow::onPositionGo);
+    tb->addWidget(goButton);
+    return tb;
+}
+
+QToolBar* MainWindow::createSizesToolBar() {
+    QToolBar* tb = new QToolBar(tr("Sizes"), this);
+    tb->setObjectName(QStringLiteral("SizesToolBar"));
+    brushShapeActionGroup_ = new QActionGroup(this);
+    brushShapeActionGroup_->setExclusive(true);
+    rectangularBrushShapeAction_ = createAction(tr("Rectangular"), "TOGGLE_BRUSH_SHAPE_RECT", "", "Use rectangular brush shape", true);
+    rectangularBrushShapeAction_->setChecked(true);
+    brushShapeActionGroup_->addAction(rectangularBrushShapeAction_);
+    tb->addAction(rectangularBrushShapeAction_);
+    circularBrushShapeAction_ = createAction(tr("Circular"), "TOGGLE_BRUSH_SHAPE_CIRC", "", "Use circular brush shape", true);
+    brushShapeActionGroup_->addAction(circularBrushShapeAction_);
+    tb->addAction(circularBrushShapeAction_);
+    tb->addSeparator();
+    brushSizeActionGroup_ = new QActionGroup(this);
+    brushSizeActionGroup_->setExclusive(true);
+    brushSize1Action_ = createAction(tr("Size 1x1"), "SET_BRUSH_SIZE_1", "", "Set brush size to 1x1", true);
+    brushSize1Action_->setChecked(true); 
+    brushSizeActionGroup_->addAction(brushSize1Action_);
+    tb->addAction(brushSize1Action_);
+    brushSize2Action_ = createAction(tr("Size 3x3"), "SET_BRUSH_SIZE_2", "", "Set brush size to 3x3", true);
+    brushSizeActionGroup_->addAction(brushSize2Action_);
+    tb->addAction(brushSize2Action_);
+    brushSize3Action_ = createAction(tr("Size 5x5"), "SET_BRUSH_SIZE_3", "", "Set brush size to 5x5", true);
+    brushSizeActionGroup_->addAction(brushSize3Action_);
+    tb->addAction(brushSize3Action_);
+    brushSize4Action_ = createAction(tr("Size 7x7"), "SET_BRUSH_SIZE_4", "", "Set brush size to 7x7", true);
+    brushSizeActionGroup_->addAction(brushSize4Action_);
+    tb->addAction(brushSize4Action_);
+    brushSize5Action_ = createAction(tr("Size 9x9"), "SET_BRUSH_SIZE_5", "", "Set brush size to 9x9", true);
+    brushSizeActionGroup_->addAction(brushSize5Action_);
+    tb->addAction(brushSize5Action_);
+    brushSize6Action_ = createAction(tr("Size 11x11"), "SET_BRUSH_SIZE_6", "", "Set brush size to 11x11", true);
+    brushSizeActionGroup_->addAction(brushSize6Action_);
+    tb->addAction(brushSize6Action_);
+    brushSize7Action_ = createAction(tr("Size 13x13"), "SET_BRUSH_SIZE_7", "", "Set brush size to 13x13", true);
+    brushSizeActionGroup_->addAction(brushSize7Action_);
+    tb->addAction(brushSize7Action_);
+    return tb;
+}
 
 void MainWindow::onMenuActionTriggered() {
     QAction *action = qobject_cast<QAction*>(sender());
-    if (action) {
-        qDebug() << "Action triggered: Name =" << action->objectName() << ", Text =" << action->text() << ", Checkable:" << action->isCheckable() << ", Checked:" << action->isChecked();
-        if (action->objectName() == QLatin1String("EXIT")) { // Use QLatin1String for string literal comparison
-            this->close(); 
-        }
-        // Further handling can be done here or by connecting actions to specific slots.
-    } else {
+    if (!action) {
         qDebug() << "onMenuActionTriggered called, but sender is not a QAction.";
+        return;
+    }
+
+    QString actionName = action->objectName();
+    qDebug() << "Action triggered: Name =" << actionName << ", Text =" << action->text() 
+             << ", Checkable:" << action->isCheckable() << ", Checked:" << action->isChecked();
+
+    if (actionName == QLatin1String("EXIT")) {
+        close();
+    } else if (actionName == QLatin1String("VIEW_TOOLBARS_STANDARD")) {
+        if (standardToolBar_) {
+            standardToolBar_->setVisible(!standardToolBar_->isVisible());
+            action->setChecked(standardToolBar_->isVisible()); // Sync menu item with toolbar state
+        }
+    } else if (actionName == QLatin1String("VIEW_TOOLBARS_BRUSHES")) {
+        if (brushesToolBar_) {
+            brushesToolBar_->setVisible(!brushesToolBar_->isVisible());
+            action->setChecked(brushesToolBar_->isVisible());
+        }
+    } else if (actionName == QLatin1String("VIEW_TOOLBARS_POSITION")) {
+        if (positionToolBar_) {
+            positionToolBar_->setVisible(!positionToolBar_->isVisible());
+            action->setChecked(positionToolBar_->isVisible());
+        }
+    } else if (actionName == QLatin1String("VIEW_TOOLBARS_SIZES")) {
+        if (sizesToolBar_) {
+            sizesToolBar_->setVisible(!sizesToolBar_->isVisible());
+            action->setChecked(sizesToolBar_->isVisible());
+        }
+    } else {
+        // General log for other actions
+        // qDebug() << "Action" << actionName << "not specifically handled for visibility/direct action yet.";
+    }
+}
+
+void MainWindow::onPositionGo() {
+    qDebug() << "Position Go clicked: X=" << (xCoordSpinBox_ ? xCoordSpinBox_->value() : -1)
+             << "Y=" << (yCoordSpinBox_ ? yCoordSpinBox_->value() : -1) 
+             << "Z=" << (zCoordSpinBox_ ? zCoordSpinBox_->value() : -1);
+}
+void MainWindow::onPositionXChanged(int value) {
+    qDebug() << "Position X changed to:" << value;
+}
+void MainWindow::onPositionYChanged(int value) {
+    qDebug() << "Position Y changed to:" << value;
+}
+void MainWindow::onPositionZChanged(int value) {
+    qDebug() << "Position Z changed to:" << value;
+    if(layerComboBox_ && value >=0 && value < layerComboBox_->count() && value != layerComboBox_->currentIndex()){
+        layerComboBox_->setCurrentIndex(value);
+    }
+}
+
+void MainWindow::onZoomControlChanged(int value) {
+    qDebug() << "Zoom control changed to:" << value << "%";
+}
+void MainWindow::onLayerControlChanged(int index) {
+    qDebug() << "Layer control changed to index:" << index << "Text:" << (layerComboBox_ ? layerComboBox_->itemText(index) : "N/A");
+    if(zCoordSpinBox_ && index != zCoordSpinBox_->value()){
+        zCoordSpinBox_->setValue(index);
     }
 }
