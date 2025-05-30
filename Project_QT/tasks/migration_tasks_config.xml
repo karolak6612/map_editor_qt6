@@ -4,8 +4,8 @@
     <title>Project Migration to Qt6 Framework - Task-Based Execution with Review</title>
     <auditor>User (Hiring Manager & Reviewer)</auditor>
     <coder>Jules</coder>
-    <date_issued>2025-05-28</date_issued> <!-- Or current date -->
-    <version>1.5-Jules-FileSplitting</version> <!-- New version reflecting this update -->
+    <date_issued>YYYY-MM-DD</date_issued> <!-- Placeholder for actual date -->
+    <version>X.Y.Z</version> <!-- Placeholder for semantic version -->
   </header>
 
   <introduction_and_setup>
@@ -28,136 +28,135 @@
       <mandate id="M3">All new/modified Qt6 C++ code must reside within the `new_qt6_project_code_location` (i.e., `Project_QT/src`).</mandate>
       <mandate id="M4">Target Qt6 and adhere to modern C++ and Qt6 best practices, ensuring code is clean, maintainable, and well-documented where necessary.</mandate>
       <mandate id="M5">Thoroughly reference `old_source_code_location` (i.e., `wxwidgets`) for original logic. Critically analyze any existing code in `Project_QT/src` relevant to the current task; refactor, complete, or replace it as needed to meet requirements.</mandate>
-      <mandate id="M6">**File Size and Modularity (CRUCIAL):** To ensure you operate effectively within processing limits and to promote code quality, if any C++ source/header file in `Project_QT/src` (new or modified) is anticipated to exceed ~200-300 lines, you **MUST** first attempt to refactor the relevant code into smaller, logically coherent modules (`.cpp`/`.h` pairs), preserving functionality. Report all new files created for CMake integration. If pre-refactoring a specific large file is exceptionally complex or risky for the current task, explicitly state your assessment and reasoning to defer it, flagging the file for future attention (as detailed in `master_prompt.md`).</mandate>
+      <mandate id="M6" type="FILE_SIZE_MANAGEMENT">
+          <description>File Size and Modularity (CRUCIAL)</description>
+          <condition>If any C++ source/header file in `Project_QT/src` (new or modified) is anticipated to exceed approximately 250 lines, OR if an existing file is already this large and changes are substantial (e.g., >50-75 lines added/modified).</condition>
+          <action_required>You MUST first refactor the relevant code into smaller, logically coherent modules BEFORE implementing the main task logic for that code section. Each new module MUST consist of a new .cpp and .h file (e.g., encapsulating a class or related free functions). Preserve all existing functionality. Report all new files created using the `NEW_FILES_FOR_CMAKE:` tag.</action_required>
+          <escape_clause>
+            <condition_deferral>If refactoring is 1) Exceptionally complex (intricate, non-obvious dependencies), 2) High risk of functional regressions, OR 3) Would unmanageably expand current task scope.</condition_deferral>
+            <action_deferral>You MAY defer refactoring. If deferring, you MUST state: `DEFERRED_REFACTORING_WARNING: Task [TaskID] - File [large_file.cpp] (approx. XXXX lines). Reason: [HIGH_COMPLEXITY_DEPS | HIGH_REGRESSION_RISK | SCOPE_EXPANSION]. Proceeding with modifications on existing large file. This file is a high priority candidate for future dedicated refactoring.`</action_deferral>
+          </escape_clause>
+          <reference>Detailed operational workflow for this mandate is in `tasks/master_prompt.txt` (Core Directive 5).</reference>
+        </mandate>
     </core_coding_mandates>
   </introduction_and_setup>
 
-
   <task_list>
-    <!--
-      Jules will identify tasks with status="PENDING" that have not yet been formally approved in the current session.
-      The 'status' attribute itself is not dynamically updated by Jules in this file.
-    -->
-    <task id="Task1" status="PENDING" description="Migrate `wxImage` to `QImage`. (Full details: tasks_definitions/Task1.md)"/>
-    <task id="Task2" status="PENDING" description="Migrate `wxBitmap` to `QPixmap`. (Full details: tasks_definitions/Task2.md)"/>
-    <task id="Task3" status="PENDING" description="Migrate `wxDC` (Device Context) to `QPainter`. (Full details: tasks_definitions/Task3.md)"/>
-    <task id="Task4" status="PENDING" description="Basic `wxPanel` to `QWidget` Transition (Containers). (Full details: tasks_definitions/Task4.md)"/>
-    <task id="Task5" status="PENDING" description="Refactor mouse events for position and wheel in `MapView`. (Full details: tasks_definitions/Task5.md)"/>
-    <task id="Task6" status="PENDING" description="`Brush` class transition (core structure and mouse event stubs). (Full details: tasks_definitions/Task6.md)"/>
-    <task id="Task7" status="PENDING" description="Refactor basic `wxDialog` classes to `QDialog` (UI layout and simple signals/slots). (Full details: tasks_definitions/Task7.md)"/>
-    <task id="Task8" status="PENDING" description="Full `wxMenuBar` to `QMenuBar` Implementation. (Full details: tasks_definitions/Task8.md)"/>
-    <task id="Task9" status="PENDING" description="`QToolBar` Conversion for `MainToolBar` (Actions, Basic Controls). (Full details: tasks_definitions/Task9.md)"/>
-    <task id="Task10" status="PENDING" description="Migrate `wxAuiManager` docking for core panels to `QDockWidget`. (Full details: tasks_definitions/Task10.md)"/>
-    <task id="Task11" status="PENDING" description="Implement `Map` Data Structure in Qt (Core Logic, Tile/Item/Creature Storage, Iterators). (Full details: tasks_definitions/Task11.md)"/>
-    <task id="Task12" status="PENDING" description="Port `Tile` class to Qt (Item/Creature Storage, Flags, Properties, Basic Signals). (Full details: tasks_definitions/Task12.md)"/>
-    <task id="Task13" status="PENDING" description="Migrate `Item` class properties & structure (Full Attribute Model, Type Handling, Basic Rendering). (Full details: tasks_definitions/Task13.md)"/>
-    <task id="Task14" status="PENDING" description="Create `ItemManager` in Qt (Core Structure & Definition Loading from Files). (Full details: tasks_definitions/Task14.md)"/>
-    <task id="Task15" status="PENDING" description="Create Basic `Creature` Class in Qt (Data & Accessors, Sprite Forward Declaration). (Full details: tasks_definitions/Task15.md)"/>
-    <task id="Task16" status="PENDING" description="Migrate `CreatureManager` basic file handling (XML Parsing & Property Storage). (Full details: tasks_definitions/Task16.md)"/>
-    <task id="Task17" status="PENDING" description="Migrate `Selection` Class - Initial functions and structures (Tile Storage, Modes, Flags). (Full details: tasks_definitions/Task17.md)"/>
-    <task id="Task18" status="PENDING" description="Migrate `Automagic_Settings` - Set Up Initial UI and Placeholder Links to `BorderSystem`. (Full details: tasks_definitions/Task18.md)"/>
-    <task id="Task19" status="PENDING" description="Port `wxwidgets` Spawn code to `Project_QT` (Core Data, Basic Dialog, `Map` Stubs). (Full details: tasks_definitions/Task19.md)"/>
-    <task id="Task20" status="PENDING" description="Initial `Waypoint` Class Migration and Storage (Data Structure & Core Attributes ONLY). (Full details: tasks_definitions/Task20.md)"/>
-    <task id="Task21" status="PENDING" description="Implement Core `ClipboardData` Functionality (Data Serialization/Deserialization for Copy/Paste). (Full details: tasks_definitions/Task21.md)"/>
-    <task id="Task22" status="PENDING" description="Migrate `Tile` drawing function (Comprehensive Item/Creature Rendering Loop & Initial Visibility). (Full details: tasks_definitions/Task22.md)"/>
-    <task id="Task23" status="PENDING" description="Finish `MapTileItem` drawing and logic (Full `Tile` Delegation, Caching, Selection Highlight, Collision). (Full details: tasks_definitions/Task23.md)"/>
-    <task id="Task24" status="PENDING" description="Integrate `Item`'s Type System with `ItemManager` (Full Typed `Item` Creation & Properties). (Full details: tasks_definitions/Task24.md)"/>
-    <task id="Task25" status="PENDING" description="Create Basic `Sprite` Abstract Class in Qt (Core Interface & Polymorphism Support). (Full details: tasks_definitions/Task25.md)"/>
-    <task id="Task26" status="PENDING" description="Create `EditorSprite` and its initial renderer (Full UI Sprite Implementation). (Full details: tasks_definitions/Task26.md)"/>
-    <task id="Task27" status="PENDING" description="Create Initial `GameSprite` class (Data, Animation Stubs, Basic Rendering, Core Attributes). (Full details: tasks_definitions/Task27.md)"/>
-    <task id="Task28" status="PENDING" description="Add Initial Placeholder Renderers (Comprehensive Map, Tile, Item Visual Stubs). (Full details: tasks_definitions/Task28.md)"/>
-    <task id="Task29" status="PENDING" description="Begin Transition of Key Event Handling in `MapCanvas` and Menus (Core Navigation, Zoom, Basic Command Invocation). (Full details: tasks_definitions/Task29.md)"/>
-    <task id="Task30" status="PENDING" description="Replace `wxStatusBar` to Qt and simplify (Core Fields, `MainWindow` Update Methods). (Full details: tasks_definitions/Task30.md)"/>
-    <task id="Task31" status="PENDING" description="Migrate `dc_button.h` to `QPushButton` subclass (e.g., `SpriteButton`) and implement basic `onClick` and self-drawing. (Full details: tasks_definitions/Task31.md)"/>
-    <task id="Task32" status="PENDING" description="Implement `ResourceManager` in Qt (Complete - Sprite/Icon/Texture Loading, Caching, Categorization). (Full details: tasks_definitions/Task32.md)"/>
-    <task id="Task33" status="PENDING" description="Create `BrushManager` in Qt (Full `QObject` System, Creation, Selection Signals, State Update Methods). (Full details: tasks_definitions/Task33.md)"/>
-    <task id="Task34" status="PENDING" description="Brush interaction structure and helpers (Full Mouse Event to Tile/Action Logic, Including `MapCanvas` State Machines). (Full details: tasks_definitions/Task34.md)"/>
-    <task id="Task35" status="PENDING" description="Implement `SpriteManager` (Loaders - SPR/DAT Parsing, ImageSpace, Header Logic, Basic ItemData Linking). (Full details: tasks_definitions/Task35.md)"/>
-    <task id="Task36" status="PENDING" description="Migrate core `Brushes` interface from `brush.h` (`Brush` Abstract Base Class & Smart Pointers). (Full details: tasks_definitions/Task36.md)"/>
-    <task id="Task37" status="PENDING" description="Implement `TerrainBrush` (Base for Terrain Types - Drawing Stubs & Core Properties). (Full details: tasks_definitions/Task37.md)"/>
-    <task id="Task38" status="PENDING" description="Migrate `GroundBrush` (Terrain Subtype - Item Placement & Border System Hook Placeholders). (Full details: tasks_definitions/Task38.md)"/>
-    <task id="Task39" status="PENDING" description="Implement `WallBrush` (Terrain Subtype - Wall Placement, Connection Stubs, Door Logic). (Full details: tasks_definitions/Task39.md)"/>
-    <task id="Task40" status="PENDING" description="Implement `WallDecorationBrush` (Structure, Drawing Intent, Z-Order Considerations). (Full details: tasks_definitions/Task40.md)"/>
-    <task id="Task41" status="PENDING" description="Implement `AutoBorder` class structure in Qt (Data Representation for Borders). (Full details: tasks_definitions/Task41.md)"/>
-    <task id="Task42" status="PENDING" description="Migrate `TableBrush` structure, item mapping, variations, and interaction logic. (Full details: tasks_definitions/Task42.md)"/>
-    <task id="Task43" status="PENDING" description="Migrate `CarpetBrush` structure, item placement, and `getCarpet` logic. (Full details: tasks_definitions/Task43.md)"/>
-    <task id="Task44" status="PENDING" description="Implement `OptionalBorderBrush` structure and conditional draw/undraw logic. (Full details: tasks_definitions/Task44.md)"/>
-    <task id="Task45" status="PENDING" description="Create `ItemPropertyEditorBase` and Subclasses (Abstract Editor UI Structure). (Full details: tasks_definitions/Task45.md)"/>
-    <task id="Task46" status="PENDING" description="Refactor `MainToolBar` UI Using `QToolBar` (Populate Actions, Enhance Controls, Interactions). (Full details: tasks_definitions/Task46.md)"/>
-    <task id="Task47" status="PENDING" description="`BrushPalettePanel` and `BrushPanel` Cleanup and Efficiency (Resource Management & `ItemButton` Usage). (Full details: tasks_definitions/Task47.md)"/>
-    <task id="Task48" status="PENDING" description="Finish remaining `ItemAttributes`/`Items` (Full OTBM Complex Data Read & Custom Serialization). (Full details: tasks_definitions/Task48.md)"/>
-    <task id="Task49" status="PENDING" description="Basic `TilePropertyEditor` Migration (UI Structure, Placeholder Property Display). (Full details: tasks_definitions/Task49.md)"/>
-    <task id="Task50" status="PENDING" description="Implement `ReplaceItemsDialog` UI (Find Similar - Full UI, Placeholder Backend). (Full details: tasks_definitions/Task50.md)"/>
-    <task id="Task51" status="PENDING" description="Data Serialization for `Map` (OTBM/XML/JSON - Method Implementation & Full `Item` Ser/Des). (Full details: tasks_definitions/Task51.md)"/>
-    <task id="Task52" status="PENDING" description="Integrate Automagic Borders with Qt's Rendering System (Visual Updates post-Terrain Edit). (Full details: tasks_definitions/Task52.md)"/>
-    <task id="Task53" status="PENDING" description="Migrate remaining Brush types to Qt (`CarpetBrush`, `TableBrush`, `CreatureBrush`, `SpawnBrush`, etc. - Full Implementation with Item/Map Interaction). (Full details: tasks_definitions/Task53.md)"/>
-    <task id="Task54" status="PENDING" description="Finalize Item Rendering (Integrate Sprites - Full Sprite Sheet & Animation Handling). (Full details: tasks_definitions/Task54.md)"/>
-    <task id="Task55" status="PENDING" description="Add Support for `Item` Attributes Map (Advanced Properties, Door/Container Logic, `creatureMap` on `Tile`). (Full details: tasks_definitions/Task55.md)"/>
-    <task id="Task56" status="PENDING" description="Implement Remaining Specialized Brushes (`HouseBrush`, `HouseExitBrush`, `WaypointBrush` - Full Logic & Map Interaction). (Full details: tasks_definitions/Task56.md)"/>
-    <task id="Task57" status="PENDING" description="Migrate `FlagBrush` (Zones - Tile Attribute Setting & Menu/Tool Integration). (Full details: tasks_definitions/Task57.md)"/>
-    <task id="Task58" status="PENDING" description="Implement Custom `QGraphicsItems` (Selection, Waypoint, Spawn, Item/Creature Visuals on `MapTileItem`). (Full details: tasks_definitions/Task58.md)"/>
-    <task id="Task59" status="PENDING" description="Create `ItemFinder` / `TileFinder` utilities (Comprehensive Item/Tile Searching Logic). (Full details: tasks_definitions/Task59.md)"/>
-    <task id="Task60" status="PENDING" description="Implement File Handling and Version Conversion for `Map` (OTBM - Full `NodeFile` IO & TileSet/ItemAttribute Serialization). (Full details: tasks_definitions/Task60.md)"/>
-    <task id="Task61" status="PENDING" description="Integrate Tile Selection in `MapView` (Full Modifier Key Logic & Visual Synchronization). (Full details: tasks_definitions/Task61.md)"/>
-    <task id="Task62" status="PENDING" description="Full Migration of `wxFrame` (main window), menus, and `wxAUI` (if used for main layout) to Qt `QMainWindow` and related panels (Complete UI Shell & Basic Wiring). (Full details: tasks_definitions/Task62.md)"/>
-    <task id="Task63" status="PENDING" description="Migrate Waypoints to Qt (`waypoints.h/.cpp` including its interaction in Maps, creating appropriate UI elements for list/edit operations (Full Data Model, UI Stubs, Map Linking). (Full details: tasks_definitions/Task63.md)"/>
-    <task id="Task64" status="PENDING" description="Move all Item Properties Loading from `Items` class into `SpriteManager` (or Combined Asset Manager - Unifying `.dat`/Sprite/ItemType Logic). (Full details: tasks_definitions/Task64.md)"/>
-    <task id="Task65" status="PENDING" description="Migrate Basic Drawing Primitives (`QPainter` from SFML/wx) and Implement Brush Preview in `MapCanvas`. (Full details: tasks_definitions/Task65.md)"/>
-    <task id="Task66" status="PENDING" description="Migrate `House` and `Town` Handling (Data Structures, XML I/O, Basic `Map` Integration & Drawing Hooks). (Full details: tasks_definitions/Task66.md)"/>
-    <task id="Task67" status="PENDING" description="Add `Tileset` Management to `ResourceManager` or new `TilesetManager` (Linking Items/Brushes by Category). (Full details: tasks_definitions/Task67.md)"/>
-    <task id="Task68" status="PENDING" description="Create `Find Item Dialog` (Qt Version - Full UI, Search Logic Stubs, `Browse Tile` Concept). (Full details: tasks_definitions/Task68.md)"/>
-    <task id="Task69" status="PENDING" description="Integrate `Selection` Transformation Commands (Move, Rotate, Flip - Full Undoable Command Structure). (Full details: tasks_definitions/Task69.md)"/>
-    <task id="Task70" status="PENDING" description="Finish `Tileset` implementations (Creating Visual Panels for Tile, Ground, Doodad etc. in `MainPalette`). (Full details: tasks_definitions/Task70.md)"/>
-    <task id="Task71" status="PENDING" description="Implement `Waypoints` system (Full Functionality: Data, Map Interaction, UI Panel, Minimap Markers, Persistence). (Full details: tasks_definitions/Task71.md)"/>
-    <task id="Task72" status="PENDING" description="Migrate remaining rendering code in `map_drawer` to `QGraphicsView` (SFML/OpenGL Replacement, Selection Boxes, Brush/Doodad Custom Drawing). (Full details: tasks_definitions/Task72.md)"/>
-    <task id="Task73" status="PENDING" description="Port `House` and related operations using new system (Full Map Data Interaction, Tile Updates, Cleanup Actions). (Full details: tasks_definitions/Task73.md)"/>
-    <task id="Task74" status="PENDING" description="Port `Waypoint` drawing code, and functionality for clicking (Full `MapView` Interaction, Tooltips, `Map` Updates). (Full details: tasks_definitions/Task74.md)"/>
-    <task id="Task75" status="PENDING" description="Update `MapView` properties for drawing states (Implement `OnChangeViewSettings` for `ghost_items`, `show_zones`, etc.). (Full details: tasks_definitions/Task75.md)"/>
-    <task id="Task76" status="PENDING" description="Finish Graphics/Sprite/Rendering Integration (Layer Support, Special Item Flags, OpenGL Replacements, `drawBrushIndicator`). (Full details: tasks_definitions/Task76.md)"/>
-    <task id="Task77" status="PENDING" description="Update Status/Toolbar for Action IDs for items when drawing/brush changes (Full Palette/Brush Sync). (Full details: tasks_definitions/Task77.md)"/>
-    <task id="Task78" status="PENDING" description="Migrate Remaining Dialogs and Windows (Advanced Features - e.g., `TilesetWindow`, `PreferencesWindow`, `HelpSystem`). (Full details: tasks_definitions/Task78.md)"/>
-    <task id="Task79" status="PENDING" description="Implement remaining selection tool features (Full Mouse Actions, Transformation Logic, Signals, Copy/Cut/Paste Commands). (Full details: tasks_definitions/Task79.md)"/>
-    <task id="Task80" status="PENDING" description="Port `Map Display` functions (Zoom, Grid, Mouse Hover/Capture Effects, Full `MapCanvas` Logic). (Full details: tasks_definitions/Task80.md)"/>
-    <task id="Task81" status="PENDING" description="Complete Brush Loading/Saving (XML/JSON persistence for Custom/User-Defined Brushes & States). (Full details: tasks_definitions/Task81.md)"/>
-    <task id="Task82" status="PENDING" description="Migrate and Enhance Search Functionality (Full `FindItemDialog`, 'Find All', Replace Logic & `ItemTypes` Integration). (Full details: tasks_definitions/Task82.md)"/>
-    <task id="Task83" status="PENDING" description="Enhance Rendering: LOD, Lighting Effects, Transparency (Full Visual Feature Parity). (Full details: tasks_definitions/Task83.md)"/>
-    <task id="Task84" status="PENDING" description="Implement Map Loaders and Converters (Full BinaryFile I/O Replacement, All Formats, Version Conversions). (Full details: tasks_definitions/Task84.md)"/>
-    <task id="Task85" status="PENDING" description="Implement Tile Locking Mechanism (Data Model, UI Actions, `MapView` Interaction). (Full details: tasks_definitions/Task85.md)"/>
-    <task id="Task86" status="PENDING" description="Migrate and Refactor the `Town` and `House` System (Enhanced - Full UI Editors, All Menu Actions, Tile Property Logic). (Full details: tasks_definitions/Task86.md)"/>
-    <task id="Task87" status="PENDING" description="Complete `Creature` and `Spawn` Integration (Full Sprites, Attributes, Brushes, UI, Map Drawing). (Full details: tasks_definitions/Task87.md)"/>
-    <task id="Task88" status="PENDING" description="Create `ProgressDialog` using `QProgressDialog` and adapt usages (Threaded Long Operations). (Full details: tasks_definitions/Task88.md)"/>
-    <task id="Task89" status="PENDING" description="Migrate Replace Item Functionality (Full `Find Similar` Dialog Logic, Options, & Map Updates). (Full details: tasks_definitions/Task89.md)"/>
-    <task id="Task90" status="PENDING" description="Add Minimap functionality (Full `MinimapWindow`, Tile Rendering, Click Navigation, View Sync). (Full details: tasks_definitions/Task90.md)"/>
-    <task id="Task91" status="PENDING" description="Migrate or recreate `TilesetWindows` functionality (Advanced Tileset Definition/Editing UI). (Full details: tasks_definitions/Task91.md)"/>
-    <task id="Task92" status="PENDING" description="Port `SpawnItem` code from Map Display (Finalizing Spawn Visualization & Attribute Reflection). (Full details: tasks_definitions/Task92.md)"/>
-    <task id="Task93" status="PENDING" description="Create `Project_QT` Tile property dialog (Full Implementation: Editing All Tile Properties, Data Binding, Map Updates). (Full details: tasks_definitions/Task93.md)"/>
-    <task id="Task94" status="PENDING" description="Implement and Integrate the `Houses` and `Towns` System (Full Life-Cycle, UI, Map Sync, OTBM/XML). (Full details: tasks_definitions/Task94.md)"/>
-    <task id="Task95" status="PENDING" description="Complete and Refine `SelectionBrush` (Full Transformation Logic, Modifiers, `MapDisplay` Interaction). (Full details: tasks_definitions/Task95.md)"/>
-    <task id="Task96" status="PENDING" description="Implement Key Forwarding, Navigation, and Input Handling for All Palettes/Dialog Controls (Full UI Polish). (Full details: tasks_definitions/Task96.md)"/>
-    <task id="Task97" status="PENDING" description="Integrate Application Settings and Preferences (Full Persistence & Application across all components). (Full details: tasks_definitions/Task97.md)"/>
-    <task id="Task98" status="PENDING" description="Migrate 'Ground Border Tool' Automagic (Full Specialized Tool Logic & Integration). (Full details: tasks_definitions/Task98.md)"/>
-    <task id="Task99" status="PENDING" description="Migrate any features that network messaging in `LiveSocket` requires in Qt (Data Structures, Packets, Basic Send/Receive Stubs). (Full details: tasks_definitions/Task99.md)"/>
-    <task id="Task100" status="PENDING" description="Refactor, Optimize, Test, and Finalize (Systematic Code Review & Polish, Performance, Comprehensive Testing). (Full details: tasks_definitions/Task100.md)"/>
+    <task id="Task1"><status_initial>PENDING</status_initial><title>Migrate `wxImage` to `QImage`.</title><detailed_spec_file>tasks_definitions/Task1.md</detailed_spec_file><!-- Optional: Add key source files from wxwidgets for quick reference by AI --><!-- <wx_primary_source_files><file>wxwidgets/src/common/image.cpp</file><file>wxwidgets/include/wx/image.h</file></wx_primary_source_files> --><!-- Optional: Add key target files in Project_QT if known/predictable, for AI's initial focus --><!-- <qt_primary_target_files><file>Project_QT/src/core/ImageAdapter.cpp</file><file>Project_QT/src/core/ImageAdapter.h</file></qt_primary_target_files> --></task>
+    <task id="Task2"><status_initial>PENDING</status_initial><title>Migrate `wxBitmap` to `QPixmap`.</title><detailed_spec_file>tasks_definitions/Task2.md</detailed_spec_file></task>
+    <task id="Task3"><status_initial>PENDING</status_initial><title>Migrate `wxDC` (Device Context) to `QPainter`.</title><detailed_spec_file>tasks_definitions/Task3.md</detailed_spec_file></task>
+    <task id="Task4"><status_initial>PENDING</status_initial><title>Basic `wxPanel` to `QWidget` Transition (Containers).</title><detailed_spec_file>tasks_definitions/Task4.md</detailed_spec_file></task>
+    <task id="Task5"><status_initial>PENDING</status_initial><title>Refactor mouse events for position and wheel in `MapView`.</title><detailed_spec_file>tasks_definitions/Task5.md</detailed_spec_file></task>
+    <task id="Task6"><status_initial>PENDING</status_initial><title>`Brush` class transition (core structure and mouse event stubs).</title><detailed_spec_file>tasks_definitions/Task6.md</detailed_spec_file></task>
+    <task id="Task7"><status_initial>PENDING</status_initial><title>Refactor basic `wxDialog` classes to `QDialog` (UI layout and simple signals/slots).</title><detailed_spec_file>tasks_definitions/Task7.md</detailed_spec_file></task>
+    <task id="Task8"><status_initial>PENDING</status_initial><title>Full `wxMenuBar` to `QMenuBar` Implementation.</title><detailed_spec_file>tasks_definitions/Task8.md</detailed_spec_file></task>
+    <task id="Task9"><status_initial>PENDING</status_initial><title>`QToolBar` Conversion for `MainToolBar` (Actions, Basic Controls).</title><detailed_spec_file>tasks_definitions/Task9.md</detailed_spec_file></task>
+    <task id="Task10"><status_initial>PENDING</status_initial><title>Migrate `wxAuiManager` docking for core panels to `QDockWidget`.</title><detailed_spec_file>tasks_definitions/Task10.md</detailed_spec_file></task>
+    <task id="Task11"><status_initial>PENDING</status_initial><title>Implement `Map` Data Structure in Qt (Core Logic, Tile/Item/Creature Storage, Iterators).</title><detailed_spec_file>tasks_definitions/Task11.md</detailed_spec_file></task>
+    <task id="Task12"><status_initial>PENDING</status_initial><title>Port `Tile` class to Qt (Item/Creature Storage, Flags, Properties, Basic Signals).</title><detailed_spec_file>tasks_definitions/Task12.md</detailed_spec_file></task>
+    <task id="Task13"><status_initial>PENDING</status_initial><title>Migrate `Item` class properties &amp; structure (Full Attribute Model, Type Handling, Basic Rendering).</title><detailed_spec_file>tasks_definitions/Task13.md</detailed_spec_file></task>
+    <task id="Task14"><status_initial>PENDING</status_initial><title>Create `ItemManager` in Qt (Core Structure &amp; Definition Loading from Files).</title><detailed_spec_file>tasks_definitions/Task14.md</detailed_spec_file></task>
+    <task id="Task15"><status_initial>PENDING</status_initial><title>Create Basic `Creature` Class in Qt (Data &amp; Accessors, Sprite Forward Declaration).</title><detailed_spec_file>tasks_definitions/Task15.md</detailed_spec_file></task>
+    <task id="Task16"><status_initial>PENDING</status_initial><title>Migrate `CreatureManager` basic file handling (XML Parsing &amp; Property Storage).</title><detailed_spec_file>tasks_definitions/Task16.md</detailed_spec_file></task>
+    <task id="Task17"><status_initial>PENDING</status_initial><title>Migrate `Selection` Class - Initial functions and structures (Tile Storage, Modes, Flags).</title><detailed_spec_file>tasks_definitions/Task17.md</detailed_spec_file></task>
+    <task id="Task18"><status_initial>PENDING</status_initial><title>Migrate `Automagic_Settings` - Set Up Initial UI and Placeholder Links to `BorderSystem`.</title><detailed_spec_file>tasks_definitions/Task18.md</detailed_spec_file></task>
+    <task id="Task19"><status_initial>PENDING</status_initial><title>Port `wxwidgets` Spawn code to `Project_QT` (Core Data, Basic Dialog, `Map` Stubs).</title><detailed_spec_file>tasks_definitions/Task19.md</detailed_spec_file></task>
+    <task id="Task20"><status_initial>PENDING</status_initial><title>Initial `Waypoint` Class Migration and Storage (Data Structure &amp; Core Attributes ONLY).</title><detailed_spec_file>tasks_definitions/Task20.md</detailed_spec_file></task>
+    <task id="Task21"><status_initial>PENDING</status_initial><title>Implement Core `ClipboardData` Functionality (Data Serialization/Deserialization for Copy/Paste).</title><detailed_spec_file>tasks_definitions/Task21.md</detailed_spec_file></task>
+    <task id="Task22"><status_initial>PENDING</status_initial><title>Migrate `Tile` drawing function (Comprehensive Item/Creature Rendering Loop &amp; Initial Visibility).</title><detailed_spec_file>tasks_definitions/Task22.md</detailed_spec_file></task>
+    <task id="Task23"><status_initial>PENDING</status_initial><title>Finish `MapTileItem` drawing and logic (Full `Tile` Delegation, Caching, Selection Highlight, Collision).</title><detailed_spec_file>tasks_definitions/Task23.md</detailed_spec_file></task>
+    <task id="Task24"><status_initial>PENDING</status_initial><title>Integrate `Item`'s Type System with `ItemManager` (Full Typed `Item` Creation &amp; Properties).</title><detailed_spec_file>tasks_definitions/Task24.md</detailed_spec_file></task>
+    <task id="Task25"><status_initial>PENDING</status_initial><title>Create Basic `Sprite` Abstract Class in Qt (Core Interface &amp; Polymorphism Support).</title><detailed_spec_file>tasks_definitions/Task25.md</detailed_spec_file></task>
+    <task id="Task26"><status_initial>PENDING</status_initial><title>Create `EditorSprite` and its initial renderer (Full UI Sprite Implementation).</title><detailed_spec_file>tasks_definitions/Task26.md</detailed_spec_file></task>
+    <task id="Task27"><status_initial>PENDING</status_initial><title>Create Initial `GameSprite` class (Data, Animation Stubs, Basic Rendering, Core Attributes).</title><detailed_spec_file>tasks_definitions/Task27.md</detailed_spec_file></task>
+    <task id="Task28"><status_initial>PENDING</status_initial><title>Add Initial Placeholder Renderers (Comprehensive Map, Tile, Item Visual Stubs).</title><detailed_spec_file>tasks_definitions/Task28.md</detailed_spec_file></task>
+    <task id="Task29"><status_initial>PENDING</status_initial><title>Begin Transition of Key Event Handling in `MapCanvas` and Menus (Core Navigation, Zoom, Basic Command Invocation).</title><detailed_spec_file>tasks_definitions/Task29.md</detailed_spec_file></task>
+    <task id="Task30"><status_initial>PENDING</status_initial><title>Replace `wxStatusBar` to Qt and simplify (Core Fields, `MainWindow` Update Methods).</title><detailed_spec_file>tasks_definitions/Task30.md</detailed_spec_file></task>
+    <task id="Task31"><status_initial>PENDING</status_initial><title>Migrate `dc_button.h` to `QPushButton` subclass (e.g., `SpriteButton`) and implement basic `onClick` and self-drawing.</title><detailed_spec_file>tasks_definitions/Task31.md</detailed_spec_file></task>
+    <task id="Task32"><status_initial>PENDING</status_initial><title>Implement `ResourceManager` in Qt (Complete - Sprite/Icon/Texture Loading, Caching, Categorization).</title><detailed_spec_file>tasks_definitions/Task32.md</detailed_spec_file></task>
+    <task id="Task33"><status_initial>PENDING</status_initial><title>Create `BrushManager` in Qt (Full `QObject` System, Creation, Selection Signals, State Update Methods).</title><detailed_spec_file>tasks_definitions/Task33.md</detailed_spec_file></task>
+    <task id="Task34"><status_initial>PENDING</status_initial><title>Brush interaction structure and helpers (Full Mouse Event to Tile/Action Logic, Including `MapCanvas` State Machines).</title><detailed_spec_file>tasks_definitions/Task34.md</detailed_spec_file></task>
+    <task id="Task35"><status_initial>PENDING</status_initial><title>Implement `SpriteManager` (Loaders - SPR/DAT Parsing, ImageSpace, Header Logic, Basic ItemData Linking).</title><detailed_spec_file>tasks_definitions/Task35.md</detailed_spec_file></task>
+    <task id="Task36"><status_initial>PENDING</status_initial><title>Migrate core `Brushes` interface from `brush.h` (`Brush` Abstract Base Class &amp; Smart Pointers).</title><detailed_spec_file>tasks_definitions/Task36.md</detailed_spec_file></task>
+    <task id="Task37"><status_initial>PENDING</status_initial><title>Implement `TerrainBrush` (Base for Terrain Types - Drawing Stubs &amp; Core Properties).</title><detailed_spec_file>tasks_definitions/Task37.md</detailed_spec_file></task>
+    <task id="Task38"><status_initial>PENDING</status_initial><title>Migrate `GroundBrush` (Terrain Subtype - Item Placement &amp; Border System Hook Placeholders).</title><detailed_spec_file>tasks_definitions/Task38.md</detailed_spec_file></task>
+    <task id="Task39"><status_initial>PENDING</status_initial><title>Implement `WallBrush` (Terrain Subtype - Wall Placement, Connection Stubs, Door Logic).</title><detailed_spec_file>tasks_definitions/Task39.md</detailed_spec_file></task>
+    <task id="Task40"><status_initial>PENDING</status_initial><title>Implement `WallDecorationBrush` (Structure, Drawing Intent, Z-Order Considerations).</title><detailed_spec_file>tasks_definitions/Task40.md</detailed_spec_file></task>
+    <task id="Task41"><status_initial>PENDING</status_initial><title>Implement `AutoBorder` class structure in Qt (Data Representation for Borders).</title><detailed_spec_file>tasks_definitions/Task41.md</detailed_spec_file></task>
+    <task id="Task42"><status_initial>PENDING</status_initial><title>Migrate `TableBrush` structure, item mapping, variations, and interaction logic.</title><detailed_spec_file>tasks_definitions/Task42.md</detailed_spec_file></task>
+    <task id="Task43"><status_initial>PENDING</status_initial><title>Migrate `CarpetBrush` structure, item placement, and `getCarpet` logic.</title><detailed_spec_file>tasks_definitions/Task43.md</detailed_spec_file></task>
+    <task id="Task44"><status_initial>PENDING</status_initial><title>Implement `OptionalBorderBrush` structure and conditional draw/undraw logic.</title><detailed_spec_file>tasks_definitions/Task44.md</detailed_spec_file></task>
+    <task id="Task45"><status_initial>PENDING</status_initial><title>Create `ItemPropertyEditorBase` and Subclasses (Abstract Editor UI Structure).</title><detailed_spec_file>tasks_definitions/Task45.md</detailed_spec_file></task>
+    <task id="Task46"><status_initial>PENDING</status_initial><title>Refactor `MainToolBar` UI Using `QToolBar` (Populate Actions, Enhance Controls, Interactions).</title><detailed_spec_file>tasks_definitions/Task46.md</detailed_spec_file></task>
+    <task id="Task47"><status_initial>PENDING</status_initial><title>`BrushPalettePanel` and `BrushPanel` Cleanup and Efficiency (Resource Management &amp; `ItemButton` Usage).</title><detailed_spec_file>tasks_definitions/Task47.md</detailed_spec_file></task>
+    <task id="Task48"><status_initial>PENDING</status_initial><title>Finish remaining `ItemAttributes`/`Items` (Full OTBM Complex Data Read &amp; Custom Serialization).</title><detailed_spec_file>tasks_definitions/Task48.md</detailed_spec_file></task>
+    <task id="Task49"><status_initial>PENDING</status_initial><title>Basic `TilePropertyEditor` Migration (UI Structure, Placeholder Property Display).</title><detailed_spec_file>tasks_definitions/Task49.md</detailed_spec_file></task>
+    <task id="Task50"><status_initial>PENDING</status_initial><title>Implement `ReplaceItemsDialog` UI (Find Similar - Full UI, Placeholder Backend).</title><detailed_spec_file>tasks_definitions/Task50.md</detailed_spec_file></task>
+    <task id="Task51"><status_initial>PENDING</status_initial><title>Data Serialization for `Map` (OTBM/XML/JSON - Method Implementation &amp; Full `Item` Ser/Des).</title><detailed_spec_file>tasks_definitions/Task51.md</detailed_spec_file></task>
+    <task id="Task52"><status_initial>PENDING</status_initial><title>Integrate Automagic Borders with Qt's Rendering System (Visual Updates post-Terrain Edit).</title><detailed_spec_file>tasks_definitions/Task52.md</detailed_spec_file></task>
+    <task id="Task53"><status_initial>PENDING</status_initial><title>Migrate remaining Brush types to Qt (`CarpetBrush`, `TableBrush`, `CreatureBrush`, `SpawnBrush`, etc. - Full Implementation with Item/Map Interaction).</title><detailed_spec_file>tasks_definitions/Task53.md</detailed_spec_file></task>
+    <task id="Task54"><status_initial>PENDING</status_initial><title>Finalize Item Rendering (Integrate Sprites - Full Sprite Sheet &amp; Animation Handling).</title><detailed_spec_file>tasks_definitions/Task54.md</detailed_spec_file></task>
+    <task id="Task55"><status_initial>PENDING</status_initial><title>Add Support for `Item` Attributes Map (Advanced Properties, Door/Container Logic, `creatureMap` on `Tile`).</title><detailed_spec_file>tasks_definitions/Task55.md</detailed_spec_file></task>
+    <task id="Task56"><status_initial>PENDING</status_initial><title>Implement Remaining Specialized Brushes (`HouseBrush`, `HouseExitBrush`, `WaypointBrush` - Full Logic &amp; Map Interaction).</title><detailed_spec_file>tasks_definitions/Task56.md</detailed_spec_file></task>
+    <task id="Task57"><status_initial>PENDING</status_initial><title>Migrate `FlagBrush` (Zones - Tile Attribute Setting &amp; Menu/Tool Integration).</title><detailed_spec_file>tasks_definitions/Task57.md</detailed_spec_file></task>
+    <task id="Task58"><status_initial>PENDING</status_initial><title>Implement Custom `QGraphicsItems` (Selection, Waypoint, Spawn, Item/Creature Visuals on `MapTileItem`).</title><detailed_spec_file>tasks_definitions/Task58.md</detailed_spec_file></task>
+    <task id="Task59"><status_initial>PENDING</status_initial><title>Create `ItemFinder` / `TileFinder` utilities (Comprehensive Item/Tile Searching Logic).</title><detailed_spec_file>tasks_definitions/Task59.md</detailed_spec_file></task>
+    <task id="Task60"><status_initial>PENDING</status_initial><title>Implement File Handling and Version Conversion for `Map` (OTBM - Full `NodeFile` IO &amp; TileSet/ItemAttribute Serialization).</title><detailed_spec_file>tasks_definitions/Task60.md</detailed_spec_file></task>
+    <task id="Task61"><status_initial>PENDING</status_initial><title>Integrate Tile Selection in `MapView` (Full Modifier Key Logic &amp; Visual Synchronization).</title><detailed_spec_file>tasks_definitions/Task61.md</detailed_spec_file></task>
+    <task id="Task62"><status_initial>PENDING</status_initial><title>Full Migration of `wxFrame` (main window), menus, and `wxAUI` (if used for main layout) to Qt `QMainWindow` and related panels (Complete UI Shell &amp; Basic Wiring).</title><detailed_spec_file>tasks_definitions/Task62.md</detailed_spec_file></task>
+    <task id="Task63"><status_initial>PENDING</status_initial><title>Migrate Waypoints to Qt (`waypoints.h/.cpp` including its interaction in Maps, creating appropriate UI elements for list/edit operations (Full Data Model, UI Stubs, Map Linking).</title><detailed_spec_file>tasks_definitions/Task63.md</detailed_spec_file></task>
+    <task id="Task64"><status_initial>PENDING</status_initial><title>Move all Item Properties Loading from `Items` class into `SpriteManager` (or Combined Asset Manager - Unifying `.dat`/Sprite/ItemType Logic).</title><detailed_spec_file>tasks_definitions/Task64.md</detailed_spec_file></task>
+    <task id="Task65"><status_initial>PENDING</status_initial><title>Migrate Basic Drawing Primitives (`QPainter` from SFML/wx) and Implement Brush Preview in `MapCanvas`.</title><detailed_spec_file>tasks_definitions/Task65.md</detailed_spec_file></task>
+    <task id="Task66"><status_initial>PENDING</status_initial><title>Migrate `House` and `Town` Handling (Data Structures, XML I/O, Basic `Map` Integration &amp; Drawing Hooks).</title><detailed_spec_file>tasks_definitions/Task66.md</detailed_spec_file></task>
+    <task id="Task67"><status_initial>PENDING</status_initial><title>Add `Tileset` Management to `ResourceManager` or new `TilesetManager` (Linking Items/Brushes by Category).</title><detailed_spec_file>tasks_definitions/Task67.md</detailed_spec_file></task>
+    <task id="Task68"><status_initial>PENDING</status_initial><title>Create `Find Item Dialog` (Qt Version - Full UI, Search Logic Stubs, `Browse Tile` Concept).</title><detailed_spec_file>tasks_definitions/Task68.md</detailed_spec_file></task>
+    <task id="Task69"><status_initial>PENDING</status_initial><title>Integrate `Selection` Transformation Commands (Move, Rotate, Flip - Full Undoable Command Structure).</title><detailed_spec_file>tasks_definitions/Task69.md</detailed_spec_file></task>
+    <task id="Task70"><status_initial>PENDING</status_initial><title>Finish `Tileset` implementations (Creating Visual Panels for Tile, Ground, Doodad etc. in `MainPalette`).</title><detailed_spec_file>tasks_definitions/Task70.md</detailed_spec_file></task>
+    <task id="Task71"><status_initial>PENDING</status_initial><title>Implement `Waypoints` system (Full Functionality: Data, Map Interaction, UI Panel, Minimap Markers, Persistence).</title><detailed_spec_file>tasks_definitions/Task71.md</detailed_spec_file></task>
+    <task id="Task72"><status_initial>PENDING</status_initial><title>Migrate remaining rendering code in `map_drawer` to `QGraphicsView` (SFML/OpenGL Replacement, Selection Boxes, Brush/Doodad Custom Drawing).</title><detailed_spec_file>tasks_definitions/Task72.md</detailed_spec_file></task>
+    <task id="Task73"><status_initial>PENDING</status_initial><title>Port `House` and related operations using new system (Full Map Data Interaction, Tile Updates, Cleanup Actions).</title><detailed_spec_file>tasks_definitions/Task73.md</detailed_spec_file></task>
+    <task id="Task74"><status_initial>PENDING</status_initial><title>Port `Waypoint` drawing code, and functionality for clicking (Full `MapView` Interaction, Tooltips, `Map` Updates).</title><detailed_spec_file>tasks_definitions/Task74.md</detailed_spec_file></task>
+    <task id="Task75"><status_initial>PENDING</status_initial><title>Update `MapView` properties for drawing states (Implement `OnChangeViewSettings` for `ghost_items`, `show_zones`, etc.).</title><detailed_spec_file>tasks_definitions/Task75.md</detailed_spec_file></task>
+    <task id="Task76"><status_initial>PENDING</status_initial><title>Finish Graphics/Sprite/Rendering Integration (Layer Support, Special Item Flags, OpenGL Replacements, `drawBrushIndicator`).</title><detailed_spec_file>tasks_definitions/Task76.md</detailed_spec_file></task>
+    <task id="Task77"><status_initial>PENDING</status_initial><title>Update Status/Toolbar for Action IDs for items when drawing/brush changes (Full Palette/Brush Sync).</title><detailed_spec_file>tasks_definitions/Task77.md</detailed_spec_file></task>
+    <task id="Task78"><status_initial>PENDING</status_initial><title>Migrate Remaining Dialogs and Windows (Advanced Features - e.g., `TilesetWindow`, `PreferencesWindow`, `HelpSystem`).</title><detailed_spec_file>tasks_definitions/Task78.md</detailed_spec_file></task>
+    <task id="Task79"><status_initial>PENDING</status_initial><title>Implement remaining selection tool features (Full Mouse Actions, Transformation Logic, Signals, Copy/Cut/Paste Commands).</title><detailed_spec_file>tasks_definitions/Task79.md</detailed_spec_file></task>
+    <task id="Task80"><status_initial>PENDING</status_initial><title>Port `Map Display` functions (Zoom, Grid, Mouse Hover/Capture Effects, Full `MapCanvas` Logic).</title><detailed_spec_file>tasks_definitions/Task80.md</detailed_spec_file></task>
+    <task id="Task81"><status_initial>PENDING</status_initial><title>Complete Brush Loading/Saving (XML/JSON persistence for Custom/User-Defined Brushes &amp; States).</title><detailed_spec_file>tasks_definitions/Task81.md</detailed_spec_file></task>
+    <task id="Task82"><status_initial>PENDING</status_initial><title>Migrate and Enhance Search Functionality (Full `FindItemDialog`, 'Find All', Replace Logic &amp; `ItemTypes` Integration).</title><detailed_spec_file>tasks_definitions/Task82.md</detailed_spec_file></task>
+    <task id="Task83"><status_initial>PENDING</status_initial><title>Enhance Rendering: LOD, Lighting Effects, Transparency (Full Visual Feature Parity).</title><detailed_spec_file>tasks_definitions/Task83.md</detailed_spec_file></task>
+    <task id="Task84"><status_initial>PENDING</status_initial><title>Implement Map Loaders and Converters (Full BinaryFile I/O Replacement, All Formats, Version Conversions).</title><detailed_spec_file>tasks_definitions/Task84.md</detailed_spec_file></task>
+    <task id="Task85"><status_initial>PENDING</status_initial><title>Implement Tile Locking Mechanism (Data Model, UI Actions, `MapView` Interaction).</title><detailed_spec_file>tasks_definitions/Task85.md</detailed_spec_file></task>
+    <task id="Task86"><status_initial>PENDING</status_initial><title>Migrate and Refactor the `Town` and `House` System (Enhanced - Full UI Editors, All Menu Actions, Tile Property Logic).</title><detailed_spec_file>tasks_definitions/Task86.md</detailed_spec_file></task>
+    <task id="Task87"><status_initial>PENDING</status_initial><title>Complete `Creature` and `Spawn` Integration (Full Sprites, Attributes, Brushes, UI, Map Drawing).</title><detailed_spec_file>tasks_definitions/Task87.md</detailed_spec_file></task>
+    <task id="Task88"><status_initial>PENDING</status_initial><title>Create `ProgressDialog` using `QProgressDialog` and adapt usages (Threaded Long Operations).</title><detailed_spec_file>tasks_definitions/Task88.md</detailed_spec_file></task>
+    <task id="Task89"><status_initial>PENDING</status_initial><title>Migrate Replace Item Functionality (Full `Find Similar` Dialog Logic, Options, &amp; Map Updates).</title><detailed_spec_file>tasks_definitions/Task89.md</detailed_spec_file></task>
+    <task id="Task90"><status_initial>PENDING</status_initial><title>Add Minimap functionality (Full `MinimapWindow`, Tile Rendering, Click Navigation, View Sync).</title><detailed_spec_file>tasks_definitions/Task90.md</detailed_spec_file></task>
+    <task id="Task91"><status_initial>PENDING</status_initial><title>Migrate or recreate `TilesetWindows` functionality (Advanced Tileset Definition/Editing UI).</title><detailed_spec_file>tasks_definitions/Task91.md</detailed_spec_file></task>
+    <task id="Task92"><status_initial>PENDING</status_initial><title>Port `SpawnItem` code from Map Display (Finalizing Spawn Visualization &amp; Attribute Reflection).</title><detailed_spec_file>tasks_definitions/Task92.md</detailed_spec_file></task>
+    <task id="Task93"><status_initial>PENDING</status_initial><title>Create `Project_QT` Tile property dialog (Full Implementation: Editing All Tile Properties, Data Binding, Map Updates).</title><detailed_spec_file>tasks_definitions/Task93.md</detailed_spec_file></task>
+    <task id="Task94"><status_initial>PENDING</status_initial><title>Implement and Integrate the `Houses` and `Towns` System (Full Life-Cycle, UI, Map Sync, OTBM/XML).</title><detailed_spec_file>tasks_definitions/Task94.md</detailed_spec_file></task>
+    <task id="Task95"><status_initial>PENDING</status_initial><title>Complete and Refine `SelectionBrush` (Full Transformation Logic, Modifiers, `MapDisplay` Interaction).</title><detailed_spec_file>tasks_definitions/Task95.md</detailed_spec_file></task>
+    <task id="Task96"><status_initial>PENDING</status_initial><title>Implement Key Forwarding, Navigation, and Input Handling for All Palettes/Dialog Controls (Full UI Polish).</title><detailed_spec_file>tasks_definitions/Task96.md</detailed_spec_file></task>
+    <task id="Task97"><status_initial>PENDING</status_initial><title>Integrate Application Settings and Preferences (Full Persistence &amp; Application across all components).</title><detailed_spec_file>tasks_definitions/Task97.md</detailed_spec_file></task>
+    <task id="Task98"><status_initial>PENDING</status_initial><title>Migrate 'Ground Border Tool' Automagic (Full Specialized Tool Logic &amp; Integration).</title><detailed_spec_file>tasks_definitions/Task98.md</detailed_spec_file></task>
+    <task id="Task99"><status_initial>PENDING</status_initial><title>Migrate any features that network messaging in `LiveSocket` requires in Qt (Data Structures, Packets, Basic Send/Receive Stubs).</title><detailed_spec_file>tasks_definitions/Task99.md</detailed_spec_file></task>
+    <task id="Task100"><status_initial>PENDING</status_initial><title>Refactor, Optimize, Test, and Finalize (Systematic Code Review &amp; Polish, Performance, Comprehensive Testing).</title><detailed_spec_file>tasks_definitions/Task100.md</detailed_spec_file></task>
   </task_list>
 
-   <execution_control>
-    <!--
-      The following fields are NOT actively used by Jules to manage its state in the current workflow.
-      Jules determines the next task based on chat approvals and the first "PENDING" task it hasn't formally completed.
-      These are kept for human reference or if a different workflow were used in the future.
-    -->
-    <!-- <current_task_id>Task1</current_task_id> -->
-    <total_tasks>100</total_tasks> <!-- This can be useful for overall context. -->
-    <!-- <processed_for_review_count>0</processed_for_review_count> -->
-    <!-- <approved_and_merged_count>0</approved_and_merged_count> -->
+  <execution_control>
+    <info_note>The fields within 'execution_control' are for human informational purposes or for alternative workflows. In the current AI workflow (guided by master_prompt.txt), task progression and status are managed internally by the AI based on user's chat commands (e.g., 'APPROVED:[TaskID]'). The AI should not use 'current_task_id' or status fields from the XML for dynamic state tracking.</info_note>
+    <total_tasks_defined>100</total_tasks_defined>
   </execution_control>
 
   <!--
-    The <workflow_instructions> block describes a general interaction pattern.
-    The specific detailed workflow Jules follows is now in 'master_prompt.md'.
-    This block is kept for human reference to understand the original, more manual intent.
+    The <workflow_instructions> and <final_instructions> elements below describe a general interaction pattern
+    and are kept for human reference or for alternative systems.
+    The AI Assistant (Jules) MUST follow the detailed operational workflow defined in: tasks/master_prompt.txt.
+    Do NOT use the content of <workflow_instructions> or <final_instructions> for your execution logic.
   -->
   <workflow_instructions>
+    <reference_to_primary_workflow_doc>tasks/master_prompt.txt</reference_to_primary_workflow_doc>
     <step name="TaskSelection">AI identifies the current task by parsing this XML for the task definition (which points to a .md file) and by internally tracking approved tasks.</step>
     <step name="CodeAnalysisAndRefactoring">AI analyzes original code, existing Qt code, and potentially refactors large files into smaller modules before main task implementation, reporting new files for build system updates.</step>
     <step name="CodeGeneration">AI generates Qt6 code for the current task (potentially across multiple files), placing it in `Project_QT/src`.</step>
@@ -169,6 +168,7 @@
   </workflow_instructions>
 
   <final_instructions>
+    <reference_to_primary_workflow_doc>tasks/master_prompt.txt</reference_to_primary_workflow_doc>
     <!-- These are now integrated and superseded by the more detailed instructions in master_prompt.md for Jules -->
   </final_instructions>
 
