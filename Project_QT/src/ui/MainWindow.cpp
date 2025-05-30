@@ -17,11 +17,18 @@
 #include "PlaceholderMinimapWidget.h"
 #include "PlaceholderPropertiesWidget.h"
 #include "AutomagicSettingsDialog.h" // Include for AutomagicSettingsDialog
+#include "ClipboardData.h"           // For internal clipboard
+#include "Map.h"                     // For Map and MapPos
+#include "Selection.h"               // For Selection
+#include <QApplication>             // For future QClipboard access
+#include <QClipboard>               // For future QClipboard access
 
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle(tr("Idler's Map Editor (Qt)"));
     resize(1280, 720);
+
+    internalClipboard_ = new ClipboardData();
 
     setupMenuBar();
     setupToolBars(); 
@@ -33,6 +40,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 }
 
 MainWindow::~MainWindow() {
+    delete internalClipboard_;
+    internalClipboard_ = nullptr;
 }
 
 void MainWindow::setupMenuBar() {
@@ -622,4 +631,85 @@ void MainWindow::mainUpdateAutomagicSettings(bool automagicEnabled, bool sameGro
 void MainWindow::mainTriggerMapOrUIRefreshForAutomagic() {
     qDebug() << "MainWindow::mainTriggerMapOrUIRefreshForAutomagic (stub) called.";
     // This would eventually call methods on MapView or other relevant UI components
+}
+
+// --- Clipboard Operation Handlers (Stubs) ---
+
+void MainWindow::handleCopy() {
+    Map* currentMap = getCurrentMap();
+    Selection* currentSelection = currentMap ? currentMap->getSelection() : nullptr;
+
+    if (currentMap && currentSelection && !currentSelection->isEmpty()) {
+        if (internalClipboard_) {
+            internalClipboard_->populateFromSelection(currentSelection->getSelectedTiles(), *currentMap);
+            qDebug() << "MainWindow::handleCopy: Data copied to internal clipboard." << internalClipboard_->getTilesData().count() << "tiles.";
+            
+            // Future: Serialize and put on QClipboard
+            // QByteArray jsonData = internalClipboard_->serializeToJson();
+            // QApplication::clipboard()->setText(QString::fromUtf8(jsonData)); 
+        } else {
+            qWarning() << "MainWindow::handleCopy: internalClipboard_ is null.";
+        }
+    } else {
+        qDebug() << "MainWindow::handleCopy: No map or selection, or selection empty.";
+    }
+}
+
+void MainWindow::handleCut() {
+    Map* currentMap = getCurrentMap();
+    Selection* currentSelection = currentMap ? currentMap->getSelection() : nullptr;
+
+    if (currentMap && currentSelection && !currentSelection->isEmpty()) {
+        if (internalClipboard_) {
+            internalClipboard_->populateFromSelection(currentSelection->getSelectedTiles(), *currentMap);
+            qDebug() << "MainWindow::handleCut: Data copied to internal clipboard." << internalClipboard_->getTilesData().count() << "tiles.";
+
+            // Future: Serialize and put on QClipboard (as in handleCopy)
+
+            // Future: Delete the selected content from the map (this would involve creating an Action)
+            qDebug() << "MainWindow::handleCut: Deletion of original selection from map is deferred.";
+            // Example: editor->deleteSelectionAction(); currentSelection->clear();
+        } else {
+            qWarning() << "MainWindow::handleCut: internalClipboard_ is null.";
+        }
+    } else {
+        qDebug() << "MainWindow::handleCut: No map or selection, or selection empty.";
+    }
+}
+
+void MainWindow::handlePaste() {
+    Map* currentMap = getCurrentMap();
+    MapPos pasteTargetPosition = getPasteTargetPosition(); 
+
+    if (currentMap && internalClipboard_ && !internalClipboard_->isEmpty()) {
+        // Future: Get data from QClipboard if it's empty or newer
+        // QByteArray clipboardJsonData = QApplication::clipboard()->text().toUtf8();
+        // if (!clipboardJsonData.isEmpty()) { internalClipboard_->deserializeFromJson(clipboardJsonData); }
+            
+        qDebug() << "MainWindow::handlePaste: Pasting" << internalClipboard_->getTilesData().count() << "tiles from internal clipboard to map at (" << pasteTargetPosition.x << "," << pasteTargetPosition.y << "," << pasteTargetPosition.z << ").";
+        // Future: Create a PasteAction using internalClipboard_->getTilesData() and pasteTargetPosition
+        // Example: editor->pasteAction(internalClipboard_, pasteTargetPosition);
+    } else {
+        qDebug() << "MainWindow::handlePaste: No map or internal clipboard is empty/null.";
+    }
+}
+
+bool MainWindow::canPaste() const {
+    // Future: Check QClipboard as well
+    return internalClipboard_ && !internalClipboard_->isEmpty();
+}
+
+// --- Stubbed Helper Methods for Clipboard ---
+
+Map* MainWindow::getCurrentMap() const { 
+    qDebug("MainWindow::getCurrentMap (stub) - returning nullptr for now."); 
+    // In a real app, this would return a pointer to the currently active Map object.
+    // For example: return currentMapDocument_ ? currentMapDocument_->getMap() : nullptr;
+    return nullptr; 
+}
+
+MapPos MainWindow::getPasteTargetPosition() const { 
+    qDebug("MainWindow::getPasteTargetPosition (stub) - returning (0,0,0) for now."); 
+    // This should return the current cursor position on the map, or a designated paste target.
+    return MapPos(0,0,0); 
 }
