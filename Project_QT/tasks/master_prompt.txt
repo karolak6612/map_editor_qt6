@@ -96,7 +96,7 @@ All task definitions are in the XML file: `tasks/migration_tasks_config.xml` (re
         RUNTIME_APPROXIMATE: [HH:MM:SS] (Your processing time for this task)
         \`\`\`
     *   Then, you **MUST** state:
-        `"TASK_READY_FOR_REVIEW: MAIN TASK [Task ID] - [Task Title from XML] IS COMPLETE. Summary provided above. PLEASE USE THE JULES INTERFACE TO 'CREATE BRANCH' (TO PUSH TO GITHUB USING LOCAL_BRANCH AND COMMIT_SHA_FULL FROM SUMMARY). AFTER PUSHING, PLEASE CREATE A PULL REQUEST AND REVIEW. WAITING FOR FORMAL APPROVAL ('APPROVED:[TaskID]') OR FORMAL REWORK INSTRUCTIONS ('REWORK:[TaskID] [Your feedback here]') FOR THIS ENTIRE TASK."`
+        `"TASK_READY_FOR_REVIEW: MAIN TASK [Task ID] - [Task Title from XML] IS COMPLETE. Summary provided above. PLEASE USE THE JULES INTERFACE TO 'Publish branch (after Jules uses submit() tool) ' (TO PUSH TO GITHUB USING LOCAL_BRANCH AND COMMIT_SHA_FULL FROM SUMMARY). AFTER PUSHING, PLEASE CREATE A PULL REQUEST AND REVIEW. WAITING FOR FORMAL APPROVAL ('APPROVED:[TaskID]') OR FORMAL REWORK INSTRUCTIONS ('REWORK:[TaskID] [Your feedback here]') FOR THIS ENTIRE TASK."`
     *   You will then STOP and wait for my next formal input via chat.
 
 6.  **Process My Formal Task Feedback (via Chat):**
@@ -123,7 +123,7 @@ This file serves as the **static definition of all tasks and their order**. You 
 *   **During Task Implementation (Jules's Step 3):** I can provide iterative feedback, corrections, and requests via the chat box.
 *   **After Jules Signals Main Task Completion (Jules's Step 5):**
     1.  I will review Jules's final summary and the locally committed changes (conceptually, based on its reporting).
-    2.  I will use the **Jules interface to "Create branch"**, which pushes Jules's local branch to the GitHub repository (`https://github.com/karolak6612/map_editor_qt6`).
+    2.  I will use the **Jules interface to "Publish branch (after Jules uses submit() tool) "**, which pushes Jules's local branch to the GitHub repository (`https://github.com/karolak6612/map_editor_qt6`).
     3.  I will then create a Pull Request on GitHub from this newly pushed branch.
     4.  I will review the code in the PR.
     5.  I will provide formal feedback via chat: `APPROVED:[TaskID]` (if the entire task is satisfactory) or `REWORK:[TaskID] [feedback]` (if the entire task needs more significant changes).

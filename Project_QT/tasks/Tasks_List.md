@@ -25,7 +25,7 @@ This folder contains all configuration and instruction files for guiding the AI 
 
 3.  **User-Facilitated Push to GitHub & Formal Review:**
     *   Jules signals Main Task completion by providing a **structured final task summary** (as defined in `master_prompt.txt`, including TASK_ID, LOCAL_BRANCH, COMMIT_SHA_FULL, FILES_MODIFIED, NEW_FILES_FOR_CMAKE, etc.).
-    *   The user (Auditor/Reviewer) then uses the **Jules interface's "Create branch" functionality**. This action pushes Jules's locally committed feature branch (using `LOCAL_BRANCH` and `COMMIT_SHA_FULL` from summary) to the main GitHub repository.
+    *   The user (Auditor/Reviewer) then uses the **Jules interface's "Publish branch (after Jules uses submit() tool) " functionality**. This action pushes Jules's locally committed feature branch (using `LOCAL_BRANCH` and `COMMIT_SHA_FULL` from summary) to the main GitHub repository.
     *   The user creates a Pull Request (PR) on GitHub from this newly pushed branch.
     *   The user reviews the code in the PR.
 
