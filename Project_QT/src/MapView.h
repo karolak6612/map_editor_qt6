@@ -9,11 +9,15 @@
 #include <QRectF>   // Added for drawBackground
 #include <QPainter> // Added for drawBackground
 #include <QEnterEvent>
+#include <QFocusEvent> // Added for focusOutEvent
 #include <QDebug>
 
 // Forward declarations
 class MapViewInputHandler;
 class Brush; // Added forward declaration
+class BrushManager;
+class Map;
+class QUndoStack;
 
 // Constants
 const int GROUND_LAYER = 7;
@@ -26,7 +30,7 @@ class MapView : public QGraphicsView {
     Q_OBJECT
 
 public:
-    explicit MapView(QWidget *parent = nullptr);
+    explicit MapView(BrushManager* brushManager, Map* map, QUndoStack* undoStack, QWidget *parent = nullptr);
     ~MapView() override;
 
     enum class EditorMode {
@@ -51,6 +55,11 @@ public:
 
     QPointF screenToMap(const QPoint& screenPos) const;
     QPoint mapToScreen(const QPointF& mapTilePos) const;
+
+    // Public interface for MapViewInputHandler
+    void pan(int dx, int dy);
+    void zoom(qreal factor, const QPointF& centerScreenPos); // Changed center to screen pos for consistency with wheelEvent
+    void setSelectionArea(const QRectF& rect);
 
     // Placeholder methods (many are called by MapViewInputHandler via mapView_ pointer)
     void pasteSelection(const QPointF& mapPos);
@@ -95,8 +104,10 @@ protected:
     void leaveEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override; // Added
 
     void drawBackground(QPainter* painter, const QRectF& rect) override;
+    void drawForeground(QPainter *painter, const QRectF &rect) override; // Added
 private:
     void changeFloor(int newFloor);
     void updateAndRefreshMapCoordinates(const QPoint& screenPos);
@@ -115,6 +126,7 @@ private:
     bool doubleClickProperties_ = true;
 
     MapViewInputHandler* inputHandler_;
+    QRectF currentSelectionArea_; // Added for drawing selection
 };
 
 #endif // MAPVIEW_H
