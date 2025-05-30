@@ -16,6 +16,10 @@ class QDockWidget;                  // Added
 class PlaceholderPaletteWidget;     // Added
 class PlaceholderMinimapWidget;     // Added
 class PlaceholderPropertiesWidget;  // Added
+class AutomagicSettingsDialog; // Forward declaration
+class ClipboardData;           // Forward declaration for clipboard
+class Map;                     // Already forward declared in Map.h, but good practice if Map.h isn't fully included here
+class Selection;               // Already forward declared in Selection.h, but good practice
 
 
 class MainWindow : public QMainWindow {
@@ -24,6 +28,24 @@ class MainWindow : public QMainWindow {
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
+
+    // Clipboard methods
+    void handleCopy();
+    void handleCut();
+    void handlePaste();
+    bool canPaste() const;
+
+    // Automagic settings methods
+    void openAutomagicSettingsDialog();
+    bool mainGetAutomagicEnabled() const;
+    bool mainGetSameGroundTypeBorderEnabled() const;
+    bool mainGetWallsRepelBordersEnabled() const;
+    bool mainGetLayerCarpetsEnabled() const;
+    bool mainGetBorderizeDeleteEnabled() const;
+    bool mainGetCustomBorderEnabled() const;
+    int mainGetCustomBorderId() const;
+    void mainUpdateAutomagicSettings(bool automagicEnabled, bool sameGround, bool wallsRepel, bool layerCarpets, bool borderizeDelete, bool customBorder, int customBorderId);
+    void mainTriggerMapOrUIRefreshForAutomagic();
 
 private slots:
     void onMenuActionTriggered(); 
@@ -116,6 +138,14 @@ private:
     QAction* viewPaletteDockAction_;    // Added
     QAction* viewMinimapDockAction_;    // Added
     QAction* viewPropertiesDockAction_; // Added
+
+    // Internal clipboard
+    ClipboardData* internalClipboard_ = nullptr;
+
+    // Stubbed helper methods for map/position access (can be private)
+// private: // Making them private as they are internal helpers for clipboard ops
+    Map* getCurrentMap() const; 
+    MapPos getPasteTargetPosition() const;
 };
 
 #endif // MAINWINDOW_H

@@ -18,6 +18,22 @@ enum class Direction : quint8 {
     // NorthEast, SouthEast, SouthWest, NorthWest can be added if needed for diagonal
 };
 // Q_ENUM(Direction) // If you want to make it known to Qt's meta-object system (requires QObject context or global registration)
+#include <QRectF> // For draw method targetRect
+#include "DrawingOptions.h" // For draw method options
+
+// Forward declarations
+class QPainter;
+// QRectF is included above
+
+// Direction enum (can be moved to a common types file later if widely used)
+enum class Direction : quint8 {
+    North = 0,
+    East  = 1,
+    South = 2,
+    West  = 3
+    // NorthEast, SouthEast, SouthWest, NorthWest can be added if needed for diagonal
+};
+// Q_ENUM(Direction) // If you want to make it known to Qt's meta-object system (requires QObject context or global registration)
 // For now, just a C++ enum class is fine.
 
 class Creature : public QObject {
@@ -99,6 +115,7 @@ public:
     Brush* getBrush() const;      // Associated brush for placing this creature
     void setBrush(Brush* brush); // Not owned by Creature instance, set by CreatureManager
 
+    virtual void draw(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
     Creature* deepCopy() const;
 
 signals:

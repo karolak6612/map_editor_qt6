@@ -30,7 +30,18 @@ struct MapPos {
     int y = 0;
     int z = 0;
     MapPos(int x_ = 0, int y_ = 0, int z_ = 0) : x(x_), y(y_), z(z_) {}
+
+    bool operator==(const MapPos& other) const {
+        return x == other.x && y == other.y && z == other.z;
+    }
 };
+
+#include <QtGlobal> // For qHash
+
+// qHash function for MapPos
+inline uint qHash(const MapPos& pos, uint seed = 0) {
+    return qHash(pos.x, seed) ^ qHash(pos.y, seed << 1) ^ qHash(pos.z, seed << 2);
+}
 // And include QVector3D as a common Qt type for 3D points if QPoint3D is a placeholder.
 #include <QVector3D> // As a more standard Qt 3D point, can be used if QPoint3D is not defined.
 
@@ -42,6 +53,7 @@ class Creature;
 class Spawn;
 class House;
 class Waypoint;
+class Selection; // Forward-declare Selection
 // Add any other classes that Map might store by pointer and need forward declaration
 
 class Map : public QObject {
@@ -82,6 +94,10 @@ public:
     void removeWaypoint(Waypoint* waypoint);
     const QList<Waypoint*>& getWaypoints() const;
 
+    // Selection methods
+    Selection* getSelection() const;
+    void updateSelection(const QSet<MapPos>& newSelection); // Example: takes a set of positions
+
 
     // Stubs for loading/saving
     bool load(const QString& path);
@@ -110,6 +126,7 @@ private:
     QList<Spawn*> spawns_;     
     QList<House*> houses_;     
     QList<Waypoint*> waypoints_; 
+    Selection* selection_ = nullptr;
 };
 
 #endif // MAP_H

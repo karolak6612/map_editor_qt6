@@ -8,10 +8,14 @@
                       // This also makes Map class known, though not strictly needed by Tile itself.
 #include <QtGlobal>   // For quint16, quint32
 
+#include <QRectF> // For draw method targetRect
+#include "DrawingOptions.h" // For draw method options
+
 // Forward declarations
 class Item;
 class Creature;
 class Spawn;
+class QPainter; // For draw method
 // MapPos is now included via Map.h
 
 class Tile : public QObject {
@@ -113,6 +117,9 @@ public:
     bool hasZoneId(quint16 zoneId) const;
     
     void update(); 
+
+    // Method to draw the tile and its contents
+    void draw(QPainter* painter, const QRectF& targetScreenRect, const DrawingOptions& options) const;
 
 signals:
     void tileChanged(int x, int y, int z); 

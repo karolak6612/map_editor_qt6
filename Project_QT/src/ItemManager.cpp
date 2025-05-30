@@ -510,7 +510,26 @@ Item* ItemManager::createItem(quint16 serverId, QObject* parent) const {
     
     newItem->setClientId(props.clientId);
     newItem->setName(props.name); 
-    // newItem->setTypeName(); // Set if ItemProperties has a derived type string, or handle in subclasses of Item
+    // newItem->setTypeName(); // Item::setTypeName could be used if props had a typeName field.
+
+    // Set new dedicated members using their setters
+    newItem->setDescriptionText(props.description);
+    newItem->setEditorSuffix(props.editorSuffix);
+    newItem->setItemGroup(props.group);
+    newItem->setItemType(props.type); // This might override group-based type setting if XML is more specific
+    newItem->setWeight(props.weight);
+    newItem->setAttack(props.attack);
+    newItem->setDefense(props.defense);
+    newItem->setArmor(props.armor);
+    newItem->setCharges(props.charges); // Uses direct member now
+    newItem->setMaxTextLen(props.maxTextLen); // Uses direct member now
+    newItem->setRotateTo(props.rotateTo);     // Uses direct member now
+    newItem->setVolume(props.volume);
+    newItem->setSlotPosition(props.slotPosition);
+    newItem->setWeaponType(props.weaponType);
+    newItem->setLightLevel(props.lightLevel); // Uses direct member now
+    newItem->setLightColor(props.lightColor); // Uses direct member now
+    newItem->setClassification(props.classification);
 
     // Set boolean flags from ItemProperties
     newItem->setMoveable(props.isMoveable);
@@ -538,25 +557,20 @@ Item* ItemManager::createItem(quint16 serverId, QObject* parent) const {
     
     // Set attributes that are commonly instance-specific but might have type defaults
     if (props.isStackable) {
-        newItem->setCount(1); 
+        newItem->setCount(1); // Default count for a newly created stackable item
     }
-    if (props.clientCharges || props.extraChargeable || props.charges > 0) {
-         newItem->setAttribute(QStringLiteral("charges"), props.charges > 0 ? props.charges : (props.clientCharges || props.extraChargeable ? 1 : 0) );
-    }
-    if (props.maxTextLen > 0) {
-        newItem->setAttribute(QStringLiteral("maxTextLen"), props.maxTextLen);
-    }
-    if (props.rotateTo > 0) {
-        newItem->setAttribute(QStringLiteral("rotateTo"), props.rotateTo);
-    }
-    if (props.lightLevel > 0) {
-        newItem->setAttribute(QStringLiteral("lightLevel"), props.lightLevel);
-        newItem->setAttribute(QStringLiteral("lightColor"), props.lightColor);
-    }
-    // Other attributes like actionId, uniqueId are usually instance specific, not from ItemProperties directly.
-    // Weight might be set:
-    // newItem->setAttribute(QStringLiteral("weight"), props.weight);
+    // Charges are now handled by newItem->setCharges(props.charges) above.
+    // maxTextLen is now handled by newItem->setMaxTextLen(props.maxTextLen) above.
+    // rotateTo is now handled by newItem->setRotateTo(props.rotateTo) above.
+    // lightLevel and lightColor are now handled by their dedicated setters above.
 
+    // Example of a property that might still use generic attributes if not dedicated:
+    // if (props.someCustomAttributeValue != 0) {
+    //     newItem->setAttribute(QStringLiteral("someCustomAttribute"), props.someCustomAttributeValue);
+    // }
+    
+    // ActionID and UniqueID are typically instance-specific and not set from ItemProperties directly,
+    // unless ItemProperties were to store default action/unique IDs for certain types.
 
     return newItem;
 }

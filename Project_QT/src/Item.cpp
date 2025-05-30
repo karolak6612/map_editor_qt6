@@ -1,8 +1,10 @@
 #include "Item.h"
 #include <QDebug>
-#include <QPainter> // For drawText
-#include <QRectF>   // For drawText
+#include <QPainter> // For drawText and draw
+#include <QRectF>   // For drawText and draw
+#include <QColor>   // For draw method placeholder
 // QMap and QVariant are included via Item.h
+// DrawingOptions.h is included via Item.h
 
 Item::Item(quint16 serverId, QObject *parent) : QObject(parent),
     serverId_(serverId),
@@ -27,10 +29,29 @@ Item::Item(quint16 serverId, QObject *parent) : QObject(parent),
     isHangable_(false),
     hasHookSouth_(false),
     hasHookEast_(false),
-    hasHeight_(false)
+    hasHeight_(false),
+    // Initialize new dedicated members
+    description_(""),
+    editorSuffix_(""),
+    itemGroup_(ITEM_GROUP_NONE),
+    itemType_(ITEM_TYPE_NONE),
+    weight_(0.0f),
+    attack_(0),
+    defense_(0),
+    armor_(0),
+    charges_(0),
+    maxTextLen_(0),
+    rotateTo_(0),
+    volume_(0),
+    slotPosition_(0),
+    weaponType_(0), // Assuming 0 is WEAPON_NONE or similar default
+    lightLevel_(0),
+    lightColor_(0),
+    classification_(0)
 {
     // Name, ClientID, and flags are often set by an ItemManager after creation
     // based on the serverId by reading an items.xml or similar definition file.
+    // The new dedicated members would also typically be set by ItemManager.
 }
 
 Item::~Item() {
@@ -256,4 +277,162 @@ Item* Item::deepCopy() const {
     newItem->hasHeight_ = this->hasHeight_;
     
     return newItem;
+}
+
+void Item::draw(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter) return;
+    
+    // Placeholder: Draw a semi-transparent blueish rectangle for a generic item
+    QColor itemColor = Qt::blue;
+    // Use serverId_ for varied color, it's a quint16
+    // To make it more visually distinct, ensure serverId_ doesn't map to similar hues too often.
+    // A simple way is to multiply by a prime or a number that distributes well across 360 degrees.
+    itemColor.setHsv(((serverId_ * 37) % 360), 200, 220); 
+    
+    painter->fillRect(targetRect, QColor(itemColor.red(), itemColor.green(), itemColor.blue(), 128)); // Semi-transparent
+    painter->drawRect(targetRect); // Draw an outline
+    
+    // Optional: Use options to decide whether to draw text, etc.
+    // if (options.showItemDetails) { /* draw more details */ }
+
+    // qDebug() << "Item::draw() called for ID:" << serverId_ << "at" << targetRect;
+}
+
+// --- New Dedicated Property Getters and Setters ---
+
+QString Item::descriptionText() const { return description_; }
+void Item::setDescriptionText(const QString& description) {
+    if (description_ != description) {
+        description_ = description;
+        emit propertyChanged();
+    }
+}
+
+QString Item::editorSuffix() const { return editorSuffix_; }
+void Item::setEditorSuffix(const QString& suffix) {
+    if (editorSuffix_ != suffix) {
+        editorSuffix_ = suffix;
+        emit propertyChanged();
+    }
+}
+
+ItemGroup_t Item::itemGroup() const { return itemGroup_; }
+void Item::setItemGroup(ItemGroup_t group) {
+    if (itemGroup_ != group) {
+        itemGroup_ = group;
+        emit propertyChanged();
+    }
+}
+
+ItemTypes_t Item::itemType() const { return itemType_; }
+void Item::setItemType(ItemTypes_t type) {
+    if (itemType_ != type) {
+        itemType_ = type;
+        emit propertyChanged();
+    }
+}
+
+float Item::weight() const { return weight_; }
+void Item::setWeight(float weight) {
+    // Compare floats with a small epsilon if exact comparison is problematic
+    if (qAbs(weight_ - weight) > 0.0001f) { 
+        weight_ = weight;
+        emit propertyChanged();
+    }
+}
+
+qint16 Item::attack() const { return attack_; }
+void Item::setAttack(qint16 attack) {
+    if (attack_ != attack) {
+        attack_ = attack;
+        emit propertyChanged();
+    }
+}
+
+qint16 Item::defense() const { return defense_; }
+void Item::setDefense(qint16 defense) {
+    if (defense_ != defense) {
+        defense_ = defense;
+        emit propertyChanged();
+    }
+}
+
+qint16 Item::armor() const { return armor_; }
+void Item::setArmor(qint16 armor) {
+    if (armor_ != armor) {
+        armor_ = armor;
+        emit propertyChanged();
+    }
+}
+
+quint16 Item::charges() const { return charges_; }
+void Item::setCharges(quint16 charges) {
+    if (charges_ != charges) {
+        charges_ = charges;
+        emit propertyChanged();
+    }
+}
+
+quint16 Item::maxTextLen() const { return maxTextLen_; }
+void Item::setMaxTextLen(quint16 len) {
+    if (maxTextLen_ != len) {
+        maxTextLen_ = len;
+        emit propertyChanged();
+    }
+}
+
+quint16 Item::rotateTo() const { return rotateTo_; }
+void Item::setRotateTo(quint16 id) {
+    if (rotateTo_ != id) {
+        rotateTo_ = id;
+        emit propertyChanged();
+    }
+}
+
+quint16 Item::volume() const { return volume_; }
+void Item::setVolume(quint16 volume) {
+    if (this->volume_ != volume) { // Explicit this-> to avoid confusion with a potential local variable
+        this->volume_ = volume;
+        emit propertyChanged();
+    }
+}
+
+quint32 Item::slotPosition() const { return slotPosition_; }
+void Item::setSlotPosition(quint32 slotPos) {
+    if (slotPosition_ != slotPos) {
+        slotPosition_ = slotPos;
+        emit propertyChanged();
+    }
+}
+
+quint8 Item::weaponType() const { return weaponType_; }
+void Item::setWeaponType(quint8 type) {
+    if (weaponType_ != type) {
+        weaponType_ = type;
+        emit propertyChanged();
+    }
+}
+
+quint16 Item::lightLevel() const { return lightLevel_; }
+void Item::setLightLevel(quint16 level) {
+    if (lightLevel_ != level) {
+        lightLevel_ = level;
+        emit propertyChanged();
+    }
+}
+
+quint16 Item::lightColor() const { return lightColor_; }
+void Item::setLightColor(quint16 color) {
+    if (lightColor_ != color) {
+        lightColor_ = color;
+        emit propertyChanged();
+    }
+}
+
+quint16 Item::classification() const { return classification_; }
+void Item::setClassification(quint16 classification) {
+    if (classification_ != classification) {
+        classification_ = classification;
+        emit propertyChanged();
+    }
 }

@@ -1,20 +1,31 @@
 #include "Map.h"
 #include "Tile.h" // Minimal Tile.h created in previous step
+#include "Selection.h" // Include Selection.h
+#include "Spawn.h" // Include Spawn.h for Spawn object details
+#include "Waypoint.h" // Include Waypoint.h for Waypoint object details
 #include <QDebug>
+#include <QSet> // Include QSet for updateSelection
 #include <QVector3D> // Used if MapPos was not defined in Map.h, but MapPos is used.
+// #include <algorithm> // Not needed if using QList::removeOne
 
 // Note: MapPos struct is assumed to be defined in Map.h as per previous step.
 // If it were not, it would need to be defined here or included.
 
 Map::Map(QObject *parent) : QObject(parent) {
     initialize(0, 0, 0);
+    selection_ = new Selection(this);
 }
 
 Map::Map(int width, int height, int floors, const QString& description, QObject *parent) : QObject(parent) {
     initialize(width, height, floors, description);
+    selection_ = new Selection(this);
 }
 
 Map::~Map() {
+    // It's generally safer to delete objects that might depend on the map (like selection_)
+    // *before* clearing the map's core data (like tiles_).
+    delete selection_;
+    selection_ = nullptr;
     clear();
 }
 
@@ -45,13 +56,12 @@ void Map::clear() {
     tiles_.clear();
 
     // For Spawns, Houses, Waypoints: If Map owns them, they should be deleted.
-    // For now, as per instruction, just clearing the lists.
     // Consider using qDeleteAll for QList<T*> if ownership is established.
-    // qDeleteAll(spawns_); // If Map owns Spawn objects
+    qDeleteAll(spawns_); // Delete all Spawn objects
     spawns_.clear();
-    // qDeleteAll(houses_); // If Map owns House objects
+    qDeleteAll(houses_); // If Map owns House objects (assuming similar pattern for future)
     houses_.clear();
-    // qDeleteAll(waypoints_); // If Map owns Waypoint objects
+    qDeleteAll(waypoints_); // If Map owns Waypoint objects (assuming similar pattern for future)
     waypoints_.clear();
 
     width_ = 0;
@@ -167,20 +177,34 @@ Tile* Map::createTile(int x, int y, int z) {
     return newTile;
 }
 
-// Entity List Stubs
+// Entity List Implementations
 void Map::addSpawn(Spawn* spawn) {
     if (spawn) {
-        spawns_.append(spawn);
-        qDebug() << "Spawn added (stub)";
-        emit mapChanged();
+        if (!spawns_.contains(spawn)) { // Optional: prevent duplicates if not desired
+            spawns_.append(spawn);
+            qDebug() << "Spawn added to map at position (" << spawn->position().x << "," << spawn->position().y << "," << spawn->position().z << ")";
+            // emit spawnAdded(spawn); // Optional: more specific signal
+            emit mapChanged();
+        } else {
+            qDebug() << "Map::addSpawn - Spawn already exists in the list.";
+        }
+    } else {
+        qWarning() << "Map::addSpawn - Attempted to add a null spawn.";
     }
 }
 
 void Map::removeSpawn(Spawn* spawn) {
-    if (spawns_.removeOne(spawn)) { // removeOne returns true if item was removed
-        qDebug() << "Spawn removed (stub)";
-        // Note: Does not delete spawn, just removes from list. Caller manages memory if needed.
-        emit mapChanged();
+    if (spawn) {
+        if (spawns_.removeOne(spawn)) { // removeOne returns true if item was found and removed
+            qDebug() << "Spawn removed from map and deleted.";
+            delete spawn; // Delete the spawn object as the map owns it
+            // emit spawnRemoved(spawn); // Optional: more specific signal
+            emit mapChanged();
+        } else {
+            qDebug() << "Map::removeSpawn - Spawn not found in the list.";
+        }
+    } else {
+        qWarning() << "Map::removeSpawn - Attempted to remove a null spawn.";
     }
 }
 
@@ -209,16 +233,31 @@ const QList<House*>& Map::getHouses() const {
 
 void Map::addWaypoint(Waypoint* waypoint) {
     if (waypoint) {
-        waypoints_.append(waypoint);
-        qDebug() << "Waypoint added (stub)";
-        emit mapChanged();
+        if (!waypoints_.contains(waypoint)) { // Optional: prevent duplicates
+            waypoints_.append(waypoint);
+            qDebug() << "Waypoint" << waypoint->name() << "added to map at position (" << waypoint->position().x << "," << waypoint->position().y << "," << waypoint->position().z << ")";
+            // emit waypointAdded(waypoint); // Optional: more specific signal
+            emit mapChanged();
+        } else {
+            qWarning() << "Map::addWaypoint - Waypoint" << waypoint->name() << "already exists.";
+        }
+    } else {
+        qWarning("Map::addWaypoint - Attempted to add null waypoint.");
     }
 }
 
 void Map::removeWaypoint(Waypoint* waypoint) {
-    if (waypoints_.removeOne(waypoint)) {
-        qDebug() << "Waypoint removed (stub)";
-        emit mapChanged();
+    if (waypoint) {
+        if (waypoints_.removeOne(waypoint)) { // removeOne returns true if item was found and removed
+            qDebug() << "Waypoint" << waypoint->name() << "removed from map and deleted.";
+            delete waypoint; // Map owns the waypoint
+            // emit waypointRemoved(waypoint); // Optional: more specific signal
+            emit mapChanged();
+        } else {
+            qWarning() << "Map::removeWaypoint - Waypoint" << waypoint->name() << "not found in map.";
+        }
+    } else {
+        qWarning("Map::removeWaypoint - Attempted to remove null waypoint.");
     }
 }
 
@@ -237,4 +276,23 @@ bool Map::load(const QString& path) {
 bool Map::save(const QString& path) const {
     qDebug() << "Map::save not implemented, path:" << path;
     return false;
+}
+
+// Selection method implementations
+Selection* Map::getSelection() const {
+    return selection_;
+}
+
+void Map::updateSelection(const QSet<MapPos>& newSelection) {
+    if (selection_) {
+        selection_->clear();
+        for (const MapPos& pos : newSelection) {
+            selection_->addTile(pos);
+        }
+        // Optionally, emit a signal here if Map has a selectionChanged signal
+        // emit selectionChangedSignal(); // Example
+        qDebug() << "Map selection updated with" << newSelection.count() << "tiles.";
+    } else {
+        qWarning("Map::updateSelection called but selection_ is null.");
+    }
 }

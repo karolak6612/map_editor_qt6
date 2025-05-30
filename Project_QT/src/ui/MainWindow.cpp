@@ -16,11 +16,19 @@
 #include "PlaceholderPaletteWidget.h"   
 #include "PlaceholderMinimapWidget.h"
 #include "PlaceholderPropertiesWidget.h"
+#include "AutomagicSettingsDialog.h" // Include for AutomagicSettingsDialog
+#include "ClipboardData.h"           // For internal clipboard
+#include "Map.h"                     // For Map and MapPos
+#include "Selection.h"               // For Selection
+#include <QApplication>             // For future QClipboard access
+#include <QClipboard>               // For future QClipboard access
 
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle(tr("Idler's Map Editor (Qt)"));
     resize(1280, 720);
+
+    internalClipboard_ = new ClipboardData();
 
     setupMenuBar();
     setupToolBars(); 
@@ -32,6 +40,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 }
 
 MainWindow::~MainWindow() {
+    delete internalClipboard_;
+    internalClipboard_ = nullptr;
 }
 
 void MainWindow::setupMenuBar() {
@@ -563,4 +573,143 @@ void MainWindow::onLayerControlChanged(int index) {
     if(zCoordSpinBox_ && index != zCoordSpinBox_->value()){
         zCoordSpinBox_->setValue(index);
     }
+}
+
+// Automagic Settings Placeholder Implementations
+
+void MainWindow::openAutomagicSettingsDialog() {
+    AutomagicSettingsDialog dialog(this);
+
+    // Load current settings into the dialog (using placeholder getters from MainWindow)
+    dialog.setSettings(
+        mainGetAutomagicEnabled(),
+        mainGetSameGroundTypeBorderEnabled(),
+        mainGetWallsRepelBordersEnabled(),
+        mainGetLayerCarpetsEnabled(),
+        mainGetBorderizeDeleteEnabled(),
+        mainGetCustomBorderEnabled(),
+        mainGetCustomBorderId()
+    );
+
+    if (dialog.exec() == QDialog::Accepted) {
+        // Apply new settings from the dialog (using placeholder updater in MainWindow)
+        mainUpdateAutomagicSettings(
+            dialog.isAutomagicEnabled(),
+            dialog.isSameGroundTypeBorderEnabled(),
+            dialog.isWallsRepelBordersEnabled(),
+            dialog.isLayerCarpetsEnabled(),
+            dialog.isBorderizeDeleteEnabled(),
+            dialog.isCustomBorderEnabled(),
+            dialog.getCustomBorderId()
+        );
+    }
+}
+
+bool MainWindow::mainGetAutomagicEnabled() const { qDebug("MainWindow::mainGetAutomagicEnabled (stub)"); return false; }
+bool MainWindow::mainGetSameGroundTypeBorderEnabled() const { qDebug("MainWindow::mainGetSameGroundTypeBorderEnabled (stub)"); return true; } // Default true based on common use
+bool MainWindow::mainGetWallsRepelBordersEnabled() const { qDebug("MainWindow::mainGetWallsRepelBordersEnabled (stub)"); return true; } // Default true
+bool MainWindow::mainGetLayerCarpetsEnabled() const { qDebug("MainWindow::mainGetLayerCarpetsEnabled (stub)"); return true; } // Default true
+bool MainWindow::mainGetBorderizeDeleteEnabled() const { qDebug("MainWindow::mainGetBorderizeDeleteEnabled (stub)"); return false; }
+bool MainWindow::mainGetCustomBorderEnabled() const { qDebug("MainWindow::mainGetCustomBorderEnabled (stub)"); return false; }
+int MainWindow::mainGetCustomBorderId() const { qDebug("MainWindow::mainGetCustomBorderId (stub)"); return 1; }
+
+void MainWindow::mainUpdateAutomagicSettings(bool automagicEnabled, bool sameGround, bool wallsRepel, bool layerCarpets, bool borderizeDelete, bool customBorder, int customBorderId) {
+    qDebug() << "MainWindow::mainUpdateAutomagicSettings (stub) called with values:";
+    qDebug() << "  Automagic:" << automagicEnabled;
+    qDebug() << "  Same Ground:" << sameGround;
+    qDebug() << "  Walls Repel:" << wallsRepel;
+    qDebug() << "  Layer Carpets:" << layerCarpets;
+    qDebug() << "  Borderize Delete:" << borderizeDelete;
+    qDebug() << "  Custom Border:" << customBorder;
+    qDebug() << "  Custom Border ID:" << customBorderId;
+    
+    // In a real scenario, this would update some internal state or call a settings manager
+    // And then potentially trigger a refresh
+    mainTriggerMapOrUIRefreshForAutomagic();
+}
+
+void MainWindow::mainTriggerMapOrUIRefreshForAutomagic() {
+    qDebug() << "MainWindow::mainTriggerMapOrUIRefreshForAutomagic (stub) called.";
+    // This would eventually call methods on MapView or other relevant UI components
+}
+
+// --- Clipboard Operation Handlers (Stubs) ---
+
+void MainWindow::handleCopy() {
+    Map* currentMap = getCurrentMap();
+    Selection* currentSelection = currentMap ? currentMap->getSelection() : nullptr;
+
+    if (currentMap && currentSelection && !currentSelection->isEmpty()) {
+        if (internalClipboard_) {
+            internalClipboard_->populateFromSelection(currentSelection->getSelectedTiles(), *currentMap);
+            qDebug() << "MainWindow::handleCopy: Data copied to internal clipboard." << internalClipboard_->getTilesData().count() << "tiles.";
+            
+            // Future: Serialize and put on QClipboard
+            // QByteArray jsonData = internalClipboard_->serializeToJson();
+            // QApplication::clipboard()->setText(QString::fromUtf8(jsonData)); 
+        } else {
+            qWarning() << "MainWindow::handleCopy: internalClipboard_ is null.";
+        }
+    } else {
+        qDebug() << "MainWindow::handleCopy: No map or selection, or selection empty.";
+    }
+}
+
+void MainWindow::handleCut() {
+    Map* currentMap = getCurrentMap();
+    Selection* currentSelection = currentMap ? currentMap->getSelection() : nullptr;
+
+    if (currentMap && currentSelection && !currentSelection->isEmpty()) {
+        if (internalClipboard_) {
+            internalClipboard_->populateFromSelection(currentSelection->getSelectedTiles(), *currentMap);
+            qDebug() << "MainWindow::handleCut: Data copied to internal clipboard." << internalClipboard_->getTilesData().count() << "tiles.";
+
+            // Future: Serialize and put on QClipboard (as in handleCopy)
+
+            // Future: Delete the selected content from the map (this would involve creating an Action)
+            qDebug() << "MainWindow::handleCut: Deletion of original selection from map is deferred.";
+            // Example: editor->deleteSelectionAction(); currentSelection->clear();
+        } else {
+            qWarning() << "MainWindow::handleCut: internalClipboard_ is null.";
+        }
+    } else {
+        qDebug() << "MainWindow::handleCut: No map or selection, or selection empty.";
+    }
+}
+
+void MainWindow::handlePaste() {
+    Map* currentMap = getCurrentMap();
+    MapPos pasteTargetPosition = getPasteTargetPosition(); 
+
+    if (currentMap && internalClipboard_ && !internalClipboard_->isEmpty()) {
+        // Future: Get data from QClipboard if it's empty or newer
+        // QByteArray clipboardJsonData = QApplication::clipboard()->text().toUtf8();
+        // if (!clipboardJsonData.isEmpty()) { internalClipboard_->deserializeFromJson(clipboardJsonData); }
+            
+        qDebug() << "MainWindow::handlePaste: Pasting" << internalClipboard_->getTilesData().count() << "tiles from internal clipboard to map at (" << pasteTargetPosition.x << "," << pasteTargetPosition.y << "," << pasteTargetPosition.z << ").";
+        // Future: Create a PasteAction using internalClipboard_->getTilesData() and pasteTargetPosition
+        // Example: editor->pasteAction(internalClipboard_, pasteTargetPosition);
+    } else {
+        qDebug() << "MainWindow::handlePaste: No map or internal clipboard is empty/null.";
+    }
+}
+
+bool MainWindow::canPaste() const {
+    // Future: Check QClipboard as well
+    return internalClipboard_ && !internalClipboard_->isEmpty();
+}
+
+// --- Stubbed Helper Methods for Clipboard ---
+
+Map* MainWindow::getCurrentMap() const { 
+    qDebug("MainWindow::getCurrentMap (stub) - returning nullptr for now."); 
+    // In a real app, this would return a pointer to the currently active Map object.
+    // For example: return currentMapDocument_ ? currentMapDocument_->getMap() : nullptr;
+    return nullptr; 
+}
+
+MapPos MainWindow::getPasteTargetPosition() const { 
+    qDebug("MainWindow::getPasteTargetPosition (stub) - returning (0,0,0) for now."); 
+    // This should return the current cursor position on the map, or a designated paste target.
+    return MapPos(0,0,0); 
 }
