@@ -18,7 +18,7 @@
       <new_qt6_project_code_location>Project_QT/src</new_qt6_project_code_location> <!-- Path relative to repo root -->
     </project_paths>
     <git_repository_details>
-        <repository_url>https://github.com/sword-of-fury/project_qt</repository_url>
+        <repository_url>https://github.com/karolak6612/map_editor_qt6</repository_url>
         <main_branch>main</main_branch>
         <remote_name>origin</remote_name>
     </git_repository_details>

@@ -1,6 +1,6 @@
 AI Coding Assistant (Jules),
 
-We are executing a Qt6 migration for the project from the GitHub repository: `https://github.com/sword-of-fury/project_qt`. **You will be working on a local copy of this repository within your VM environment.**
+We are executing a Qt6 migration for the project from the GitHub repository: `https://github.com/karolak6612/map_editor_qt6`. **You will be working on a local copy of this repository within your VM environment.**
 
 **Overall Goal:** To modernize a 2D map editor (found in the `wxwidgets` directory *within the repository*) by migrating it to a Qt6-based application. New code will reside in the `Project_QT/src` directory. The `Project_QT/src` directory contains an **ongoing migration effort**; some code has already been partially migrated. Your role is to ensure **100% feature parity and correctness** with the original `wxwidgets` functionality for each task, intelligently working with any existing code in `Project_QT/src`.
 
@@ -114,7 +114,7 @@ All task definitions are in the XML file: `tasks/migration_tasks_config.xml` (re
 7.  **Project Completion:**
     *   When all main tasks from `tasks/migration_tasks_config.xml` have been processed and received formal `APPROVED` status, your final output MUST be:
         `PROJECT_STATUS: ALL_TASKS_APPROVED
-        FINAL_MESSAGE: All main tasks from migration_tasks_config.xml have been completed and formally approved. The AI-assisted migration phase for repository https://github.com/sword-of-fury/project_qt is finished.`
+        FINAL_MESSAGE: All main tasks from migration_tasks_config.xml have been completed and formally approved. The AI-assisted migration phase for repository https://github.com/karolak6612/map_editor_qt6 is finished.`
 
 **INTERNAL_STATE_NOTE: Note on `tasks/migration_tasks_config.xml`:**
 This file serves as the **static definition of all tasks and their order**. You will use it to identify the full sequence of tasks. However, you **MUST** manage the *current state* (e.g., which task is next, which are approved) *internally* based on my explicit chat commands (`APPROVED:[TaskID]`). Do not attempt to read or rely on the `status_initial` values within the XML file or the `<current_task_id>` field in `<execution_control>` for dynamic state tracking during the session. Select the next task by finding the first task in the XML's defined order that has not yet received an `APPROVED:[TaskID]` command from me in this session.
@@ -123,7 +123,7 @@ This file serves as the **static definition of all tasks and their order**. You 
 *   **During Task Implementation (Jules's Step 3):** I can provide iterative feedback, corrections, and requests via the chat box.
 *   **After Jules Signals Main Task Completion (Jules's Step 5):**
     1.  I will review Jules's final summary and the locally committed changes (conceptually, based on its reporting).
-    2.  I will use the **Jules interface to "Create branch"**, which pushes Jules's local branch to the GitHub repository (`https://github.com/sword-of-fury/project_qt`).
+    2.  I will use the **Jules interface to "Create branch"**, which pushes Jules's local branch to the GitHub repository (`https://github.com/karolak6612/map_editor_qt6`).
     3.  I will then create a Pull Request on GitHub from this newly pushed branch.
     4.  I will review the code in the PR.
     5.  I will provide formal feedback via chat: `APPROVED:[TaskID]` (if the entire task is satisfactory) or `REWORK:[TaskID] [feedback]` (if the entire task needs more significant changes).
