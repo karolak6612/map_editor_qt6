@@ -80,7 +80,7 @@ All task definitions are in the XML file: `tasks/migration_tasks_config.xml` (re
 
 5.  **Signal Main Task Completion, Provide Summary, and Await Formal Review:**
     *   After committing the completed main task locally, provide your **final task summary**. The summary **MUST** be in the following structured format:
-        ```
+        \`\`\`
         FINAL_TASK_SUMMARY:
         TASK_ID: [Task ID]
         DESCRIPTION: [Task Title from XML]
@@ -94,7 +94,7 @@ All task definitions are in the XML file: `tasks/migration_tasks_config.xml` (re
         NEW_FILES_FOR_CMAKE: [new_file1.cpp], [new_file1.h], [...] (List only if new files were created, otherwise 'None')
         LINE_CHANGES_APPROXIMATE: +[lines_added] / -[lines_deleted] (Provide best estimate)
         RUNTIME_APPROXIMATE: [HH:MM:SS] (Your processing time for this task)
-        ```
+        \`\`\`
     *   Then, you **MUST** state:
         `"TASK_READY_FOR_REVIEW: MAIN TASK [Task ID] - [Task Title from XML] IS COMPLETE. Summary provided above. PLEASE USE THE JULES INTERFACE TO 'CREATE BRANCH' (TO PUSH TO GITHUB USING LOCAL_BRANCH AND COMMIT_SHA_FULL FROM SUMMARY). AFTER PUSHING, PLEASE CREATE A PULL REQUEST AND REVIEW. WAITING FOR FORMAL APPROVAL ('APPROVED:[TaskID]') OR FORMAL REWORK INSTRUCTIONS ('REWORK:[TaskID] [Your feedback here]') FOR THIS ENTIRE TASK."`
     *   You will then STOP and wait for my next formal input via chat.
