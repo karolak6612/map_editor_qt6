@@ -7,9 +7,19 @@
 #include <QMouseEvent> // For event details if needed by brushes
 
 // Forward declarations
-class MapView; // Assuming MapView is the class interacting with brushes
-class Tile;    // Placeholder for Tile interactions
-class BaseMap; // Placeholder for Map interactions (consider if Map or Editor is better)
+class MapView;
+class Tile;
+class BaseMap;
+class QUndoCommand; // Added
+class Map;          // Added
+class QUndoStack;   // Added
+
+// Define BrushShape enum here or in a common types header
+enum class BrushShape {
+    Square,
+    Circle
+    // Add other shapes like Line, Custom etc. if needed
+};
 
 class Brush : public QObject {
     Q_OBJECT
@@ -20,9 +30,16 @@ public:
 
     // Pure virtual methods for mouse interaction
     // These will be called by MapViewInputHandler, passing necessary context.
-    virtual void mousePressEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView) = 0;
-    virtual void mouseMoveEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView) = 0;
-    virtual void mouseReleaseEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView) = 0;
+    virtual QUndoCommand* mousePressEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) = 0;
+    virtual QUndoCommand* mouseMoveEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) = 0;
+    virtual QUndoCommand* mouseReleaseEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) = 0;
+
+    // Method to cancel ongoing brush operation
+    virtual void cancel() = 0; // Added based on MapViewInputHandler usage
+
+    // Brush properties
+    virtual int getBrushSize() const = 0;    // Size typically means radius or half-width
+    virtual BrushShape getBrushShape() const = 0;
 
     // Pure virtual methods for core brush properties/actions (from wxBrush)
     // virtual void draw(BaseMap* map, Tile* tile, void* parameter = nullptr) = 0; // Actual drawing logic deferred

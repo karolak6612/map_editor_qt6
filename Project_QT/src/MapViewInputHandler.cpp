@@ -10,6 +10,9 @@
 #include <QCursor>
 #include <QGuiApplication> // For QGuiApplication::queryKeyboardModifiers()
 #include <QDebug>
+#include <QUndoStack>   // Added
+#include <QUndoCommand> // Added
+#include <QtMath>       // For qSqrt
 
 MapViewInputHandler::MapViewInputHandler(MapView* mapView,
                                          BrushManager* brushManager,
@@ -61,17 +64,45 @@ void MapViewInputHandler::handleMousePressEvent(QMouseEvent* event, const QPoint
     if (!mapView_ || !brushManager_) return;
     updateModifierKeys(event);
     pressedButton_ = event->button();
+    dragStartMapPos_ = mapPosition; // Store for all press events
 
     if (pressedButton_ == Qt::LeftButton) {
         Brush* currentBrush = brushManager_->getCurrentBrush();
-        // Consider if ctrl or shift are active, they might modify brush behavior or select a different tool
-        // For now, simple: if brush is active, draw. Otherwise, select.
-        if (currentBrush != nullptr  && !(event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier))) {
-            currentMode_ = InteractionMode::Drawing;
+        if (currentBrush) { // Drawing mode
+            currentMode_ = InteractionMode::Drawing; // Default drawing mode
+            isDraggingDraw_ = currentBrush->canDrag() && shiftModifierActive_;
+            isReplaceDragging_ = currentBrush->isGround() && altModifierActive_; // Assuming isGround() exists
+
+            if (isDraggingDraw_) {
+                currentMode_ = InteractionMode::DraggingDraw;
+                qDebug() << "MapViewInputHandler: Starting DraggingDraw";
+            }
+            if (isReplaceDragging_) {
+                // Additional setup for replace dragging might be needed here,
+                // e.g., getting the tile/brush to replace from mapPosition.
+                // For now, just setting the flag. The brush will handle the logic.
+                qDebug() << "MapViewInputHandler: Starting ReplaceDragging";
+            }
             startDrawing(mapPosition, event);
-        } else { // No brush, or Ctrl/Shift is pressed (could be for selection tool)
-            currentMode_ = InteractionMode::SelectingBox;
-            startSelectionBox(mapPosition, event);
+
+        } else { // Selection mode (no active brush)
+            // TODO: Implement isPasting() check and finishPasting() call
+            // For now, directly to selection:
+            bool clearPreviousSelection = !ctrlModifierActive_; // Standard behavior: Ctrl to add to selection
+            if (shiftModifierActive_ || ctrlModifierActive_) { // Shift or Ctrl for box selection modifications
+                currentMode_ = InteractionMode::SelectingBox;
+                // Pass clearPreviousSelection to startSelectionBox if it needs to handle it
+                // map_->getSelection()->setClearPrevious(clearPreviousSelection); // Example
+                qDebug() << "MapViewInputHandler: Starting SelectingBox (Shift/Ctrl). Clear prev:" << clearPreviousSelection;
+                startSelectionBox(mapPosition, event);
+            } else { // No modifiers, standard selection
+                // TODO: Check if clicking on an existing selection to DraggingSelection
+                // For now, default to starting a new selection box or single click selection.
+                // map_->getSelection()->setClearPrevious(true); // Example
+                qDebug() << "MapViewInputHandler: Starting SelectingBox (no modifier).";
+                currentMode_ = InteractionMode::SelectingBox;
+                startSelectionBox(mapPosition, event);
+            }
         }
     } else if (pressedButton_ == Qt::MiddleButton) {
         currentMode_ = InteractionMode::PanningView;
@@ -98,6 +129,7 @@ void MapViewInputHandler::handleMouseMoveEvent(QMouseEvent* event, const QPointF
 
     switch (currentMode_) {
         case InteractionMode::Drawing:
+        case InteractionMode::DraggingDraw: // DraggingDraw also calls continueDrawing
             continueDrawing(mapPosition, event);
             break;
         case InteractionMode::PanningView:
@@ -123,12 +155,19 @@ void MapViewInputHandler::handleMouseReleaseEvent(QMouseEvent* event, const QPoi
     updateModifierKeys(event);
 
     if (event->button() == pressedButton_) { // Ensure we're releasing the button that initiated the action
-        InteractionMode modeEnded = currentMode_; // Store current mode before resetting
-        currentMode_ = InteractionMode::Idle;    // Reset mode first
+        InteractionMode modeEnded = currentMode_;
+
+        // Reset mode and flags before calling finish handlers,
+        // as finish handlers might set new states (e.g. after pasting).
+        currentMode_ = InteractionMode::Idle;
         pressedButton_ = Qt::NoButton;
+        isDraggingDraw_ = false;
+        isReplaceDragging_ = false;
+        // currentDrawingCommand_ handling will be done by drawing helpers if used.
 
         switch (modeEnded) {
             case InteractionMode::Drawing:
+            case InteractionMode::DraggingDraw:
                 finishDrawing(mapPosition, event);
                 break;
             case InteractionMode::PanningView:
@@ -137,12 +176,11 @@ void MapViewInputHandler::handleMouseReleaseEvent(QMouseEvent* event, const QPoi
             case InteractionMode::SelectingBox:
                 finishSelectionBox(mapPosition, event);
                 break;
+            // TODO: Handle InteractionMode::Pasting, InteractionMode::DraggingSelection
             default:
-                // This case should ideally not be reached if pressedButton_ was set.
                 break;
         }
-        // General update might be needed if the action modified the view or model
-        mapView_->update();
+        mapView_->update(); // General update after action is finished
     }
 }
 
@@ -240,7 +278,7 @@ void MapViewInputHandler::handleWheelEvent(QWheelEvent* event, const QPointF& ma
 void MapViewInputHandler::handleFocusOutEvent(QFocusEvent* event) {
     if (!mapView_) return;
     qDebug() << "MapViewInputHandler: Focus Out event received.";
-    
+
     // If an operation was in progress, it's often safest to cancel it
     if (currentMode_ != InteractionMode::Idle) {
         qDebug() << "Focus lost during an operation, cancelling mode:" << static_cast<int>(currentMode_);
@@ -270,35 +308,137 @@ void MapViewInputHandler::handleFocusOutEvent(QFocusEvent* event) {
 
 // --- Helper Methods Implementation ---
 
+QList<QPointF> MapViewInputHandler::getAffectedTiles(const QPointF& primaryMapPos, Brush* currentBrush) const {
+    QList<QPointF> affectedTiles;
+    if (!currentBrush) {
+        qWarning("getAffectedTiles: No current brush provided.");
+        affectedTiles.append(primaryMapPos);
+        return affectedTiles;
+    }
+
+    int brushSize = currentBrush->getBrushSize();
+    BrushShape brushShape = currentBrush->getBrushShape();
+
+    if (brushShape == BrushShape::Square) {
+        for (int y_offset = -brushSize; y_offset <= brushSize; ++y_offset) {
+            for (int x_offset = -brushSize; x_offset <= brushSize; ++x_offset) {
+                affectedTiles.append(QPointF(primaryMapPos.x() + x_offset, primaryMapPos.y() + y_offset));
+            }
+        }
+    } else if (brushShape == BrushShape::Circle) {
+        for (int y_offset = -brushSize; y_offset <= brushSize; ++y_offset) {
+            for (int x_offset = -brushSize; x_offset <= brushSize; ++x_offset) {
+                double distance = qSqrt(static_cast<double>(x_offset * x_offset + y_offset * y_offset));
+                if (distance <= static_cast<double>(brushSize) + 0.5) { // +0.5 for better inclusivity of edge tiles
+                    affectedTiles.append(QPointF(primaryMapPos.x() + x_offset, primaryMapPos.y() + y_offset));
+                }
+            }
+        }
+    } else {
+        qWarning("getAffectedTiles: Unknown brush shape! Defaulting to primary tile.");
+        affectedTiles.append(primaryMapPos);
+    }
+
+    if (affectedTiles.isEmpty()) { // Ensure at least the primary tile
+        affectedTiles.append(primaryMapPos);
+    }
+
+    return affectedTiles;
+}
+
 void MapViewInputHandler::startDrawing(const QPointF& mapPos, QMouseEvent* event) {
     if (!brushManager_ || !mapView_ || !map_ || !undoStack_) return;
-    Brush* brush = brushManager_->getCurrentBrush();
-    if (brush) {
-        // Pass all relevant state to the brush's event handler
-        brush->mousePress(mapPos, event, mapView_, map_, undoStack_,
-                          shiftModifierActive_, ctrlModifierActive_, altModifierActive_);
+    currentDrawingCommand_ = nullptr; // Reset at the beginning of a new potential stroke.
+
+    Brush* currentBrush = brushManager_->getCurrentBrush();
+    if (currentBrush) {
+        QList<QPointF> tiles = getAffectedTiles(mapPos, currentBrush);
+        for (const QPointF& tilePos : tiles) {
+            QUndoCommand* cmd = currentBrush->mousePressEvent(tilePos, event, mapView_, map_, undoStack_,
+                                                             shiftModifierActive_, ctrlModifierActive_, altModifierActive_,
+                                                             nullptr); // parentCommand is null for press
+            if (cmd) {
+                if (!currentDrawingCommand_) {
+                    currentDrawingCommand_ = cmd; // First command becomes the main command for the stroke
+                } else {
+                    // If multiple commands are generated by a single press (e.g. large brush),
+                    // this simplified logic pushes subsequent ones directly.
+                    // Ideally, the brush's mousePressEvent for a large brush would return ONE command
+                    // that encompasses all initial changes. Or, a macro would be built here.
+                    undoStack_->push(cmd);
+                }
+            }
+        }
     }
-    dragStartMapPos_ = mapPos; // Used by some brushes for line/rect drawing, or by this handler
+    // dragStartMapPos_ is already set in handleMousePressEvent
     mapView_->update(); // Ensure view updates if brush made changes or shows preview
 }
 
 void MapViewInputHandler::continueDrawing(const QPointF& mapPos, QMouseEvent* event) {
     if (!brushManager_ || !mapView_ || !map_ || !undoStack_) return;
-    Brush* brush = brushManager_->getCurrentBrush();
-    if (brush) {
-        brush->mouseMove(mapPos, event, mapView_, map_, undoStack_,
-                         shiftModifierActive_, ctrlModifierActive_, altModifierActive_);
+    Brush* currentBrush = brushManager_->getCurrentBrush();
+    if (currentBrush) {
+        QList<QPointF> tiles = getAffectedTiles(mapPos, currentBrush);
+        for (const QPointF& tilePos : tiles) {
+            if (!currentDrawingCommand_) {
+                // If no command was started by press (e.g. press was on empty space, or brush needs drag to activate)
+                // The first move event that generates a command will start currentDrawingCommand_.
+                QUndoCommand* moveCmd = currentBrush->mouseMoveEvent(tilePos, event, mapView_, map_, undoStack_,
+                                                                  shiftModifierActive_, ctrlModifierActive_, altModifierActive_,
+                                                                  nullptr); // No parent yet
+                if (moveCmd) {
+                    currentDrawingCommand_ = moveCmd;
+                }
+            } else {
+                // A command is in progress, pass it as parent.
+                // The brush's mouseMoveEvent is expected to add its actions as children to currentDrawingCommand_
+                // or otherwise modify it. It should ideally not return a new top-level command if a parent is given,
+                // unless it wants to replace currentDrawingCommand_ (which is not standard QUndoCommand usage).
+                currentBrush->mouseMoveEvent(tilePos, event, mapView_, map_, undoStack_,
+                                             shiftModifierActive_, ctrlModifierActive_, altModifierActive_,
+                                             currentDrawingCommand_);
+            }
+        }
     }
     mapView_->update(); // Brush might be continuously drawing or updating a preview
 }
 
 void MapViewInputHandler::finishDrawing(const QPointF& mapPos, QMouseEvent* event) {
     if (!brushManager_ || !mapView_ || !map_ || !undoStack_) return;
-    Brush* brush = brushManager_->getCurrentBrush();
-    if (brush) {
-        brush->mouseRelease(mapPos, event, mapView_, map_, undoStack_,
-                            shiftModifierActive_, ctrlModifierActive_, altModifierActive_);
+    Brush* currentBrush = brushManager_->getCurrentBrush();
+    if (currentBrush) {
+        QList<QPointF> tiles = getAffectedTiles(mapPos, currentBrush);
+        for (const QPointF& tilePos : tiles) {
+            if (!currentDrawingCommand_) {
+                // If no command was started by press or move, try to create one on release.
+                QUndoCommand* releaseCmd = currentBrush->mouseReleaseEvent(tilePos, event, mapView_, map_, undoStack_,
+                                                                         shiftModifierActive_, ctrlModifierActive_, altModifierActive_,
+                                                                         nullptr); // No parent yet
+                if (releaseCmd) {
+                    currentDrawingCommand_ = releaseCmd; // This becomes the command for the whole gesture.
+                }
+            } else {
+                // A command is in progress, pass it as parent.
+                currentBrush->mouseReleaseEvent(tilePos, event, mapView_, map_, undoStack_,
+                                                shiftModifierActive_, ctrlModifierActive_, altModifierActive_,
+                                                currentDrawingCommand_);
+            }
+        }
     }
+
+    if (currentDrawingCommand_) {
+        // Set a meaningful text for the aggregated command if it doesn't have one.
+        // Brushes should ideally set their own text.
+        if (currentDrawingCommand_->text().isEmpty()) {
+             currentDrawingCommand_->setText(QObject::tr("Brush Stroke"));
+        }
+        undoStack_->push(currentDrawingCommand_);
+    }
+
+    // Reset drawing-specific flags (already done in handleMouseReleaseEvent, but good for clarity if called elsewhere)
+    isDraggingDraw_ = false;
+    isReplaceDragging_ = false;
+    currentDrawingCommand_ = nullptr; // Reset for the next operation.
     mapView_->update(); // Final update for the drawing operation
 }
 

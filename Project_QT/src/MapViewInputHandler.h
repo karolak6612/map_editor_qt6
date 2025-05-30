@@ -15,8 +15,9 @@ class QInputEvent; // For updateModifierKeys
 class MapView;
 class Brush;
 class BrushManager;
-class Map; // Replace with actual map data class if different
+class Map;
 class QUndoStack;
+class QUndoCommand; // Added for currentDrawingCommand_
 
 class MapViewInputHandler : public QObject {
     Q_OBJECT
@@ -25,6 +26,7 @@ public:
     enum class InteractionMode {
         Idle,
         Drawing,
+        DraggingDraw,     // Added for shift+drag drawing with certain brushes
         SelectingBox,
         DraggingSelection, // Placeholder, full implementation later
         PanningView,
@@ -64,6 +66,8 @@ private:
     void updateSelectionBox(const QPointF& mapPos, QMouseEvent* event);
     void finishSelectionBox(const QPointF& mapPos, QMouseEvent* event);
 
+    QList<QPointF> getAffectedTiles(const QPointF& primaryMapPos, Brush* currentBrush) const; // Added
+
     // Member variables
     MapView* mapView_;                 // Non-owning pointer to the MapView
     BrushManager* brushManager_;     // Non-owning pointer
@@ -78,6 +82,12 @@ private:
     bool shiftModifierActive_ = false;
     bool ctrlModifierActive_ = false;
     bool altModifierActive_ = false;
+
+    // Flags for specific drawing behaviors
+    bool isDraggingDraw_ = false;    // True when shift-dragging to draw a line/rectangle with a brush
+    bool isReplaceDragging_ = false; // True when alt-dragging with a ground brush to replace terrain
+
+    QUndoCommand* currentDrawingCommand_ = nullptr; // For accumulating changes before pushing to stack (optional usage)
 };
 
 #endif // MAPVIEWINPUTHANDLER_H
