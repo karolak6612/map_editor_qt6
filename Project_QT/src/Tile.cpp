@@ -350,11 +350,15 @@ void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const Drawing
 
     // 1. Draw Ground
     if (options.showGround && ground_) {
-        ground_->draw(painter, targetScreenRect, options);
+        // Make a copy of options, in case ground_->draw modifies it (though it shouldn't for const ref)
+        DrawingOptions groundOptions = options;
+        // Potentially adjust options specifically for ground if needed, e.g. groundOptions.someFlag = false;
+        ground_->draw(painter, targetScreenRect, groundOptions);
     } else if (options.showGround) {
-        // Placeholder for empty ground: a very dark, almost black, slightly transparent color
-        // This helps visualize empty parts of the map if needed.
-        // painter->fillRect(targetScreenRect, QColor(5, 5, 5, 128));
+        // Draw a base placeholder for the tile itself if ground is null but should be shown
+        painter->save();
+        painter->fillRect(targetScreenRect, QColor(50, 50, 50, 100)); // Dark semi-transparent gray
+        painter->restore();
     }
 
     // 2. Draw Items (items_ should be in correct visual order: bottom-most first)
@@ -362,7 +366,9 @@ void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const Drawing
         for (Item* item : items_) {
             if (item) {
                 // TODO: Future checks based on options.showInvisibleItems and item properties
-                item->draw(painter, targetScreenRect, options);
+                DrawingOptions itemOptions = options;
+                // Example: Adjust targetRect for item if items are not full tile size
+                item->draw(painter, targetScreenRect, itemOptions); // Assuming items draw relative to tile's full rect for now
             }
         }
     }
@@ -371,7 +377,9 @@ void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const Drawing
     if (options.showCreatures && creature_) {
         // TODO: Future checks based on options.showInvisibleItems (if creatures can be invisible)
         creature_->draw(painter, targetScreenRect, options);
-    }
+    } // else if (options.showCreatures && options.drawDebugInfo) {
+      // Optionally draw a placeholder for where a creature *would* be if debug info is on for creatures
+    //}
 
     // 4. Draw Spawn Indicator (placeholder)
     if (options.showSpawns && spawn_) {
@@ -412,6 +420,18 @@ void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const Drawing
             painter->restore();
             // qDebug() << "Tile::draw() Flags:" << flagsText.trimmed() << "for tile at" << x_ << y_ << z_;
         }
+    }
+
+    // 6. Draw Debug Info (Coordinates)
+    if (options.drawDebugInfo) {
+        painter->save();
+        QFont font = painter->font();
+        font.setPointSize(7);
+        painter->setFont(font);
+        painter->setPen(Qt::cyan);
+        QString coordText = QString("%1,%2,%3").arg(x_).arg(y_).arg(z_);
+        painter->drawText(targetScreenRect.adjusted(2,2,0,0), Qt::AlignTop | Qt::AlignLeft | Qt::TextDontClip, coordText);
+        painter->restore();
     }
     
     // Future: Draw effects (if options.showEffects)

@@ -1,37 +1,46 @@
-#ifndef SPRITE_H
-#define SPRITE_H
+#ifndef QT_SPRITE_H
+#define QT_SPRITE_H
 
-#include <QSize>
-#include <QPointF>
-#include <QPixmap>
-#include <QRectF>
-#include <QVariantMap>
+#include <QObject>
+#include <QRect>
 
-// Forward declare
+// Forward declaration
 class QPainter;
 
-class Sprite {
-public:
-    Sprite() = default;
-    virtual ~Sprite() = default;
-
-    // Pure virtual methods for the core interface:
-    virtual void draw(QPainter* painter, const QPointF& targetPosition, int frame = 0, const QVariantMap& options = QVariantMap()) = 0;
-    virtual void drawPartial(QPainter* painter, const QRectF& targetScreenRect, const QRect& sourceSpriteRect, int frame = 0, const QVariantMap& options = QVariantMap()) = 0;
-    
-    virtual QSize size(int frame = 0) const = 0; // Pixel dimensions of a specific frame
-    virtual int frameCount() const = 0;
-    virtual int layerCount() const = 0; // If sprites can have layers (e.g., for outfits)
-    
-    virtual QPixmap getFramePixmap(int frame = 0, int layer = 0, const QVariantMap& options = QVariantMap()) = 0;
-    
-    virtual void unloadResources() = 0; // To free any loaded pixmaps or other graphical resources
-
-    // Non-copyable and non-movable
-    Sprite(const Sprite&) = delete;
-    Sprite& operator=(const Sprite&) = delete;
-    Sprite(Sprite&&) = delete;
-    Sprite& operator=(Sprite&&) = delete;
+enum SpriteSize {
+    SPRITE_SIZE_16x16,
+    SPRITE_SIZE_32x32,
+    SPRITE_SIZE_64x64,
+    SPRITE_SIZE_COUNT // Keep this for consistency if needed, or remove if not used
 };
 
-#endif // SPRITE_H
+class Sprite : public QObject {
+    Q_OBJECT
+
+public:
+    explicit Sprite(QObject *parent = nullptr) : QObject(parent) {}
+    virtual ~Sprite() = default;
+
+    // Pure virtual methods to be implemented by derived classes
+    virtual void drawTo(QPainter* painter, const QRect& targetScreenRect, const QRect& sourceSpriteRect) = 0;
+    // Added animation parameters, similar to original GameSprite::DrawTo, but more generic for an abstract class
+    // Derived classes can choose how to interpret these, e.g. for animation frames or sprite sheet portions.
+    virtual void drawTo(QPainter* painter, const QPoint& targetPos, int sourceX = 0, int sourceY = 0, int sourceWidth = -1, int sourceHeight = -1) = 0;
+
+    virtual void unload() = 0; // For explicit resource cleanup
+
+    virtual int width() const = 0;  // Width of a single sprite frame/image
+    virtual int height() const = 0; // Height of a single sprite frame/image
+
+    // Optional: Add methods for animation control if common to all sprites,
+    // though detailed animation might be specific to derived classes like GameSprite.
+    // virtual int getFrameCount() const { return 1; } // Example
+    // virtual void setCurrentFrame(int frame) {}      // Example
+
+private:
+    // Disallow copy and assignment
+    Sprite(const Sprite&) = delete;
+    Sprite& operator=(const Sprite&) = delete;
+};
+
+#endif // QT_SPRITE_H
