@@ -1,6 +1,8 @@
 #include "Map.h"
 #include "Tile.h" // Minimal Tile.h created in previous step
+#include "Selection.h" // Include Selection.h
 #include <QDebug>
+#include <QSet> // Include QSet for updateSelection
 #include <QVector3D> // Used if MapPos was not defined in Map.h, but MapPos is used.
 
 // Note: MapPos struct is assumed to be defined in Map.h as per previous step.
@@ -8,13 +10,19 @@
 
 Map::Map(QObject *parent) : QObject(parent) {
     initialize(0, 0, 0);
+    selection_ = new Selection(this);
 }
 
 Map::Map(int width, int height, int floors, const QString& description, QObject *parent) : QObject(parent) {
     initialize(width, height, floors, description);
+    selection_ = new Selection(this);
 }
 
 Map::~Map() {
+    // It's generally safer to delete objects that might depend on the map (like selection_)
+    // *before* clearing the map's core data (like tiles_).
+    delete selection_;
+    selection_ = nullptr;
     clear();
 }
 
@@ -237,4 +245,23 @@ bool Map::load(const QString& path) {
 bool Map::save(const QString& path) const {
     qDebug() << "Map::save not implemented, path:" << path;
     return false;
+}
+
+// Selection method implementations
+Selection* Map::getSelection() const {
+    return selection_;
+}
+
+void Map::updateSelection(const QSet<MapPos>& newSelection) {
+    if (selection_) {
+        selection_->clear();
+        for (const MapPos& pos : newSelection) {
+            selection_->addTile(pos);
+        }
+        // Optionally, emit a signal here if Map has a selectionChanged signal
+        // emit selectionChangedSignal(); // Example
+        qDebug() << "Map selection updated with" << newSelection.count() << "tiles.";
+    } else {
+        qWarning("Map::updateSelection called but selection_ is null.");
+    }
 }
