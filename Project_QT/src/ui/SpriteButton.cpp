@@ -16,15 +16,11 @@ SpriteButton::SpriteButton(const QPixmap& pixmap, QWidget *parent)
 SpriteButton::SpriteButton(const QIcon& icon, const QString& text, QWidget *parent)
     : QPushButton(icon, text, parent) { // Call base constructor for icon and text
     init();
-    // If an icon is set, QPushButton usually handles its drawing.
+    // If an icon is set via this constructor, QPushButton usually handles its drawing.
     // If m_currentPixmap should also be used, or if this constructor implies
     // that the icon itself provides the primary visual, this needs clarification.
-    // For now, if an icon is set via this constructor, paintEvent might need to
-    // be careful not to overdraw it, or this constructor shouldn't set m_currentPixmap.
-    // Let's assume if an icon is provided here, the base QPushButton drawing is mostly sufficient
+    // For now, if an icon is set via this constructor, the base QPushButton drawing is mostly sufficient
     // and m_currentPixmap is not set from it unless explicitly desired.
-    // If the goal is for THIS class to always custom draw, then perhaps the icon's pixmap
-    // for the current state should be extracted and set to m_currentPixmap.
 }
 
 SpriteButton::~SpriteButton() {
@@ -65,55 +61,32 @@ void SpriteButton::paintEvent(QPaintEvent *event) {
     // If we have a custom pixmap, we might not want the text or icon from the style option
     // to be drawn by the primitive, or we draw them ourselves.
     // For a pure sprite button, clear text and icon from option so base drawing doesn't draw them.
-    if (!m_currentPixmap.isNull()) {
-        // option.text = QString(); // Uncomment if you don't want QPushButton to draw its text
-        // option.icon = QIcon();   // Uncomment if you don't want QPushButton to draw its icon
-    }
+    // However, if text is also desired alongside the pixmap, this needs adjustment.
+    // For now, assume m_currentPixmap is the primary content if present.
+    // If m_currentPixmap is present, we could clear option.text and option.icon.
+    // This task focuses on drawing the sprite; text alongside sprite is a further enhancement.
 
     // Draw the basic button frame/background using the current style
     painter.drawControl(QStyle::CE_PushButtonBevel, option);
-    // If you want text drawn by style, it's already in 'option.text'
-    // If you want icon drawn by style, it's in 'option.icon'
-    // QPushButton::paintEvent(event); // Calling base class paintEvent is another way but can be complex to combine with custom drawing.
 
     if (!m_currentPixmap.isNull()) {
         QRect pixmapRect = m_currentPixmap.rect();
-        // Center the pixmap within the button's contents rect
         QRect contentRect = style()->subElementRect(QStyle::SE_PushButtonContents, &option, this);
 
         // Adjust for button being down (pressed)
-        if (isDown()) {
+        if (isDown()) { // or option.state & QStyle::State_Sunken
             contentRect.translate(style()->pixelMetric(QStyle::PM_ButtonShiftHorizontal, &option, this),
                                   style()->pixelMetric(QStyle::PM_ButtonShiftVertical, &option, this));
         }
 
         pixmapRect.moveCenter(contentRect.center());
 
-        // Ensure pixmap does not exceed contentRect if it's too large (optional, could also scale)
-        // if (!contentRect.contains(pixmapRect)) {
-        //     pixmapRect = pixmapRect.intersected(contentRect);
-        // }
-
         painter.drawPixmap(pixmapRect.topLeft(), m_currentPixmap);
-    } else if (!option.icon.isNull()) {
-        // If no custom pixmap, but an icon was set (e.g. via constructor or setIcon),
-        // let the style draw it. QStyle::CE_PushButtonLabel includes icon and text.
-        // However, CE_PushButtonBevel usually just draws the frame.
-        // To draw icon and text as per style if no custom pixmap:
-        // painter.drawControl(QStyle::CE_PushButtonLabel, option);
-        // This is already handled by default by QPushButton if we don't override paintEvent
-        // or call the base paintEvent. Since we *are* overriding, if we want the default
-        // icon/text drawing when m_currentPixmap is null, we'd need to replicate it or call base.
-        // For now, if m_currentPixmap is null, it will just be a standard button (possibly with text if set).
-        // The base QPushButton::paintEvent() would handle text and icon if we called it.
-        // Let's rely on text being set on the button itself, and QStyle will draw it
-        // as part of CE_PushButtonBevel or if we add CE_PushButtonLabel.
-        // The most common case is that if m_currentPixmap is null, this button might just show text.
-        // QStyleOptionButton already has text and icon. Let's draw them using CE_PushButtonLabel.
-        // This ensures text appears even if no pixmap.
+    } else if (!option.icon.isNull() || !option.text.isEmpty()) {
+        // If no custom pixmap, but an icon or text was set (e.g. via constructor or setIcon/setText),
+        // let the style draw it. CE_PushButtonLabel handles both icon and text.
         painter.drawControl(QStyle::CE_PushButtonLabel, option);
     }
-
 
     // Draw focus rectangle if button has focus
     if (option.state & QStyle::State_HasFocus) {
