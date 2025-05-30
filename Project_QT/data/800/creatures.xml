@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<creatures>
+	<creature name="Achad" type="monster" looktype="146" lookhead="93" lookbody="93" looklegs="57" lookfeet="97"/>
+	<creature name="acolyte Of The Cult" type="monster" looktype="194" lookhead="114" lookbody="121" looklegs="121" lookfeet="57"/>
+	<creature name="adept of the cult" type="monster" looktype="194" lookhead="114" lookbody="94" looklegs="94" lookfeet="57"/>
+	<creature name="amazon" type="monster" looktype="137" lookhead="113" lookbody="120" looklegs="114" lookfeet="132"/>
+	<creature name="ancient scarab" type="monster" looktype="79" lookhead="20" lookbody="30" looklegs="40" lookfeet="50"/>
+	<creature name="Apocalypse" type="monster" looktype="12" lookhead="38" lookbody="114" lookfeet="94"/>
+	<creature name="Apprentice Sheng" type="monster" looktype="23"/>
+	<creature name="Arkhothep" type="monster" looktype="87"/>
+	<creature name="Ashmunrah" type="monster" looktype="87" lookhead="20" lookbody="30" looklegs="40" lookfeet="50"/>
+	<creature name="Assasin" type="monster" looktype="129" lookhead="95" lookbody="95" looklegs="95" lookfeet="95"/>
+	<creature name="Assassin" type="monster" looktype="129"/>
+	<creature name="Avalanche" type="monster" looktype="261"/>
+	<creature name="Axeitus Headbanger" type="monster" looktype="71"/>
+	<creature name="azure frog" type="monster" looktype="226" lookhead="69" lookbody="66" looklegs="69" lookfeet="66"/>
+	<creature name="badger" type="monster" looktype="105" lookhead="20" lookbody="30" looklegs="40" lookfeet="50"/>
+	<creature name="bandit" type="monster" looktype="129" lookhead="58" lookbody="59" looklegs="45" lookfeet="114"/>
+	<creature name="banshee" type="monster" looktype="78" lookhead="20" lookbody="30" looklegs="40" lookfeet="50"/>
+	<creature name="Barbarian Bloodwalker" type="monster" looktype="255" lookhead="114" lookbody="132" looklegs="132" lookfeet="132"/>
+	<creature name="Barbarian Brutetamer" type="monster" looktype="264" lookhead="78" lookbody="116" looklegs="95" lookfeet="121"/>
+	<creature name="Barbarian Headsplitter" type="monster" looktype="253" lookhead="115" lookbody="105" looklegs="119" lookfeet="132"/>
+	<creature name="Barbarian Skullhunter" type="monster" looktype="254" lookbody="77" looklegs="77" lookfeet="114"/>
+	<creature name="bat" type="monster" looktype="122" lookhead="20" lookbody="30" looklegs="40" lookfeet="50"/>
+</creatures>

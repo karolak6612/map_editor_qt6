@@ -1,0 +1,9 @@
+<materials>
+	<brush name="ice" type="ground"/>
+	<brush name="void" type="ground" server_lookid="100" z-order="95">
+		<item id="100" chance="10"/>
+	</brush>
+	<brush name="grass" type="ground" server_lookid="4526" z-order="3500">
+		<item id="4526" chance="50"/>
+	</brush>
+</materials> 

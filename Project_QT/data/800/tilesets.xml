@@ -1,0 +1,14 @@
+<materials>
+	<tileset name="Cave">
+		<terrain>
+			<brush name="void"/>
+			<brush name="lava"/>
+		</terrain>
+	</tileset>
+	<tileset name="Nature">
+		<terrain>
+			<brush name="sea"/>
+			<brush name="swamp"/>
+		</terrain>
+	</tileset>
+</materials> 
