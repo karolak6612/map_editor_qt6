@@ -8,12 +8,15 @@ class QMenuBar;
 class QMenu;
 class QAction;
 class QToolBar; 
-class QSpinBox;    // Added
-class QComboBox;   // Added
-class QLabel;      // Added
-class QActionGroup;// Added
+class QSpinBox;    
+class QComboBox;   
+class QLabel;      
+class QActionGroup;
+class QDockWidget;                  // Added
+class PlaceholderPaletteWidget;     // Added
+class PlaceholderMinimapWidget;     // Added
+class PlaceholderPropertiesWidget;  // Added
 
-// class MapView; 
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -28,20 +31,20 @@ private slots:
     void onPositionXChanged(int value);
     void onPositionYChanged(int value);
     void onPositionZChanged(int value);
-    void onZoomControlChanged(int value);   // Added
-    void onLayerControlChanged(int index); // Added
+    void onZoomControlChanged(int value);   
+    void onLayerControlChanged(int index); 
 
 private:
     // Main setup methods
     void setupMenuBar();
     void setupToolBars(); 
-    // void setupDockWidgets(); 
+    void setupDockWidgets(); // Added
     // void setupStatusBar(); 
 
-    // Helper method for creating actions (used by menu and toolbar setup)
+    // Helper method for creating actions
     QAction* createAction(const QString& text, const QString& objectName, const QString& shortcut = "", const QString& statusTip = "", bool checkable = false, bool checked = false);
 
-    // Helper methods for creating top-level menus
+    // Menu creation helpers
     QMenu* createFileMenu();
     QMenu* createEditMenu();
     QMenu* createEditorMenu(); 
@@ -57,7 +60,7 @@ private:
     QMenu* createServerMenu(); 
     QMenu* createIdlerMenu();  
 
-    // Helper methods for creating toolbars
+    // Toolbar creation helpers
     QToolBar* createStandardToolBar();   
     QToolBar* createBrushesToolBar();    
     QToolBar* createPositionToolBar();   
@@ -66,13 +69,18 @@ private:
     // UI Member Variables
     QMenuBar *menuBar_; 
 
-    // Toolbar Member Variables
+    // Toolbar Members
     QToolBar* standardToolBar_;   
     QToolBar* brushesToolBar_;    
     QToolBar* positionToolBar_;   
     QToolBar* sizesToolBar_;      
 
-    // Common QAction members (shared between menu and toolbars)
+    // Dock Widget Members
+    QDockWidget* paletteDock_;      // Added
+    QDockWidget* minimapDock_;      // Added
+    QDockWidget* propertiesDock_;   // Added
+
+    // Common QAction members
     QAction* newAction_;
     QAction* openAction_;
     QAction* saveAction_;
@@ -91,7 +99,6 @@ private:
     QAction* rectangularBrushShapeAction_;
     QAction* circularBrushShapeAction_;
     QActionGroup* brushShapeActionGroup_; 
-
     QAction* brushSize1Action_;
     QAction* brushSize2Action_;
     QAction* brushSize3Action_;
@@ -101,9 +108,14 @@ private:
     QAction* brushSize7Action_;
     QActionGroup* brushSizeActionGroup_; 
 
-    // Standard Toolbar Controls (Zoom and Layer)
-    QSpinBox* zoomSpinBox_;     // Added
-    QComboBox* layerComboBox_;  // Added
+    // Standard Toolbar Controls
+    QSpinBox* zoomSpinBox_;     
+    QComboBox* layerComboBox_;  
+
+    // Dock Widget Toggle Actions (for menu)
+    QAction* viewPaletteDockAction_;    // Added
+    QAction* viewMinimapDockAction_;    // Added
+    QAction* viewPropertiesDockAction_; // Added
 };
 
 #endif // MAINWINDOW_H
