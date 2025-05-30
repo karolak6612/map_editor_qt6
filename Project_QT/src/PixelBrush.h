@@ -14,7 +14,13 @@ public:
     int getBrushSize() const override;      // From Brush base
     BrushShape getBrushShape() const override; // From Brush base
 
-    // Mouse interaction methods
+    // New methods from Brush interface
+    Type type() const override;
+    bool canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr) const override;
+    QUndoCommand* applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) override;
+    QUndoCommand* removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) override;
+
+    // Mouse interaction methods (signatures should already match Brush.h)
     QUndoCommand* mousePressEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView,
                                   Map* map, QUndoStack* undoStack,
                                   bool shiftPressed, bool ctrlPressed, bool altPressed,

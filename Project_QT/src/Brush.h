@@ -20,13 +20,47 @@ enum class BrushShape {
     Circle
     // Add other shapes like Line, Custom etc. if needed
 };
+// Q_ENUM(BrushShape) // Moved inside class if Brush is QObject
 
 class Brush : public QObject {
     Q_OBJECT
-
 public:
+    // Make enums part of the class and use Q_ENUM if Brush is QObject
+    enum class BrushShape { // Re-declared inside class for Q_ENUM
+        Square,
+        Circle
+    };
+    Q_ENUM(BrushShape)
+
+    enum class Type {
+        Unknown,
+        Raw,
+        Doodad,
+        Terrain,
+        Ground,
+        Wall,
+        WallDecoration,
+        Table,
+        Carpet,
+        Door,
+        OptionalBorder,
+        Creature,
+        Spawn,
+        House,
+        HouseExit,
+        Waypoint,
+        Flag,
+        Eraser,
+        Pixel
+        // TODO: Add any other brush types from wxwidgets/brush_enums.h
+    };
+    Q_ENUM(Type)
+
     explicit Brush(QObject *parent = nullptr);
     virtual ~Brush();
+
+    // Method to get brush type
+    virtual Type type() const = 0;
 
     // Pure virtual methods for mouse interaction
     // These will be called by MapViewInputHandler, passing necessary context.
@@ -65,11 +99,24 @@ public:
     // ... (add other is[Type] from wxBrush as needed, defaulting to false) ...
     virtual bool isEraser() const;
 
+    // Core brush action interface
+    virtual bool canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr) const = 0;
+    virtual QUndoCommand* applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) = 0;
+    virtual QUndoCommand* removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) = 0;
+
+    // Shared properties and accessors
+    bool isVisibleInPalette() const { return isVisibleInPalette_; }
+    void setVisibleInPalette(bool visible) { isVisibleInPalette_ = visible; }
+
+    bool usesCollection() const { return usesCollection_; }
+    void setUsesCollection(bool uses) { usesCollection_ = uses; }
 
     // Add other common properties or methods if identified
 
 protected:
     // Common properties like brush ID can be added if necessary
+    bool isVisibleInPalette_ = true;
+    bool usesCollection_ = false;
     // static uint32_t id_counter; // If unique IDs are needed for Qt brushes
     // uint32_t id_;
 };
