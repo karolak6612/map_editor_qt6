@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<items>
+	<item id="1" name="water" />
+	<item id="2" name="blood" />
+	<item id="3" name="beer" />
+	<item id="4" name="slime" />
+	<item id="5" name="lemonade" />
+	<item id="6" name="milk" />
+	<item id="7" name="manafluid" />
+	<item id="10" name="lifefluid" />
+	<item id="11" name="oil" />
+	<item id="13" name="urine" />
+	<item id="14" name="coconut milk" />
+	<item id="15" name="wine" />
+	<item id="19" name="mud" />
+	<item id="21" name="fruit juice" />
+	<item id="26" name="lava" />
+	<item id="27" name="rum" />
+	<item id="28" name="swamp" />
+	<item id="35" name="tea" />
+	<item id="43" name="mead" />
+	<item id="100" name="void" />
+	<item id="101" name="earth" />
+	<item id="103" name="dirt" />
+	<item id="104" name="sand" />
+	<item id="106" name="grass" />
+	<item fromid="108" toid="109" name="flowers" />
+	<item id="194" name="dirt" />
+	<item id="231" name="sand" />
+	<item id="280" name="earth ground" />
+	<item id="293" name="grass">
+		<attribute key="floorchange" value="down" />
+	</item>
+	<item id="294" article="a" name="pitfall">
+		<attribute key="floorchange" value="down" />
+		<attribute key="decayTo" value="293" />
+		<attribute key="duration" value="300" />
+	</item>
+	<item fromid="351" toid="353" name="dirt floor" />
+	<item id="354" name="muddy floor" />
+	<item id="355" name="muddy floor">
+		<attribute key="fluidSource" value="mud" />
+	</item>
+</items>
