@@ -31,17 +31,6 @@ bool GroundBrush::canDraw(Map* map, const QPointF& tilePos, QObject* drawingCont
         qWarning() << "GroundBrush::canDraw: Map pointer is null.";
         return false;
     }
-
-    // Basic check: A ground brush can attempt to draw if there's a map.
-    // More advanced checks could involve:
-    // - if currentGroundItemId_ is valid (not 0) for an apply operation.
-    // - if the tile at tilePos is not obstructed for ground placement by other items.
-    // - ground_equivalent checks with neighbors (deferred).
-    // - if drawingContext provides a specific item, check if it's a valid ground type.
-
-    // This method is more about "can this TYPE of brush operate here in general".
-    // The specific configured item ID (currentGroundItemId_) is checked in applyBrush.
-    // For removeBrush, it can generally always attempt to act.
     return true;
 }
 
@@ -56,13 +45,8 @@ QUndoCommand* GroundBrush::applyBrush(Map* map, const QPointF& tilePos, QObject*
     }
 
     quint16 groundItemIdToPlace = getCurrentGroundItemId();
-    // currentGroundItemId_ is a member, accessible via getCurrentGroundItemId()
 
     if (groundItemIdToPlace == 0) {
-        // If currentGroundItemId_ is 0, it could mean "erase ground" or "brush not configured".
-        // For applyBrush, it's more likely it means the brush is not configured to place anything specific.
-        // The removeBrush method should be used for explicit erasure.
-        // So, if groundItemIdToPlace is 0 here, it implies the brush is not properly set up to *place* a ground.
         qWarning() << "GroundBrush::applyBrush: currentGroundItemId_ is 0. Brush may not be configured to place a specific ground. No action taken.";
         return nullptr;
     }
@@ -72,40 +56,28 @@ QUndoCommand* GroundBrush::applyBrush(Map* map, const QPointF& tilePos, QObject*
 }
 
 QUndoCommand* GroundBrush::removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
-    Q_UNUSED(drawingContext); // Not typically used for a generic ground removal
+    Q_UNUSED(drawingContext);
 
     if (!map) {
         qWarning() << "GroundBrush::removeBrush: Map pointer is null.";
         return nullptr;
     }
-
-    // To remove ground, we pass an item ID of 0 to SetGroundItemCommand.
-    // The command's redo() will see newGroundItemId_ == 0 and call map->removeGround().
-    // Its undo() will restore whatever was there before (captured by its first redo).
     qDebug() << "GroundBrush::removeBrush: Attempting to remove ground at" << tilePos;
     return new SetGroundItemCommand(map, tilePos, 0, parentCommand); // 0 signifies ground removal
 }
 
 // Brush geometry methods
 int GroundBrush::getBrushSize() const {
-    // This should ideally be retrieved from a BrushManager or global settings.
-    // For now, returning a default size 0 (single tile).
-    // qDebug() << "GroundBrush::getBrushSize() - returning placeholder 0";
     return 0;
 }
 
 Brush::BrushShape GroundBrush::getBrushShape() const {
-    // This should also come from global settings or BrushManager.
-    // qDebug() << "GroundBrush::getBrushShape() - returning placeholder Square";
     return Brush::BrushShape::Square;
 }
 
 // --- Methods for managing the ground item ID ---
 void GroundBrush::setCurrentGroundItemId(quint16 itemId) {
     currentGroundItemId_ = itemId;
-    // Optionally, if the brush's lookId should reflect the item, update it here.
-    // This might involve looking up item properties if lookId_ is e.g. a client sprite ID.
-    // For now, just setting the ID.
     qDebug() << "GroundBrush: Set currentGroundItemId to" << currentGroundItemId_;
 }
 
@@ -113,10 +85,22 @@ quint16 GroundBrush::getCurrentGroundItemId() const {
     return currentGroundItemId_;
 }
 
+// Optional border support
+bool GroundBrush::hasOptionalBorder() const {
+    // Placeholder implementation.
+    // Actual logic would depend on how a ground brush type is defined
+    // to support optional borders (e.g., loaded from XML attribute,
+    // or based on its name/ID).
+    // For now, let's assume no ground brush supports it by default,
+    // unless a specific brush type overrides this or sets a member flag.
+    // Example: return m_supportsOptionalBorder;
+    // Example: if (name().contains("mountain", Qt::CaseInsensitive)) return true;
+    return false;
+}
+
 // Cancel operation
 void GroundBrush::cancel() {
     qDebug() << "GroundBrush::cancel called";
-    // Reset any internal state if GroundBrush had a multi-step operation.
 }
 
 // Mouse event handlers
@@ -124,17 +108,17 @@ QUndoCommand* GroundBrush::mousePressEvent(const QPointF& mapPos, QMouseEvent* e
                                          Map* map, QUndoStack* undoStack,
                                          bool shiftPressed, bool ctrlPressed, bool altPressed,
                                          QUndoCommand* parentCommand) {
-    Q_UNUSED(event); Q_UNUSED(mapView); Q_UNUSED(undoStack); // undoStack is for MapViewInputHandler
+    Q_UNUSED(event); Q_UNUSED(mapView); Q_UNUSED(undoStack);
     Q_UNUSED(shiftPressed); Q_UNUSED(altPressed);
 
-    if (!canDraw(map, mapPos, nullptr /* drawingContext */)) {
+    if (!canDraw(map, mapPos, nullptr )) {
         return nullptr;
     }
 
-    if (ctrlPressed) { // Ctrl + Click to erase with this ground brush
-        return removeBrush(map, mapPos, nullptr /* drawingContext */, parentCommand);
+    if (ctrlPressed) {
+        return removeBrush(map, mapPos, nullptr , parentCommand);
     } else {
-        return applyBrush(map, mapPos, nullptr /* drawingContext */, parentCommand);
+        return applyBrush(map, mapPos, nullptr , parentCommand);
     }
 }
 
@@ -145,14 +129,14 @@ QUndoCommand* GroundBrush::mouseMoveEvent(const QPointF& mapPos, QMouseEvent* ev
     Q_UNUSED(mapView); Q_UNUSED(undoStack);
     Q_UNUSED(shiftPressed); Q_UNUSED(altPressed);
 
-    if (event->buttons() & Qt::LeftButton) { // Only draw if left button is held (dragging)
-        if (!canDraw(map, mapPos, nullptr /* drawingContext */)) {
+    if (event->buttons() & Qt::LeftButton) {
+        if (!canDraw(map, mapPos, nullptr )) {
             return nullptr;
         }
         if (ctrlPressed) {
-            return removeBrush(map, mapPos, nullptr /* drawingContext */, parentCommand);
+            return removeBrush(map, mapPos, nullptr , parentCommand);
         } else {
-            return applyBrush(map, mapPos, nullptr /* drawingContext */, parentCommand);
+            return applyBrush(map, mapPos, nullptr , parentCommand);
         }
     }
     return nullptr;
@@ -164,13 +148,10 @@ QUndoCommand* GroundBrush::mouseReleaseEvent(const QPointF& mapPos, QMouseEvent*
                                            QUndoCommand* parentCommand) {
     Q_UNUSED(mapPos); Q_UNUSED(event); Q_UNUSED(mapView); Q_UNUSED(map); Q_UNUSED(undoStack);
     Q_UNUSED(shiftPressed); Q_UNUSED(ctrlPressed); Q_UNUSED(altPressed); Q_UNUSED(parentCommand);
-    // For simple ground brushes, actions usually happen on press or move.
-    // Release might finalize a complex operation, but not for this basic version.
-    // qDebug() << "GroundBrush::mouseReleaseEvent at" << mapPos;
     return nullptr;
 }
 
 // Convenience method
 bool GroundBrush::isGround() const {
-    return true; // This is, indeed, a GroundBrush.
+    return true;
 }

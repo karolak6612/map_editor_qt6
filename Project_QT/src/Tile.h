@@ -17,6 +17,7 @@ class Creature;
 class Spawn;
 class QPainter; // For draw method
 // MapPos is now included via Map.h
+// class Map; // Already forward declared via Map.h inclusion or defined if Map.h is fully included.
 
 class Tile : public QObject {
     Q_OBJECT
@@ -34,7 +35,6 @@ public:
         ZoneBrush           = 0x0040  // TILESTATE_ZONE_BRUSH (RME specific, for temporary display)
     };
     Q_DECLARE_FLAGS(TileMapFlags, TileMapFlag)
-    // Q_FLAG(TileMapFlags) // Q_FLAG is for use with Q_PROPERTY, not strictly needed for Q_DECLARE_FLAGS alone
 
     enum class TileStateFlag : quint16 {
         NoState             = 0x0000,
@@ -47,7 +47,6 @@ public:
         Modified            = 0x0040  // TILESTATE_MODIFIED
     };
     Q_DECLARE_FLAGS(TileStateFlags, TileStateFlag)
-    // Q_FLAG(TileStateFlags)
 
 public:
     explicit Tile(int x, int y, int z, QObject *parent = nullptr);
@@ -60,25 +59,25 @@ public:
     MapPos mapPos() const; 
 
     // Item/Creature Management
-    void addItem(Item* item); // Appends to items_. Tile takes ownership if not already parented.
-    bool removeItem(Item* item); // Removes specific item, deletes it. Returns true if found and removed.
-    Item* removeItem(int index); // Removes item at specific index from items_, returns it (caller takes ownership).
+    void addItem(Item* item);
+    bool removeItem(Item* item);
+    Item* removeItem(int index);
     
-    void setGround(Item* groundItem); // Deletes old ground, sets new. Tile takes ownership.
+    void setGround(Item* groundItem);
     Item* getGround() const;
 
-    const QVector<Item*>& items() const; // Const ref to items_ (non-ground items)
-    QVector<Item*>& items();             // Non-const ref to items_ for internal map operations
+    const QVector<Item*>& items() const;
+    QVector<Item*>& items();
     
     Creature* creature() const;
-    void setCreature(Creature* creature); // Deletes old, sets new. Tile takes ownership.
+    void setCreature(Creature* creature);
 
     Spawn* spawn() const;
-    void setSpawn(Spawn* spawn); // Does NOT take ownership. Spawn is linked, not owned.
+    void setSpawn(Spawn* spawn);
 
-    int itemCount() const; // Number of items (ground + other items)
-    int creatureCount() const; // 0 or 1
-    bool isEmpty() const; // Checks ground, items, creature
+    int itemCount() const;
+    int creatureCount() const;
+    bool isEmpty() const;
 
     Item* getTopLookItem() const; 
     Item* getTopUseItem() const;  
@@ -87,22 +86,36 @@ public:
     // Flag/Property Management
     void setMapFlag(TileMapFlag flag, bool on = true);
     bool hasMapFlag(TileMapFlag flag) const;
-    TileMapFlags getMapFlags() const; // Renamed from mapFlags to avoid conflict with potential future Q_PROPERTY
+    TileMapFlags getMapFlags() const;
 
     void setStateFlag(TileStateFlag flag, bool on = true);
     bool hasStateFlag(TileStateFlag flag) const;
-    TileStateFlags getStateFlags() const; // Renamed from stateFlags
+    TileStateFlags getStateFlags() const;
 
     bool isBlocking() const; 
     bool isPZ() const; void setPZ(bool on);
     bool isNoPVP() const; void setNoPVP(bool on);
     bool isNoLogout() const; void setNoLogout(bool on);
     bool isPVPZone() const; void setPVPZone(bool on);
-    // Add more for other map flags as needed
 
     bool isModified() const; void setModified(bool on = true);
     bool isSelected() const; void setSelected(bool on = true);
 
+    // Table specific methods
+    bool hasTable() const;
+    Item* getTable() const;
+    void cleanTables(Map* map, bool dontDelete = false);
+    void tableize(Map* map);
+
+    // Carpet specific methods
+    bool hasCarpet() const;
+    Item* getCarpet() const;
+    void cleanCarpets(Map* map, bool dontDelete = false);
+    void carpetize(Map* map);
+
+    // Optional Border specific methods
+    void setOptionalBorder(bool on);
+    bool hasSetOptionalBorder() const;
 
     // House ID
     quint32 getHouseId() const;
@@ -118,15 +131,13 @@ public:
     
     void update(); 
 
-    // Method to draw the tile and its contents
     void draw(QPainter* painter, const QRectF& targetScreenRect, const DrawingOptions& options) const;
 
-    // New methods for command interactions
     QList<Item*> getWallItems() const;
     void clearWalls();
-    void addWallItemById(quint16 wallItemId); // Creates item from ID and adds
-    void removeGround(); // Companion to setGround, specifically for removing.
-    void setGroundById(quint16 groundItemId); // Helper for Map::setGround to use
+    void addWallItemById(quint16 wallItemId);
+    void removeGround();
+    void setGroundById(quint16 groundItemId);
 
 signals:
     void tileChanged(int x, int y, int z); 
@@ -135,17 +146,17 @@ signals:
 private:
     int x_, y_, z_;
 
-    Item* ground_ = nullptr;        // Tile owns this
-    QVector<Item*> items_;          // Tile owns these (non-ground items)
-    Creature* creature_ = nullptr;  // Tile owns this
-    Spawn* spawn_ = nullptr;        // Tile does NOT own this, it's a link
+    Item* ground_ = nullptr;
+    QVector<Item*> items_;
+    Creature* creature_ = nullptr;
+    Spawn* spawn_ = nullptr;
     quint32 houseId_ = 0;
 
     TileMapFlags mapFlags_ = TileMapFlag::NoFlag;
     TileStateFlags stateFlags_ = TileStateFlag::NoState;
     QVector<quint16> zoneIds_;
     
-    // quint8 minimapColor_ = 0xFF; // To be calculated by update()
+    Map* getMap() const;
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(Tile::TileMapFlags)

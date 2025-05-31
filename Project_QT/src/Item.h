@@ -13,6 +13,7 @@
 
 // Forward declarations
 class QPainter;
+class Brush; // Added forward declaration for Brush
 // QRectF is included above via #include <QRectF>
 // QVariantMap is typedef for QMap<QString, QVariant> - no need to forward declare if QMap is included
 
@@ -82,6 +83,11 @@ public:
     bool hasHeight() const;       
     // Add more as per ItemPropertyFlag in wxItem and ItemType properties
 
+    // Brush-related properties
+    bool isTable() const;
+    bool isCarpet() const; // <-- ADDED THIS LINE
+    // Add isCarpet(), isWall() etc. here if they follow the same pattern of querying ItemTypeData
+
     // Setters for these flags (mainly for ItemManager/subclass setup)
     void setMoveable(bool on);
     void setBlocking(bool on);
@@ -127,6 +133,8 @@ public:
     quint16 lightLevel() const;
     quint16 lightColor() const;
     quint16 classification() const;
+
+    class Brush* getBrush() const; // Returns the brush associated with this item's type
 
     // New dedicated property setters
     void setDescriptionText(const QString& description); // Renamed
