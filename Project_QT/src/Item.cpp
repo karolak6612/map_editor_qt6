@@ -9,6 +9,8 @@
 #include <QByteArray>   // For unserializeOtbmAttributes
 #include <QIODevice>    // For QDataStream operations (usually included by QDataStream)
 
+#include "OtbmTypes.h" // For OTBM attribute enums
+
 // Attribute Key Definitions
 const QString Item::AttrCount = QStringLiteral("count");
 const QString Item::AttrActionID = QStringLiteral("actionId");
@@ -508,25 +510,7 @@ void Item::setClassification(quint16 classification) {
     }
 }
 
-// OTBM Attribute IDs (common values, may need adjustment based on specific OTBM version target)
-namespace OtbmAttr {
-    static const quint8 DESCRIPTION      = 0x01; // Often description or special text
-    static const quint8 EXT_FILE         = 0x02; // Not typically handled as a direct item attribute for storage
-    static const quint8 TILE_FLAGS       = 0x03; // Usually for Tile objects, not item attributes directly
-    static const quint8 ACTION_ID        = 0x04;
-    static const quint8 UNIQUE_ID        = 0x05;
-    // static const QString ItemAttrTextKey = Item::AttrText; // This was a note, Item::AttrText is used directly
-    static const quint8 TEXT             = 0x06; // For item text
-    static const quint8 WRITTEN_DATE     = 0x07;
-    static const quint8 WRITTEN_BY       = 0x08;
-    static const quint8 DESCRIPTION_ALT  = 0x09; // Often the primary "description" or "look text"
-    static const quint8 CHARGES_COUNT    = 0x0D;
-    static const quint8 DURATION         = 0x0F;
-    static const quint8 DEPOT_ID         = 0x10;
-    static const quint8 TELEPORT_DEST    = 0x12;
-    static const quint8 HOUSE_DOOR_ID    = 0x16; // If item is a house door, this is its house-unique ID
-    static const quint8 TIER             = 0x1A; // Example for Tier, might be different
-}
+// Note: The local OtbmAttr namespace has been removed. Constants are now from OtbmTypes.h
 
 bool Item::unserializeOtbmAttributes(QDataStream& stream) {
     if (stream.atEnd()) {
@@ -564,71 +548,78 @@ bool Item::unserializeOtbmAttributes(QDataStream& stream) {
         attributeValueStream.setByteOrder(QDataStream::LittleEndian);
 
         switch (attributeId) {
-            case OtbmAttr::DESCRIPTION:
-            case OtbmAttr::DESCRIPTION_ALT: {
+            case OTBM_ATTR_DESCRIPTION:
+            case OTBM_ATTR_DESC: { // OTBM_ATTR_DESC is often the primary one
                 setDescriptionText(QString::fromUtf8(attributeDataBytes));
                 break;
             }
-            case OtbmAttr::TEXT: {
+            case OTBM_ATTR_TEXT: {
                 setText(QString::fromUtf8(attributeDataBytes));
                 break;
             }
-            case OtbmAttr::WRITTEN_BY: {
+            case OTBM_ATTR_WRITTENBY: { // Corrected enum name
                 // Assuming no dedicated member for writer yet, just use attribute
                 setAttribute(Item::AttrWriter, QString::fromUtf8(attributeDataBytes));
                 break;
             }
-            case OtbmAttr::CHARGES_COUNT: {
-                if (dataLength < sizeof(quint16)) { // Basic validation
-                     qWarning() << "Item::unserializeOtbmAttributes - CHARGES_COUNT dataLength too short:" << dataLength;
-                     // Skip this attribute or return false depending on strictness
-                     break;
+            case OTBM_ATTR_COUNT:         // Typically quint8 (stack count)
+            case OTBM_ATTR_RUNE_CHARGES:  // Typically quint8 (rune charges)
+            case OTBM_ATTR_CHARGES: {     // Typically quint16 (item charges like amulets)
+                quint16 val = 0; // Use quint16 to accommodate OTBM_ATTR_CHARGES
+                if (attributeId == OTBM_ATTR_COUNT || attributeId == OTBM_ATTR_RUNE_CHARGES) {
+                    if (dataLength < sizeof(quint8)) {
+                        qWarning() << "Item::unserializeOtbmAttributes - Attribute" << attributeId << "dataLength too short:" << dataLength;
+                        break;
+                    }
+                    quint8 u8_val;
+                    attributeValueStream >> u8_val;
+                    val = u8_val;
+                } else { // OTBM_ATTR_CHARGES
+                    if (dataLength < sizeof(quint16)) {
+                        qWarning() << "Item::unserializeOtbmAttributes - Attribute" << attributeId << "dataLength too short:" << dataLength;
+                        break;
+                    }
+                    attributeValueStream >> val;
                 }
-                quint16 val;
-                attributeValueStream >> val;
-                // This could be charges or stack count.
-                // If this item is stackable, set its count.
-                if (isStackable()) {
+
+                if (isStackable() && attributeId == OTBM_ATTR_COUNT) { // Only OTBM_ATTR_COUNT maps to stackable count
                     setCount(val);
                 } else {
-                    // For non-stackable items, this typically represents charges.
+                    // OTBM_ATTR_CHARGES, OTBM_ATTR_RUNE_CHARGES, or OTBM_ATTR_COUNT for non-stackables
+                    // are treated as 'charges' for the item's specific charge counter.
                     setCharges(val);
                 }
-                // Note: setCount and setCharges should ideally handle their respective Attr keys.
-                // If AttrCount and AttrCharges can be distinct for some items even if not stackable,
-                // then more nuanced logic or direct setAttribute calls might be needed here based on item type.
-                // For now, this directs CHARGES_COUNT to either stackable count or dedicated charges.
                 break;
             }
-            case OtbmAttr::ACTION_ID: {
+            case OTBM_ATTR_ACTION_ID: {
                 if (dataLength < sizeof(quint16)) break;
                 quint16 val;
                 attributeValueStream >> val;
                 setActionId(val);
                 break;
             }
-            case OtbmAttr::UNIQUE_ID: {
+            case OTBM_ATTR_UNIQUE_ID: {
                 if (dataLength < sizeof(quint16)) break;
                 quint16 val;
                 attributeValueStream >> val;
                 setUniqueId(val);
                 break;
             }
-            case OtbmAttr::DURATION: {
+            case OTBM_ATTR_DURATION: {
                 if (dataLength < sizeof(quint32)) break;
                 quint32 val;
                 attributeValueStream >> val;
                 setAttribute(Item::AttrDuration, val);
                 break;
             }
-            case OtbmAttr::DEPOT_ID: {
+            case OTBM_ATTR_DEPOT_ID: {
                 if (dataLength < sizeof(quint16)) break;
                 quint16 val;
                 attributeValueStream >> val;
                 setAttribute(Item::AttrDepotID, val);
                 break;
             }
-            case OtbmAttr::TELEPORT_DEST: {
+            case OTBM_ATTR_TELE_DEST: { // Corrected enum name
                 if (dataLength < (sizeof(quint16) * 2 + sizeof(quint8))) break;
                 quint16 x, y;
                 quint8 z;
@@ -642,15 +633,15 @@ bool Item::unserializeOtbmAttributes(QDataStream& stream) {
                 }
                 break;
             }
-             case OtbmAttr::TIER: {
+             case OTBM_ATTR_TIER: {
                 if (dataLength < sizeof(quint16)) break;
                 quint16 val;
                 attributeValueStream >> val;
                 setClassification(val); // This will also set AttrTier via the setter
                 break;
             }
-            // case OtbmAttr::WRITTEN_DATE: // Example: quint32
-            // case OtbmAttr::HOUSE_DOOR_ID: // Example: quint8
+            // case OTBM_ATTR_WRITTENDATE: // Example: quint32
+            // case OTBM_ATTR_HOUSEDOORID: // Example: quint8
 
             default:
                 qDebug() << "Item::unserializeOtbmAttributes - Unhandled attribute ID:" << Qt::hex << attributeId << "Length:" << dataLength;
@@ -660,10 +651,10 @@ bool Item::unserializeOtbmAttributes(QDataStream& stream) {
         }
 
         // Check stream status for operations that read from attributeValueStream
-        bool isStringType = (attributeId == OtbmAttr::DESCRIPTION ||
-                             attributeId == OtbmAttr::DESCRIPTION_ALT ||
-                             attributeId == OtbmAttr::TEXT ||
-                             attributeId == OtbmAttr::WRITTEN_BY);
+        bool isStringType = (attributeId == OTBM_ATTR_DESCRIPTION ||
+                             attributeId == OTBM_ATTR_DESC ||
+                             attributeId == OTBM_ATTR_TEXT ||
+                             attributeId == OTBM_ATTR_WRITTENBY);
 
         if (!isStringType && attributeValueStream.status() != QDataStream::Ok) {
              // If dataLength was 0, status might be Ok but nothing was read, which is fine.
@@ -676,4 +667,109 @@ bool Item::unserializeOtbmAttributes(QDataStream& stream) {
         }
     }
     return true; // Successfully read all available attributes
+}
+
+bool Item::serializeOtbmAttributes(QDataStream& stream) const {
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    // Helper lambda to write string attributes
+    auto writeStringAttribute = [&](quint8 attrId, const QString& value) {
+        if (!value.isEmpty()) {
+            stream << attrId;
+            QByteArray utf8Value = value.toUtf8();
+            stream << static_cast<quint16>(utf8Value.length());
+            stream.writeRawData(utf8Value.constData(), utf8Value.length());
+        }
+    };
+
+    // Helper lambda for numeric attributes
+    template<typename T>
+    auto writeNumericAttribute = [&](quint8 attrId, T value, T defaultValue = 0) {
+        if (value != defaultValue) {
+            stream << attrId;
+            stream << static_cast<quint16>(sizeof(T));
+            stream << value;
+        }
+    };
+
+    // Write known attributes
+    // For description, use the direct member description_ if available, otherwise from attributes map
+    QString currentDescription = descriptionText(); // This getter accesses description_
+    if (!currentDescription.isEmpty() || hasAttribute(Item::AttrDescription)) { // Check direct member or if it was set via generic attributes
+         writeStringAttribute(OTBM_ATTR_DESC, currentDescription.isEmpty() ? getAttribute(Item::AttrDescription).toString() : currentDescription);
+    }
+
+    if (hasAttribute(Item::AttrText)) { // Text is purely from attributes map via getText()
+        writeStringAttribute(OTBM_ATTR_TEXT, getText());
+    }
+    if (hasAttribute(Item::AttrWriter)) {
+        writeStringAttribute(OTBM_ATTR_WRITTENBY, getAttribute(Item::AttrWriter).toString());
+    }
+
+    // Charges / Count
+    if (isStackable()) {
+        // OTBM_ATTR_COUNT is quint8 for stackable items
+        if (getCount() > 0) { // getCount() retrieves from AttrCount
+            stream << static_cast<quint8>(OTBM_ATTR_COUNT);
+            stream << static_cast<quint16>(sizeof(quint8));
+            stream << static_cast<quint8>(getCount());
+        }
+    } else if (charges_ > 0) { // Non-stackable, but has charges (from charges_ member)
+         // OTBM_ATTR_CHARGES is quint16
+         stream << static_cast<quint8>(OTBM_ATTR_CHARGES);
+         stream << static_cast<quint16>(sizeof(quint16));
+         stream << charges_; // Use direct member charges_
+    }
+    // Note: OTBM_ATTR_RUNE_CHARGES could also be handled if needed, typically quint8
+
+    if (getActionId() > 0) { // getActionId() retrieves from AttrActionID
+        writeNumericAttribute<quint16>(OTBM_ATTR_ACTION_ID, getActionId());
+    }
+    if (getUniqueId() > 0) { // getUniqueId() retrieves from AttrUniqueID
+        writeNumericAttribute<quint16>(OTBM_ATTR_UNIQUE_ID, getUniqueId());
+    }
+    if (classification_ > 0) { // Tier/Classification - direct member
+        writeNumericAttribute<quint16>(OTBM_ATTR_TIER, classification_);
+    }
+
+    if (hasAttribute(Item::AttrDuration) && getAttribute(Item::AttrDuration).toUInt() > 0) {
+        writeNumericAttribute<quint32>(OTBM_ATTR_DURATION, getAttribute(Item::AttrDuration).toUInt());
+    }
+    if (hasAttribute(Item::AttrDepotID) && getAttribute(Item::AttrDepotID).toUInt() > 0) {
+        writeNumericAttribute<quint16>(OTBM_ATTR_DEPOT_ID, static_cast<quint16>(getAttribute(Item::AttrDepotID).toUInt()));
+    }
+
+    if (hasAttribute(Item::AttrTeleDestX)) {
+        stream << static_cast<quint8>(OTBM_ATTR_TELE_DEST);
+        stream << static_cast<quint16>(sizeof(quint16) * 2 + sizeof(quint8)); // Size of x, y, z
+        stream << static_cast<quint16>(getAttribute(Item::AttrTeleDestX).toUInt());
+        stream << static_cast<quint16>(getAttribute(Item::AttrTeleDestY).toUInt());
+        stream << static_cast<quint8>(getAttribute(Item::AttrTeleDestZ).toUInt());
+    }
+
+    // TODO: Serialize other generic attributes from m_attributes if they don't map to known OTBM types
+    // This might involve using OTBM_ATTR_ATTRIBUTE_MAP for TFS 1.x+ style custom attributes.
+    // For now, only known/typed attributes are serialized.
+
+    return stream.status() == QDataStream::Ok;
+}
+
+bool Item::serializeOtbmNode(QDataStream& stream) const {
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    stream << static_cast<quint8>(OTBM_ITEM); // Use OTBM_NodeTypes_t enum value
+    stream << getServerId(); // quint16 serverId_ member
+
+    // Write attributes. The OTBM format implies attributes follow directly.
+    // The overall length of the item node (including attributes) is typically handled
+    // by the calling OtbmWriter when it finalizes the node.
+    if (!serializeOtbmAttributes(stream)) {
+        return false;
+    }
+
+    // After attributes, for OTBM, an end byte (0xFF) is typically written by the OtbmWriter
+    // to signify the end of the current node's properties/attributes, before writing children.
+    // This method only serializes the item's direct properties. Node structure is for OtbmWriter.
+
+    return stream.status() == QDataStream::Ok;
 }

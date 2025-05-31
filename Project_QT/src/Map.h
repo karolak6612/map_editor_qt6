@@ -25,6 +25,8 @@
 // or is a type alias for something like QVector3D for the purpose of this skeleton.
 // For a typical Qt Widgets application, QVector3D from QtGui could be an option.
 // Given the context, I will use a simple struct for now.
+#include <QDataStream> // For loadFromOTBM
+
 struct MapPos {
     int x = 0;
     int y = 0;
@@ -115,6 +117,8 @@ public:
     // Stubs for loading/saving
     bool load(const QString& path);
     bool save(const QString& path) const;
+    bool loadFromOTBM(QDataStream& stream); // Added
+    bool saveToOTBM(QDataStream& stream) const; // Added
 
 signals:
     void mapChanged(); // Example signal

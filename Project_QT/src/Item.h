@@ -161,6 +161,10 @@ public:
     // This method will read all attributes for this item.
     bool unserializeOtbmAttributes(QDataStream& stream);
 
+    // Returns true if successful, false on stream error.
+    bool serializeOtbmAttributes(QDataStream& stream) const;
+    bool serializeOtbmNode(QDataStream& stream) const; // Writes node type, ID, then attributes
+
 public:
     // Attribute Keys
     static const QString AttrCount;
