@@ -98,6 +98,19 @@ public:
     Selection* getSelection() const;
     void updateSelection(const QSet<MapPos>& newSelection); // Example: takes a set of positions
 
+    // New methods for commands and brushes
+    Tile* getOrCreateTile(const QPointF& pos);
+    Tile* getOrCreateTile(int x, int y, int z); // Overload
+    void removeTile(const QPointF& pos); // If it becomes empty
+    void removeTile(int x, int y, int z);   // Overload
+
+    // Ground operations taking item ID
+    void setGround(const QPointF& pos, quint16 groundItemId);
+    void removeGround(const QPointF& pos);
+
+    // Border/Wall update requests
+    void requestBorderUpdate(const QPointF& tilePos);
+    void requestWallUpdate(const QPointF& tilePos);
 
     // Stubs for loading/saving
     bool load(const QString& path);

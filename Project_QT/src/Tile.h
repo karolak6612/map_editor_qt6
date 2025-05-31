@@ -121,6 +121,13 @@ public:
     // Method to draw the tile and its contents
     void draw(QPainter* painter, const QRectF& targetScreenRect, const DrawingOptions& options) const;
 
+    // New methods for command interactions
+    QList<Item*> getWallItems() const;
+    void clearWalls();
+    void addWallItemById(quint16 wallItemId); // Creates item from ID and adds
+    void removeGround(); // Companion to setGround, specifically for removing.
+    void setGroundById(quint16 groundItemId); // Helper for Map::setGround to use
+
 signals:
     void tileChanged(int x, int y, int z); 
     void visualChanged(int x, int y, int z); 

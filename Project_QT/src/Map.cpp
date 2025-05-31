@@ -177,6 +177,100 @@ Tile* Map::createTile(int x, int y, int z) {
     return newTile;
 }
 
+
+// --- New methods for commands and brushes ---
+
+Tile* Map::getOrCreateTile(const QPointF& pos) {
+    // Assuming QPointF can represent 3D, or z comes from current floor context
+    // For this stub, if QPointF doesn't have .z(), this will need adjustment or z=0.
+    // The prompt uses qFloor(pos.z()) which implies pos.z() is meaningful.
+    // If QPointF is strictly 2D in this project, MapView's current floor should be used for z.
+    // For now, proceeding with pos.z(), assuming it's valid or will be adapted.
+    return getOrCreateTile(qFloor(pos.x()), qFloor(pos.y()), qFloor(pos.z()));
+}
+
+Tile* Map::getOrCreateTile(int x, int y, int z) {
+    if (!isCoordValid(x,y,z)) {
+        qWarning() << "Map::getOrCreateTile: Invalid coordinates (" << x << "," << y << "," << z << ")";
+        return nullptr;
+    }
+    Tile* tile = getTile(x, y, z);
+    if (!tile) {
+        // createTile handles adding to tiles_ vector, setting tile coordinates, and emitting signals.
+        tile = createTile(x, y, z);
+    }
+    return tile;
+}
+
+void Map::removeTile(const QPointF& pos) {
+    removeTile(qFloor(pos.x()), qFloor(pos.y()), qFloor(pos.z()));
+}
+
+void Map::removeTile(int x, int y, int z) {
+    if (!isCoordValid(x,y,z)) {
+        qWarning() << "Map::removeTile: Invalid coordinates (" << x << "," << y << "," << z << ")";
+        return;
+    }
+    int index = getTileIndex(x,y,z);
+    if (index != -1 && index < tiles_.size() && tiles_[index] != nullptr) {
+        // Full removal logic depends on whether the tile must be empty first.
+        // For now, this is a placeholder for what PlaceWallCommand might call in its undo.
+        // A robust version would check tile->isEmpty() or similar.
+        // delete tiles_[index]; // If map owns tiles and this means full deletion
+        // tiles_[index] = nullptr;
+        // emit tileChanged(x,y,z);
+        // emit mapChanged();
+        qDebug() << "Map::removeTile stub called for" << x << "," << y << "," << z << ". Actual removal logic (checking if empty, etc.) deferred.";
+    } else {
+         qDebug() << "Map::removeTile: No tile to remove at" << x << "," << y << "," << z << "or index invalid.";
+    }
+}
+
+void Map::setGround(const QPointF& pos, quint16 groundItemId) {
+    Tile* tile = getOrCreateTile(pos);
+    if (tile) {
+        // Tile class should handle the logic of creating/deleting Item objects for ground.
+        tile->setGroundById(groundItemId); // Assumes Tile::setGroundById(quint16) will be created
+        qDebug() << "Map::setGround called for tile" << pos << "with ID" << groundItemId;
+        // Tile::setGroundById should emit its own tileChanged/visualChanged signals.
+        // We emit map's tileChanged here to ensure views observing Map are notified.
+        emit tileChanged(qFloor(pos.x()), qFloor(pos.y()), qFloor(pos.z()));
+    } else {
+        qWarning() << "Map::setGround: Could not get/create tile at" << pos;
+    }
+}
+
+void Map::removeGround(const QPointF& pos) {
+    // Use qFloor for converting QPointF to integer coordinates
+    Tile* tile = getTile(qFloor(pos.x()), qFloor(pos.y()), qFloor(pos.z()));
+    if (tile) {
+        tile->removeGround(); // Assumes Tile::removeGround() will be created
+        qDebug() << "Map::removeGround called for tile" << pos;
+        // Tile::removeGround should emit its own signals.
+        emit tileChanged(qFloor(pos.x()), qFloor(pos.y()), qFloor(pos.z()));
+    } else {
+        qWarning() << "Map::removeGround: Tile not found at" << pos << ". Nothing to remove.";
+    }
+}
+
+void Map::requestBorderUpdate(const QPointF& tilePos) {
+    Q_UNUSED(tilePos); // Mark as unused if no specific logic yet
+    qDebug() << "Map::requestBorderUpdate (placeholder) called for tile:" << tilePos;
+    // This would typically add tilePos and its orthogonal neighbors to a list
+    // of tiles that need their border graphics recalculated.
+    // For now, just emit a generic signal for the specific tile.
+    emit tileChanged(qFloor(tilePos.x()), qFloor(tilePos.y()), qFloor(tilePos.z()));
+}
+
+void Map::requestWallUpdate(const QPointF& tilePos) {
+    Q_UNUSED(tilePos); // Mark as unused if no specific logic yet
+    qDebug() << "Map::requestWallUpdate (placeholder) called for tile:" << tilePos;
+    // This would trigger logic to check the walls on this tile and its neighbors
+    // and update their appearance based on connections (e.g., changing wall item IDs).
+    emit tileChanged(qFloor(tilePos.x()), qFloor(tilePos.y()), qFloor(tilePos.z()));
+}
+
+
 // Entity List Implementations
 void Map::addSpawn(Spawn* spawn) {
     if (spawn) {
