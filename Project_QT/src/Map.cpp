@@ -775,7 +775,7 @@ bool Map::loadFromOTBM(QDataStream& stream) {
                     while(reader.enterNode(itemNodeType)) {
                          if (itemNodeType == OTBM_ITEM) {
                             // Pass client version to item reading if ItemManager or Item needs it
-                            Item* item = reader.readItem(itemManager, m_otbItemsMajorVersion, m_otbItemsMinorVersion); // NEW
+                            Item* item = reader.readItem(itemManager, this->m_otbmMajorVersion, m_otbItemsMajorVersion, m_otbItemsMinorVersion); // NEW (passing map OTBM version)
                             // TODO (Task51): If item deserialization is version-dependent, OtbmReader::readItem
                             // might need to accept version parameters, or Item::unserializeOtbmAttributes
                             // might need to access the map's version via its parent or a global accessor.
@@ -910,9 +910,18 @@ bool Map::saveToOTBM(QDataStream& stream) const {
     if (!m_otbmVersionDescription.isEmpty()) {
         writer.writeAttributeString(OTBM_RootAttribute::OTBM_ROOT_ATTR_VERSION_DESC_STRING, m_otbmVersionDescription);
     }
-    qDebug() << "Map::saveToOTBM - Wrote OTBM version info: Major" << m_otbmMajorVersion
+    qDebug() << "Map::saveToOTBM - Wrote OTBM map format version info: Major" << m_otbmMajorVersion
              << "Minor" << m_otbmMinorVersion << "Build" << m_otbmBuildVersion
              << "Desc:" << m_otbmVersionDescription;
+
+    // Write map dimensions and OTB item versions as direct properties of the root node
+    writer.writeU16(this->width_); // Map width
+    writer.writeU16(this->height_); // Map height
+    writer.writeU32(this->m_otbItemsMajorVersion); // OTB items major version
+    writer.writeU32(this->m_otbItemsMinorVersion); // OTB items minor version
+
+    qDebug() << "Map::saveToOTBM - Wrote map dimensions: " << this->width_ << "x" << this->height_;
+    qDebug() << "Map::saveToOTBM - Wrote OTB Items Version: Major" << this->m_otbItemsMajorVersion << "Minor" << this->m_otbItemsMinorVersion;
 
     // TODO (Task51-MapVer): If saving to different OTBM target versions is required,
     // logic would be needed here to adjust the output structure. For example:
@@ -1001,7 +1010,7 @@ bool Map::saveToOTBM(QDataStream& stream) const {
                                 const QList<Item*>& items = tile->getItems();
                                 for (const Item* item : items) {
                                     if (item) {
-                                       writer.writeItemNode(item, m_otbItemsMajorVersion, m_otbItemsMinorVersion); // NEW
+                                       writer.writeItemNode(item, this->m_otbmMajorVersion, m_otbItemsMajorVersion, m_otbItemsMinorVersion); // UPDATED
                                        // TODO (Task51): If item serialization is version-dependent, OtbmWriter::writeItemNode
                                        // or Item::serializeOtbmAttributes might need version parameters.
                                     }

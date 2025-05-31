@@ -170,12 +170,12 @@ public:
     // This method will read all attributes for this item.
     // TODO (Task51): Consider if client version is needed for attribute interpretation.
     // If so, this method might need access to Map's version information.
-    bool unserializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion); // NEW
+    bool unserializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion); // Signature from previous step, no change here.
 
     // Returns true if successful, false on stream error.
     // TODO (Task51): Consider if client version affects how attributes are written.
-    bool serializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const; // NEW
-    bool serializeOtbmNode(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const; // NEW
+    bool serializeOtbmAttributes(QDataStream& stream, quint32 mapOtbmFormatVersion, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const; // UPDATED
+    bool serializeOtbmNode(QDataStream& stream, quint32 mapOtbmFormatVersion, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const; // UPDATED
 
 public:
     // Attribute Keys

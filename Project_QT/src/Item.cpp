@@ -595,9 +595,11 @@ bool Item::isCharged() const {
 // Note: The local OtbmAttr namespace has been removed. Constants are now from OtbmTypes.h
 
 bool Item::unserializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) {
-    // TODO: Use otbItemsMajorVersion and otbItemsMinorVersion for version-specific deserialization logic
-    Q_UNUSED(otbItemsMajorVersion);
-    Q_UNUSED(otbItemsMinorVersion);
+    // TODO: Use otbItemsMajorVersion for OTBMv1 subtype logic if not handled in OtbmReader
+    // Q_UNUSED(otbItemsMajorVersion); // mapOtbmFormatVersion is not available here, only OTB item versions.
+                                     // This was a mistake in plan. OtbmReader handles OTBMv1 subtype with mapOtbmFormatVersion.
+                                     // Here, we only have OTB item versions.
+    // Q_UNUSED(otbItemsMinorVersion); // Will be used for OTBM_ATTR_CHARGES
     if (stream.atEnd()) {
         // No attributes to read, which is valid.
         return true;
@@ -652,46 +654,42 @@ bool Item::unserializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorV
                 setAttribute(Item::AttrWriter, QString::fromUtf8(attributeDataBytes));
                 break;
             }
-            case OTBM_ATTR_COUNT: { // quint8
-                if (dataLength < sizeof(quint8)) { qWarning() << "Item::unserializeOtbmAttributes - OTBM_ATTR_COUNT dataLength too short:" << dataLength; break; }
+            case OTBM_ATTR_COUNT: { // quint8. OTBMv1 uses this for subtype for some items.
+                                    // This logic assumes OtbmReader already handled initial subtype for OTBMv1.
+                                    // So, if COUNT appears for OTBMv1 here, it's likely an actual count override or error.
+                if (dataLength < sizeof(quint8)) { qWarning("ATTR_COUNT data too short"); break; }
                 quint8 val; attributeValueStream >> val;
-                // Version logic based on wxwidgets:
-                // In OTBMv1 (mapOtbmVersion == 0), COUNT was used for subtype for stackable/splash/fluid.
-                // In later versions, COUNT is generally for stackable, CHARGES for others.
-                // Project_QT Item currently uses setCount for stackable, setCharges for other charged types.
-                // TODO (Task51-OTBMv1): Refine this based on actual map OTBM version if available, or rely on otbItemsMajorVersion if it reflects this.
-                // For now, assuming this generic logic or that initial subtype read handles OTBMv1.
                 if (iType.isStackable) {
                     setCount(val);
-                } else if (iType.group == ITEM_GROUP_SPLASH || iType.group == ITEM_GROUP_FLUID) {
-                    setCharges(val); // Or a dedicated subtype if Item has one.
                 } else {
-                    // If not stackable/splash/fluid, count might be considered charges by some servers for OTBMv1
-                    // This part needs to align with how ItemManager sets up ItemProperties and handles OTBMv1 initial subtype.
-                    setCharges(val); // Fallback, or specific logic for client version.
-                    qDebug() << "Item ID" << getServerId() << "not stackable/splash/fluid got OTBM_ATTR_COUNT:" << val << "- treating as charges.";
+                    // For non-stackables, COUNT attribute is unusual post-OTBMv1 subtype handling.
+                    // Could be charges for some specific old items or custom server usage.
+                    qDebug() << "Item ID" << getServerId() << "is not stackable but received OTBM_ATTR_COUNT:" << val << ". Treating as charges.";
+                    setCharges(val);
                 }
                 break;
             }
             case OTBM_ATTR_RUNE_CHARGES: { // Typically quint8
-                if (dataLength < sizeof(quint8)) { qWarning() << "Item::unserializeOtbmAttributes - OTBM_ATTR_RUNE_CHARGES dataLength too short:" << dataLength; break; }
+                if (dataLength < sizeof(quint8)) { qWarning("ATTR_RUNE_CHARGES data too short"); break; }
                 quint8 val; attributeValueStream >> val;
-                setCharges(val); // Assuming rune charges map to general charges
+                setCharges(val); // Map to general charges
                 break;
             }
             case OTBM_ATTR_CHARGES: { // Typically quint16
-                if (dataLength < sizeof(quint16)) { qWarning() << "Item::unserializeOtbmAttributes - OTBM_ATTR_CHARGES dataLength too short:" << dataLength; break; }
+                if (dataLength < sizeof(quint16)) { qWarning("ATTR_CHARGES data too short"); break; }
                 quint16 val; attributeValueStream >> val;
-                // wxwidgets: if (g_items.MinorVersion >= CLIENT_VERSION_820 && isCharged())
-                // TODO (Task51-ClientVer): Replace placeholder '10' with actual enum mapping for CLIENT_VERSION_820
-                if (otbItemsMinorVersion >= 10 && (iType.clientCharges || iType.extraChargeable) ) {
-                    setCharges(val);
-                } else if (otbItemsMinorVersion < 10) { // Older clients might not use this attribute or use it differently
-                    setCharges(val); // Default handling for older versions
-                } else {
-                   // Not charged type, but has ATTR_CHARGES? Could be an error or store as generic.
-                   qDebug() << "Item ID" << getServerId() << "is not client-charged type but received OTBM_ATTR_CHARGES:" << val;
-                   setAttribute(Item::AttrCharges, val); // Store as generic attribute
+                // Use OTB item minor version (ClientVersionID). CLIENT_VERSION_820 corresponds to value 10.
+                // TODO (Task51-ClientVer): Confirm '10' is the correct enum/define for CLIENT_VERSION_820 from client_version.h or similar.
+                if (otbItemsMinorVersion >= 10) { // CLIENT_VERSION_820 or newer
+                    if (iType.clientCharges || iType.extraChargeable) { // Check if item type actually supports charges
+                        setCharges(val);
+                    } else {
+                        qDebug() << "Item ID" << getServerId() << "received ATTR_CHARGES but type is not client-chargeable by OTB version" << otbItemsMinorVersion;
+                        // Optionally store as generic attribute if needed: setAttribute(Item::AttrCharges, val);
+                    }
+                } else { // Older clients might use ATTR_CHARGES differently or not at all for some items
+                    qDebug() << "Item ID" << getServerId() << "ATTR_CHARGES (" << val << ") encountered for older OTB version " << otbItemsMinorVersion << ". Applying directly.";
+                    setCharges(val); // Default handling: apply if present
                 }
                 break;
             }
@@ -774,13 +772,13 @@ bool Item::unserializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorV
     return true; // Successfully read all available attributes
 }
 
-bool Item::serializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const {
+bool Item::serializeOtbmAttributes(QDataStream& stream, quint32 mapOtbmFormatVersion, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const {
     // TODO (Task51): Implement client version specific logic for item attribute serialization.
     // This might involve:
     // - Writing different attribute IDs based on target client version.
-    // TODO: Use otbItemsMajorVersion and otbItemsMinorVersion for version-specific serialization logic
-    Q_UNUSED(otbItemsMajorVersion);
-    Q_UNUSED(otbItemsMinorVersion);
+    // TODO: Use otbItemsMajorVersion for OTBMv1 subtype logic if not handled in OtbmWriter
+    // Q_UNUSED(otbItemsMajorVersion); // mapOtbmFormatVersion will be used for this
+    // Q_UNUSED(otbItemsMinorVersion); // Will be used
     // - Converting values to older formats if necessary.
     // Map* map = qobject_cast<Map*>(this->parent()->parent()); // Example
     // if (map && map->getOtbmMajorVersion() < SOME_VERSION) { /* save old way */ }
@@ -827,33 +825,49 @@ bool Item::serializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorVer
     }
 
     // Charges / Count
-    // TODO (Task51-OTBMv1): This logic needs to be version aware, especially for OTBMv1 vs later.
-    // Example for OTBM_ATTR_COUNT / OTBM_ATTR_CHARGES
-    // if (mapOtbmVersion == 0) { // Assuming mapOtbmVersion is available, 0 for OTBM_VERSION_1
-    //     if (iType.isStackable || iType.group == ITEM_GROUP_SPLASH || iType.group == ITEM_GROUP_FLUID) {
-    //         stream << static_cast<quint8>(OTBM_ATTR_COUNT);
-    //         stream << static_cast<quint16>(sizeof(quint8));
-    //         stream << static_cast<quint8>(getCharges()); // Or getSubtype() if that's how it's stored
-    //     }
-    // } else { // Later OTBM versions
+    // Charges / Count
+    if (mapOtbmFormatVersion == 0) { // OTBM Version 1 (0-indexed from map's m_otbmMajorVersion)
+        // For OTBMv1, stackable, splash, and fluid items write their subtype/count using OTBM_ATTR_COUNT.
+        // This is *after* the initial subtype byte has already been written by OtbmWriter::writeItemNode
+        // IF this initial subtype logic is chosen for OtbmWriter.
+        // The current plan has OtbmReader handle initial subtype, so OtbmWriter might not need to write it separately.
+        // This attribute serialization should reflect what's left or what's standard for attributes.
+        // Based on wxwidgets Item::serializeAttributes, for OTBMv1, it does NOT write count/charges here again
+        // if it was already handled by the initial subtype byte.
+        // So, for OTBMv1, we might skip writing COUNT/CHARGES here if they were part of that initial byte.
+        // This needs careful alignment with OtbmReader's OTBMv1 handling.
+        // For now, let's assume if mapOtbmFormatVersion == 0, the initial subtype was the *only* place for these.
+        // So we do NOT write OTBM_ATTR_COUNT or OTBM_ATTR_CHARGES/OTBM_ATTR_RUNE_CHARGES for OTBMv1 here.
+        // TODO (Task51-OTBMv1): Confirm this interpretation. If OTBMv1 items can *also* have these as attributes beyond initial subtype.
+    } else { // Later OTBM Versions (mapOtbmFormatVersion >= 1, i.e., OTBM v2+)
         if (iType.isStackable) {
             if (getCount() > 0) {
                 stream << static_cast<quint8>(OTBM_ATTR_COUNT);
                 stream << static_cast<quint16>(sizeof(quint8));
                 stream << static_cast<quint8>(getCount());
             }
-        } else if (iType.clientCharges || iType.extraChargeable) {
-            // TODO (Task51-ClientVer): Choose between OTBM_ATTR_CHARGES (u16) and OTBM_ATTR_RUNE_CHARGES (u8)
-            // based on item type or specific client version requirements.
-            // For simplicity, using general OTBM_ATTR_CHARGES if charges > 0.
-            if (getCharges() > 0) { // getCharges() gets from charges_ member
-                stream << static_cast<quint8>(OTBM_ATTR_CHARGES);
-                stream << static_cast<quint16>(sizeof(quint16));
-                stream << static_cast<quint16>(getCharges());
+        }
+        // For non-stackable charged items (runes, amulets, etc.)
+        if (!iType.isStackable && (iType.clientCharges || iType.extraChargeable)) {
+            // Use OTB item minor version (ClientVersionID). CLIENT_VERSION_820 is 10.
+            // TODO (Task51-ClientVer): Confirm '10' for CLIENT_VERSION_820.
+            if (otbItemsMinorVersion >= 10) { // CLIENT_VERSION_820 or newer
+                if (getCharges() > 0) {
+                    stream << static_cast<quint8>(OTBM_ATTR_CHARGES); // Use OTBM_ATTR_CHARGES (u16)
+                    stream << static_cast<quint16>(sizeof(quint16));
+                    stream << static_cast<quint16>(getCharges());
+                }
+            } else { // Older clients might use OTBM_ATTR_RUNE_CHARGES (u8) or omit for some items.
+                if (iType.group == ITEM_GROUP_RUNE && getCharges() > 0) { // Example: only write for runes on old clients
+                   stream << static_cast<quint8>(OTBM_ATTR_RUNE_CHARGES);
+                   stream << static_cast<quint16>(sizeof(quint8));
+                   stream << static_cast<quint8>(getCharges());
+                }
+                // Other non-rune charged items on old clients might not save charges attribute.
             }
         }
-    // }
-    // Note: OTBM_ATTR_RUNE_CHARGES could also be handled if needed, typically quint8 for runes specifically.
+    }
+    // Note: OTBM_ATTR_RUNE_CHARGES could also be handled if needed for newer versions if distinct from general charges.
 
     if (getActionId() > 0) { // getActionId() retrieves from AttrActionID
         writeNumericAttribute<quint16>(OTBM_ATTR_ACTION_ID, getActionId());
@@ -887,7 +901,7 @@ bool Item::serializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorVer
     return stream.status() == QDataStream::Ok;
 }
 
-bool Item::serializeOtbmNode(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const {
+bool Item::serializeOtbmNode(QDataStream& stream, quint32 mapOtbmFormatVersion, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const {
     stream.setByteOrder(QDataStream::LittleEndian);
 
     stream << static_cast<quint8>(OTBM_ITEM); // Use OTBM_NodeTypes_t enum value
@@ -896,7 +910,7 @@ bool Item::serializeOtbmNode(QDataStream& stream, quint32 otbItemsMajorVersion, 
     // Write attributes. The OTBM format implies attributes follow directly.
     // The overall length of the item node (including attributes) is typically handled
     // by the calling OtbmWriter when it finalizes the node.
-    if (!serializeOtbmAttributes(stream, otbItemsMajorVersion, otbItemsMinorVersion)) {
+    if (!serializeOtbmAttributes(stream, mapOtbmFormatVersion, otbItemsMajorVersion, otbItemsMinorVersion)) {
         return false;
     }
 

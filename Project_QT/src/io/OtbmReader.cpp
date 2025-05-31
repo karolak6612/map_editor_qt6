@@ -179,7 +179,7 @@ QByteArray OtbmReader::readData(quint16 length) {
 }
 
 
-Item* OtbmReader::readItem(ItemManager* itemManager) {
+Item* OtbmReader::readItem(ItemManager* itemManager, quint32 mapOtbmFormatVersion, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) {
     // This method assumes the OTBM_ITEM node type has been read by enterNode,
     // or if called standalone for a single item, the stream is at the item's server ID.
     // For now, this OtbmReader is general. A map loader would call enterNode(OTBM_ITEM) first.
@@ -213,7 +213,56 @@ Item* OtbmReader::readItem(ItemManager* itemManager) {
     // Item::unserializeOtbmAttributes is responsible for reading all attributes
     // until it encounters an OTBM_NODE_END or another indicator.
     // It will use this OtbmReader's stream.
-    if (!item->unserializeOtbmAttributes(m_stream, otbItemsMajorVersion, otbItemsMinorVersion)) { // Pass the stream by reference
+
+    quint8 initialSubtype = 0;
+    bool initialSubtypeWasRead = false;
+
+    // Handle OTBMv1 initial subtype reading (mapOtbmFormatVersion == 0 means OTBM_VERSION_1)
+    // Note: Assuming mapOtbmFormatVersion is 0 for OTBM_VERSION_1.
+    // This value comes from the OTBM_ROOT_ATTR_VERSION_MAJOR attribute of the map file itself.
+    if (mapOtbmFormatVersion == 0) {
+        const ItemProperties& iType = itemManager->getItemProperties(itemId);
+        if (iType.isStackable || iType.group == ITEM_GROUP_SPLASH || iType.group == ITEM_GROUP_FLUID) {
+            m_stream >> initialSubtype; // Read the subtype byte
+            if (m_stream.status() != QDataStream::Ok) {
+                qWarning() << "OtbmReader::readItem - Failed to read initial subtype for OTBMv1 item ID:" << itemId << "Stream status:" << m_stream.status();
+                // Don't return nullptr yet, try to read attributes if item can be created
+                // but log this potential corruption.
+                m_stream.setStatus(QDataStream::ReadCorruptData); // Mark as corrupt
+            } else {
+                initialSubtypeWasRead = true;
+                // qDebug() << "OtbmReader::readItem - Read initial subtype" << initialSubtype << "for OTBMv1 item ID:" << itemId;
+            }
+        }
+    }
+
+    Item* item = itemManager->createItem(itemId);
+    if (!item) {
+        qWarning() << "OtbmReader::readItem - ItemManager failed to create item with ID:" << itemId;
+        // Need to skip attributes if item creation fails but stream is ok.
+        // This is complex. For now, assume if createItem fails, it's a critical issue.
+        if (m_stream.status() == QDataStream::Ok) m_stream.setStatus(QDataStream::ReadCorruptData);
+        return nullptr;
+    }
+
+    // If an initial subtype was read for OTBMv1, apply it now.
+    if (initialSubtypeWasRead) {
+        const ItemProperties& iType = itemManager->getItemProperties(itemId); // Get props again for safety
+        if (iType.isStackable) {
+            // For stackable items, OTBMv1 subtype 0 often meant 100, but here we treat it as actual count.
+            // If subtype is 0, it might mean default count (e.g. 1 for non-ammo). RME saved 0 as 0.
+            // Let's assume initialSubtype is the actual count or becomes it.
+            // If initialSubtype is 0 for a stackable, it might mean count 1 or indicate an issue.
+            // For now, if stackable and subtype is 0, use 1, else use subtype.
+            item->setCount(initialSubtype == 0 ? 1 : initialSubtype);
+        } else if (iType.group == ITEM_GROUP_SPLASH || iType.group == ITEM_GROUP_FLUID) {
+            item->setCharges(initialSubtype); // Fluids/splashes can have subtype 0 (empty)
+        }
+        // Item's modified flag should be false after this setup
+        item->setModified(false);
+    }
+
+    if (!item->unserializeOtbmAttributes(m_stream, otbItemsMajorVersion, otbItemsMinorVersion)) {
         qWarning() << "OtbmReader::readItem - Failed to unserialize attributes for item ID:" << itemId;
         delete item; // Clean up partially created item
         // The stream status should already be set by unserializeOtbmAttributes or its callees on error
