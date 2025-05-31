@@ -85,10 +85,23 @@ Then proceed to Step 3.`
             If I provide feedback, corrections, or requests via chat *during this process*, you **MUST** acknowledge immediately with: `USER_FEEDBACK_ACKNOWLEDGED: [Summarize my feedback/request]. Incorporating into current task.` Then, proceed to integrate the feedback.
             If you foresee that a specific piece of logic *within the current task's scope* cannot be completed due to missing information or an unforeseen issue, do not leave a `TODO` comment for it. Instead, immediately use `CLARIFICATION_REQUEST:` or `ERROR_ENCOUNTERED:` to inform the Auditor/Reviewer of the specific blocker for *this task*. The aim is for each task to be fully complete regarding its own scope upon your submission for review.
     *   **c. Self-Review for File Size Compliance:** Before committing (Step 4), review all new or significantly modified files. If any file now exceeds the ~250 line limit (or substantial change limit for existing large files) and was not previously refactored or flagged with `DEFERRED_REFACTORING_WARNING`, you **MUST** attempt to refactor it now. If refactoring at this stage is too risky, add `POST_TASK_REFACTORING_NEEDED: File [file.cpp/h] (XXXX lines) requires refactoring. Deferred due to [pre-commit risk].` to your activity feed and task summary.
+    *   **d. Final Task Scope Adherence Check (Mandatory Self-Reflection):**
+        i.   **Re-read Task Definition:** Carefully re-read the full description for the current [Task ID] from `tasks/migration_tasks_config.xml` (including its `<title>`) AND the entirety of its corresponding detailed specification file (`tasks/tasks_definitions/[TaskID].md`).
+        ii.  **Verify Coverage:** Against the complete task definition and your understanding of the required `wxwidgets` feature parity, mentally (or by quick code review if necessary) verify that:
+            *   All specified functionalities for *this task* have been implemented in `Project_QT/src`.
+            *   All necessary `wxwidgets` behaviors relevant to *this task* have been analyzed and replicated or consciously addressed.
+            *   All `Project_QT/src` files that *should have been modified or created* for this task have been.
+            *   There are no outstanding `TODO` comments *within the scope of this task's requirements*.
+        iii. **Declare Adherence Status in Activity Feed:** You **MUST** then explicitly state your findings in the activity feed using ONE of the following exact phrases:
+            *   `"ADHERENCE_CHECK_PASSED: All requirements for Task [Task ID] appear to be fully addressed. Proceeding to commit."`
+            *   `"ADHERENCE_CHECK_FAILED: Task [Task ID] - Found outstanding items: [Briefly list what's missing or incomplete, e.g., 'Edge case X from TaskID.md not handled', 'File Y.cpp was not updated as it should have been']. Will return to Step 3b (Implement and Iterate) to address these."`
+        iv.  **Action Based on Check:**
+            *   If `ADHERENCE_CHECK_PASSED`, you may then proceed to Step 4 (Locally Commit Completed Main Task).
+            *   If `ADHERENCE_CHECK_FAILED`, you **MUST NOT** proceed to commit. Instead, you **MUST** return to Step 3b (Implement and Iterate) to address the identified outstanding items for the current [Task ID]. Only after those are addressed should you re-attempt this Final Task Scope Adherence Check (Step 3d).
     *   All code modifications must occur *within your local repository copy*. Ensure all new code is placed in the `Project_QT/src` directory.
 
 4.  **Locally Commit Completed Main Task:**
-    *   When you believe you have fully addressed all requirements for the *current main task* as per its description in `tasks/migration_tasks_config.xml` and `tasks/tasks_definitions/[TaskID].md`, ensuring the code in `Project_QT/src` provides **100% feature parity with the original `wxwidgets` functionality for this task's scope** (and incorporating any iterative feedback I've provided during Step 3):
+    *   When you believe you have fully addressed all requirements for the *current main task* (passing Step 3d), ensuring the code in `Project_QT/src` provides **100% feature parity with the original `wxwidgets` functionality for this task's scope** (and incorporating any iterative feedback I've provided during Step 3):
         a.  It's advisable to ensure your local main branch (`<main_branch_name>` from `tasks/migration_tasks_config.xml`) is up-to-date with `origin/<main_branch_name>` before creating the feature branch. On your local VM: `git checkout <main_branch_name>`, then `git pull origin <main_branch_name>`.
         b.  From this up-to-date main branch, **create a new local feature branch *on your VM*.** Name it: `feature/task-<ID>-<short-task-title-from-xml>` (e.g., `feature/task-1-wximage-to-qimage`).
         c.  **Add all new and modified C++ source and header files** for THIS main task *within* `Project_QT/src` to this new local branch.
