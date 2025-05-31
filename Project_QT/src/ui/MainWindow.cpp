@@ -16,7 +16,10 @@
 #include <QStatusBar>  // Added for QStatusBar
 #include "BrushPalettePanel.h"   // Renamed from PlaceholderPaletteWidget.h
 #include "PlaceholderMinimapWidget.h"
-#include "PlaceholderPropertiesWidget.h"
+#include "TilePropertyEditor.h"  // Renamed from PlaceholderPropertiesWidget.h
+#include "Tile.h"                // For instantiating Tile in test slot
+#include "Item.h"                // For instantiating Item in test slot
+#include "ui/ReplaceItemsDialog.h" // For ReplaceItemsDialog
 #include "AutomagicSettingsDialog.h" // Include for AutomagicSettingsDialog
 #include "ClipboardData.h"           // For internal clipboard
 #include "Map.h"                     // For Map and MapPos
@@ -66,6 +69,49 @@ void MainWindow::setupMenuBar() {
     menuBar_->addMenu(createAboutMenu()); 
     menuBar_->addMenu(createServerMenu());
     menuBar_->addMenu(createIdlerMenu());
+
+    // Add Test Action for TilePropertyEditor to Experimental Menu
+    QMenu* experimentalMenu = nullptr;
+    QList<QMenu*> menus = menuBar_ ? menuBar_->findChildren<QMenu*>() : QList<QMenu*>();
+    for(QMenu* menu : menus){
+        if(menu->objectName() == QLatin1String("EXPERIMENTAL_MENU_PLACEHOLDER")){ // Assuming createExperimentalMenu sets an object name
+             experimentalMenu = menu;
+             break;
+        } else if (menu->title() == tr("E&xperimental")) { // Fallback to title
+            experimentalMenu = menu;
+            break;
+        }
+    }
+
+    if(!experimentalMenu && menuBar_){ // If still not found, and menuBar exists
+        // Try to find it by looking at the last few menus if a specific object name wasn't set.
+        // This is a bit fragile. Best to set an objectName in createExperimentalMenu.
+        QList<QAction*> menuActions = menuBar_->actions(); // These are QActions that show the menu titles
+        for(QAction* menuAction : menuActions) {
+            if(menuAction->menu() && menuAction->menu()->title() == tr("E&xperimental")) {
+                experimentalMenu = menuAction->menu();
+                break;
+            }
+        }
+    }
+
+    if(experimentalMenu){
+        experimentalMenu->addSeparator();
+        QAction* testTilePropsAction = new QAction(tr("Test Update Tile Properties"), this);
+        connect(testTilePropsAction, &QAction::triggered, this, &MainWindow::onTestUpdateTileProperties);
+        experimentalMenu->addAction(testTilePropsAction);
+    } else {
+        qWarning() << "Could not find Experimental menu to add 'Test Update Tile Properties' action. Creating Debug menu.";
+        QMenu* debugMenu = menuBar_ ? menuBar_->addMenu(tr("&Debug")) : nullptr;
+        if(debugMenu) {
+            QAction* testTilePropsAction = new QAction(tr("Test Update Tile Properties"), this);
+            connect(testTilePropsAction, &QAction::triggered, this, &MainWindow::onTestUpdateTileProperties);
+            debugMenu->addAction(testTilePropsAction);
+        } else {
+            qWarning() << "Could not add Test Tile Properties action to any menu.";
+        }
+    }
+
     qDebug() << "Menu bar setup complete with menus.";
 }
 
@@ -127,8 +173,8 @@ void MainWindow::setupDockWidgets() {
     propertiesDock_ = new QDockWidget(tr("Properties"), this);
     propertiesDock_->setObjectName(QStringLiteral("PropertiesDock"));
     propertiesDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
-    PlaceholderPropertiesWidget* propertiesContent = new PlaceholderPropertiesWidget("Properties", propertiesDock_);
-    propertiesDock_->setWidget(propertiesContent);
+    TilePropertyEditor* propertiesEditor = new TilePropertyEditor(propertiesDock_); // Renamed class, simplified constructor
+    propertiesDock_->setWidget(propertiesEditor);
     addDockWidget(Qt::RightDockWidgetArea, propertiesDock_); 
     propertiesDock_->setVisible(true); 
     if (viewPropertiesDockAction_) {
@@ -261,6 +307,16 @@ QMenu* MainWindow::createEditMenu() {
     editMenu->addAction(copyAction_);
     pasteAction_ = createAction("&Paste", "PASTE", QIcon::fromTheme("edit-paste"), QKeySequence::Paste, "Paste a part of the map.");
     editMenu->addAction(pasteAction_);
+    editMenu->addSeparator();
+
+    QAction* replaceItemsAction = new QAction(tr("Find/Replace Items..."), this);
+    replaceItemsAction->setObjectName("REPLACE_ITEMS_DIALOG_ACTION");
+    replaceItemsAction->setIcon(QIcon::fromTheme("edit-find-replace")); // Standard icon
+    replaceItemsAction->setStatusTip(tr("Open the Find and Replace Items dialog."));
+    // replaceItemsAction->setShortcut(QKeySequence(tr("Ctrl+Shift+R"))); // Optional shortcut
+    connect(replaceItemsAction, &QAction::triggered, this, &MainWindow::onShowReplaceItemsDialog);
+    editMenu->addAction(replaceItemsAction);
+
     return editMenu;
 }
 
@@ -1111,4 +1167,72 @@ void MainWindow::restoreToolBarState() {
     // For now, this explicit update after restore is a simpler placeholder.
     // The creation of these menu items already sets their initial checked state.
     // The onMenuActionTriggered handles user changes. This is for programmatically restored state.
+}
+
+void MainWindow::onTestUpdateTileProperties() {
+    // Create a couple of static dummy Tile objects for testing persistence across calls
+    static Tile testTile1(100, 200, 7); // Parentless for this static test case
+    static bool tile1Initialized = false;
+    if (!tile1Initialized) {
+        testTile1.setHouseId(123);
+        testTile1.setPZ(true);
+        testTile1.addZoneId(10);
+        testTile1.addZoneId(15);
+
+        Item* dummyGround = new Item(357); // Example ground item ID
+        // dummyGround->setParent(&testTile1); // This would make Tile a QObject, which it is now.
+        testTile1.setGround(dummyGround); // Tile takes ownership if designed so. Current Tile destructor deletes ground_.
+
+        // testTile1.setMapFlag(TileMapFlags::Modified, true); // Assuming TileMapFlags is the enum type
+        // testTile1.setMapFlag(TileMapFlags::Selected, true);
+        testTile1.setModified(true); // Use existing setters if available
+        testTile1.setSelected(true); // Use existing setters if available
+
+
+        testTile1.setStateFlag(Tile::TileStateFlag::HasTable, true); // Example state flag
+        tile1Initialized = true;
+        qDebug() << "Initialized Test Tile 1";
+    }
+
+    static Tile testTile2(55, 65, 6);
+    static bool tile2Initialized = false;
+    if (!tile2Initialized) {
+        testTile2.setNoPVP(true);
+        testTile2.addZoneId(99);
+        // No ground for this one to test itemCount variation
+        testTile2.setStateFlag(Tile::TileStateFlag::HasCarpet, true);
+        tile2Initialized = true;
+        qDebug() << "Initialized Test Tile 2";
+    }
+
+    // Alternate between testTile1, testTile2, and nullptr to test different states
+    static int testState = 0;
+    Tile* tileToDisplay = nullptr;
+    switch (testState) {
+        case 0: tileToDisplay = &testTile1; qDebug() << "Testing with Tile 1"; break;
+        case 1: tileToDisplay = &testTile2; qDebug() << "Testing with Tile 2"; break;
+        case 2: tileToDisplay = nullptr;    qDebug() << "Testing with nullptr Tile"; break;
+    }
+    testState = (testState + 1) % 3;
+
+    if (propertiesDock_) {
+        TilePropertyEditor* propertiesEditor = qobject_cast<TilePropertyEditor*>(propertiesDock_->widget());
+        if (propertiesEditor) {
+            qDebug() << "MainWindow: Calling displayTileProperties.";
+            propertiesEditor->displayTileProperties(tileToDisplay);
+        } else {
+            qWarning() << "MainWindow: Properties dock widget is not a TilePropertyEditor instance.";
+        }
+    } else {
+        qWarning() << "MainWindow: propertiesDock_ is null.";
+    }
+}
+
+void MainWindow::onShowReplaceItemsDialog() {
+    qDebug() << "Showing ReplaceItemsDialog...";
+    ReplaceItemsDialog dialog(this); // Parent the dialog to MainWindow
+    // dialog.setModal(true); // exec() makes it modal by default
+    int result = dialog.exec(); // Show modally and get result if needed
+    qDebug() << "ReplaceItemsDialog closed with result:" << result;
+    // result will be QDialog::Accepted or QDialog::Rejected if dialog uses accept()/reject()
 }

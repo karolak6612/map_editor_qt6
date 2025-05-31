@@ -16,7 +16,7 @@ class QActionGroup;
 class QDockWidget;                  // Added
 class BrushPalettePanel;     // Renamed from PlaceholderPaletteWidget
 class PlaceholderMinimapWidget;     // Added
-class PlaceholderPropertiesWidget;  // Added
+class TilePropertyEditor;  // Renamed from PlaceholderPropertiesWidget
 class QStatusBar;                   // Added for statusBar_ member or statusBar() usage
 class QCloseEvent; // Added for closeEvent
 class AutomagicSettingsDialog; // Forward declaration
@@ -76,6 +76,13 @@ private slots:
     void onPositionZChanged(int value);
     void onZoomControlChanged(int value);   
     void onLayerControlChanged(int index); 
+    // Slots for toolbar actions
+    void onBrushActionTriggered();
+    void onBrushShapeActionTriggered();
+    void onBrushSizeActionTriggered();
+    // Slot for testing TilePropertyEditor
+    void onTestUpdateTileProperties();
+    void onShowReplaceItemsDialog();
 
 private:
     // Main setup methods
