@@ -24,7 +24,7 @@
     </git_repository_details>
     <core_coding_mandates>
       <mandate id="M1">Provide all functional Qt6 code for the current task, ensuring 100% feature parity with the original `wxwidgets` functionality for that task's scope.</mandate>
-      <mandate id="M2">Produce complete and functional code for the current task. No incomplete snippets or placeholders unless explicitly part of a phased task (e.g., initial stubs).</mandate>
+      <mandate id="M2">Produce complete and functional code for the current task. No incomplete snippets or placeholders unless explicitly part of a phased task (e.g., initial stubs). This means if a piece of functionality is within the defined scope of the current task, it **MUST** be fully implemented. Leaving `// TODO: Implement this later` comments for functionality that *is* part of the current task's requirements is not acceptable.</mandate>
       <mandate id="M3">All new/modified Qt6 C++ code must reside within the `new_qt6_project_code_location` (i.e., `Project_QT/src`).</mandate>
       <mandate id="M4">Target Qt6 and adhere to modern C++ and Qt6 best practices, ensuring code is clean, maintainable, and well-documented where necessary.</mandate>
       <mandate id="M5">Thoroughly reference `old_source_code_location` (i.e., `wxwidgets`) for original logic. Critically analyze any existing code in `Project_QT/src` relevant to the current task; refactor, complete, or replace it as needed to meet requirements.</mandate>
