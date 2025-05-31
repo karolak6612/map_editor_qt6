@@ -5,6 +5,25 @@
 #include <QColor>   // For draw method placeholder
 #include "ItemManager.h" // Required for ItemTypeData access
 #include "Brush.h"       // Required for Brush* return type and itemTypeData->brush
+#include <QDataStream>  // For unserializeOtbmAttributes
+#include <QByteArray>   // For unserializeOtbmAttributes
+#include <QIODevice>    // For QDataStream operations (usually included by QDataStream)
+
+// Attribute Key Definitions
+const QString Item::AttrCount = QStringLiteral("count");
+const QString Item::AttrActionID = QStringLiteral("actionId");
+const QString Item::AttrUniqueID = QStringLiteral("uniqueId");
+const QString Item::AttrText = QStringLiteral("text");
+const QString Item::AttrDescription = QStringLiteral("description");
+const QString Item::AttrCharges = QStringLiteral("charges");
+const QString Item::AttrDuration = QStringLiteral("duration");
+const QString Item::AttrWriter = QStringLiteral("writer");
+const QString Item::AttrArticle = QStringLiteral("article");
+const QString Item::AttrTier = QStringLiteral("tier");
+const QString Item::AttrTeleDestX = QStringLiteral("teleportDestX");
+const QString Item::AttrTeleDestY = QStringLiteral("teleportDestY");
+const QString Item::AttrTeleDestZ = QStringLiteral("teleportDestZ");
+const QString Item::AttrDepotID = QStringLiteral("depotId");
 
 Item::Item(quint16 serverId, QObject *parent) : QObject(parent),
     serverId_(serverId),
@@ -124,7 +143,7 @@ const QMap<QString, QVariant>& Item::getAttributes() const {
 // Specific Attribute Accessors
 int Item::getCount() const {
     if (isStackable_) {
-        return getAttribute(QStringLiteral("count"), 1).toInt(); 
+        return getAttribute(Item::AttrCount, 1).toInt();
     }
     return 1;
 }
@@ -132,31 +151,40 @@ int Item::getCount() const {
 void Item::setCount(int count) {
     if (isStackable_) {
         if (count <= 0) count = 1;
-        setAttribute(QStringLiteral("count"), count);
+        setAttribute(Item::AttrCount, count); // This emits attributeChanged
+        // No direct member for stackable count other than through attributes_
     } else if (count != 1) {
         // qWarning() << "Item (ID:" << serverId_ << ", Name:" << name_ << ") is not stackable, cannot set count to" << count;
     }
 }
 
 QString Item::getText() const {
-    return getAttribute(QStringLiteral("text")).toString();
+    return getAttribute(Item::AttrText).toString();
 }
 void Item::setText(const QString& text) {
-    setAttribute(QStringLiteral("text"), text);
+    // This setter will update attributes_ and emit attributeChanged.
+    // If there was a direct member like text_, it would be set here too.
+    setAttribute(Item::AttrText, text);
 }
 
 int Item::getActionId() const {
-    return getAttribute(QStringLiteral("actionId")).toInt();
+    // Assuming actionId is primarily stored in attributes_
+    return getAttribute(Item::AttrActionID).toInt();
 }
 void Item::setActionId(int id) {
-    setAttribute(QStringLiteral("actionId"), id);
+    // This setter will update attributes_ and emit attributeChanged.
+    // If there was a direct member like actionId_, it would be set here too.
+    setAttribute(Item::AttrActionID, id);
 }
 
 int Item::getUniqueId() const {
-    return getAttribute(QStringLiteral("uniqueId")).toInt();
+    // Assuming uniqueId is primarily stored in attributes_
+    return getAttribute(Item::AttrUniqueID).toInt();
 }
 void Item::setUniqueId(int id) {
-    setAttribute(QStringLiteral("uniqueId"), id);
+    // This setter will update attributes_ and emit attributeChanged.
+    // If there was a direct member like uniqueId_, it would be set here too.
+    setAttribute(Item::AttrUniqueID, id);
 }
 
 // Boolean Flag Getters/Setters
@@ -235,14 +263,17 @@ QString Item::getDescription() const {
     }
     desc += ")";
 
-    if (hasAttribute(QStringLiteral("text"))) {
-        QString textAttr = getText();
+    // Append text from AttrText if available
+    if (hasAttribute(Item::AttrText)) {
+        QString textAttr = getText(); // getText() now uses Item::AttrText
         if(!textAttr.isEmpty()){
              desc += "\n\"" + textAttr + "\"";
         }
     }
-    if (hasAttribute(QStringLiteral("description"))) {
-        desc += "\n" + getAttribute(QStringLiteral("description")).toString();
+    // Append additional description from AttrDescription if available
+    // This is different from the primary item look description stored in member description_
+    if (hasAttribute(Item::AttrDescription)) {
+        desc += "\n" + getAttribute(Item::AttrDescription).toString();
     }
     return desc;
 }
@@ -342,6 +373,7 @@ QString Item::descriptionText() const { return description_; }
 void Item::setDescriptionText(const QString& description) {
     if (description_ != description) {
         description_ = description;
+        setAttribute(Item::AttrDescription, description_); // Keep attributes_ in sync
         emit propertyChanged();
     }
 }
@@ -406,6 +438,7 @@ quint16 Item::charges() const { return charges_; }
 void Item::setCharges(quint16 charges) {
     if (charges_ != charges) {
         charges_ = charges;
+        setAttribute(Item::AttrCharges, charges_); // Keep attributes_ in sync
         emit propertyChanged();
     }
 }
@@ -470,6 +503,177 @@ quint16 Item::classification() const { return classification_; }
 void Item::setClassification(quint16 classification) {
     if (classification_ != classification) {
         classification_ = classification;
+        setAttribute(Item::AttrTier, classification_); // Keep attributes_ in sync using AttrTier
         emit propertyChanged();
     }
+}
+
+// OTBM Attribute IDs (common values, may need adjustment based on specific OTBM version target)
+namespace OtbmAttr {
+    static const quint8 DESCRIPTION      = 0x01; // Often description or special text
+    static const quint8 EXT_FILE         = 0x02; // Not typically handled as a direct item attribute for storage
+    static const quint8 TILE_FLAGS       = 0x03; // Usually for Tile objects, not item attributes directly
+    static const quint8 ACTION_ID        = 0x04;
+    static const quint8 UNIQUE_ID        = 0x05;
+    // static const QString ItemAttrTextKey = Item::AttrText; // This was a note, Item::AttrText is used directly
+    static const quint8 TEXT             = 0x06; // For item text
+    static const quint8 WRITTEN_DATE     = 0x07;
+    static const quint8 WRITTEN_BY       = 0x08;
+    static const quint8 DESCRIPTION_ALT  = 0x09; // Often the primary "description" or "look text"
+    static const quint8 CHARGES_COUNT    = 0x0D;
+    static const quint8 DURATION         = 0x0F;
+    static const quint8 DEPOT_ID         = 0x10;
+    static const quint8 TELEPORT_DEST    = 0x12;
+    static const quint8 HOUSE_DOOR_ID    = 0x16; // If item is a house door, this is its house-unique ID
+    static const quint8 TIER             = 0x1A; // Example for Tier, might be different
+}
+
+bool Item::unserializeOtbmAttributes(QDataStream& stream) {
+    if (stream.atEnd()) {
+        // No attributes to read, which is valid.
+        return true;
+    }
+
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    while (!stream.atEnd()) {
+        quint8 attributeId;
+        stream >> attributeId;
+        if (stream.status() != QDataStream::Ok) {
+            qWarning() << "Item::unserializeOtbmAttributes - Failed to read attribute ID. Stream status:" << stream.status();
+            return false;
+        }
+
+        quint16 dataLength;
+        stream >> dataLength;
+        if (stream.status() != QDataStream::Ok) {
+            qWarning() << "Item::unserializeOtbmAttributes - Failed to read data length for attribute ID" << attributeId << ". Stream status:" << stream.status();
+            return false;
+        }
+
+        QByteArray attributeDataBytes;
+        if (dataLength > 0) { // Only resize and read if dataLength > 0
+            attributeDataBytes.resize(dataLength);
+            if (stream.readRawData(attributeDataBytes.data(), dataLength) != dataLength) {
+                qWarning() << "Item::unserializeOtbmAttributes - Failed to read attribute data for ID" << attributeId << "Expected length:" << dataLength;
+                return false;
+            }
+        }
+
+        QDataStream attributeValueStream(attributeDataBytes);
+        attributeValueStream.setByteOrder(QDataStream::LittleEndian);
+
+        switch (attributeId) {
+            case OtbmAttr::DESCRIPTION:
+            case OtbmAttr::DESCRIPTION_ALT: {
+                setDescriptionText(QString::fromUtf8(attributeDataBytes));
+                break;
+            }
+            case OtbmAttr::TEXT: {
+                setText(QString::fromUtf8(attributeDataBytes));
+                break;
+            }
+            case OtbmAttr::WRITTEN_BY: {
+                // Assuming no dedicated member for writer yet, just use attribute
+                setAttribute(Item::AttrWriter, QString::fromUtf8(attributeDataBytes));
+                break;
+            }
+            case OtbmAttr::CHARGES_COUNT: {
+                if (dataLength < sizeof(quint16)) { // Basic validation
+                     qWarning() << "Item::unserializeOtbmAttributes - CHARGES_COUNT dataLength too short:" << dataLength;
+                     // Skip this attribute or return false depending on strictness
+                     break;
+                }
+                quint16 val;
+                attributeValueStream >> val;
+                // This could be charges or stack count.
+                // If this item is stackable, set its count.
+                if (isStackable()) {
+                    setCount(val);
+                } else {
+                    // For non-stackable items, this typically represents charges.
+                    setCharges(val);
+                }
+                // Note: setCount and setCharges should ideally handle their respective Attr keys.
+                // If AttrCount and AttrCharges can be distinct for some items even if not stackable,
+                // then more nuanced logic or direct setAttribute calls might be needed here based on item type.
+                // For now, this directs CHARGES_COUNT to either stackable count or dedicated charges.
+                break;
+            }
+            case OtbmAttr::ACTION_ID: {
+                if (dataLength < sizeof(quint16)) break;
+                quint16 val;
+                attributeValueStream >> val;
+                setActionId(val);
+                break;
+            }
+            case OtbmAttr::UNIQUE_ID: {
+                if (dataLength < sizeof(quint16)) break;
+                quint16 val;
+                attributeValueStream >> val;
+                setUniqueId(val);
+                break;
+            }
+            case OtbmAttr::DURATION: {
+                if (dataLength < sizeof(quint32)) break;
+                quint32 val;
+                attributeValueStream >> val;
+                setAttribute(Item::AttrDuration, val);
+                break;
+            }
+            case OtbmAttr::DEPOT_ID: {
+                if (dataLength < sizeof(quint16)) break;
+                quint16 val;
+                attributeValueStream >> val;
+                setAttribute(Item::AttrDepotID, val);
+                break;
+            }
+            case OtbmAttr::TELEPORT_DEST: {
+                if (dataLength < (sizeof(quint16) * 2 + sizeof(quint8))) break;
+                quint16 x, y;
+                quint8 z;
+                attributeValueStream >> x >> y >> z;
+                if (attributeValueStream.status() == QDataStream::Ok) {
+                    setAttribute(Item::AttrTeleDestX, x);
+                    setAttribute(Item::AttrTeleDestY, y);
+                    setAttribute(Item::AttrTeleDestZ, z);
+                } else {
+                     qWarning() << "Item::unserializeOtbmAttributes - Failed to read TELEPORT_DEST components.";
+                }
+                break;
+            }
+             case OtbmAttr::TIER: {
+                if (dataLength < sizeof(quint16)) break;
+                quint16 val;
+                attributeValueStream >> val;
+                setClassification(val); // This will also set AttrTier via the setter
+                break;
+            }
+            // case OtbmAttr::WRITTEN_DATE: // Example: quint32
+            // case OtbmAttr::HOUSE_DOOR_ID: // Example: quint8
+
+            default:
+                qDebug() << "Item::unserializeOtbmAttributes - Unhandled attribute ID:" << Qt::hex << attributeId << "Length:" << dataLength;
+                QString unknownKey = QString("otbm_attr_%1").arg(attributeId, 2, 16, QChar('0'));
+                setAttribute(unknownKey, QVariant(attributeDataBytes)); // Store raw bytes
+                break;
+        }
+
+        // Check stream status for operations that read from attributeValueStream
+        bool isStringType = (attributeId == OtbmAttr::DESCRIPTION ||
+                             attributeId == OtbmAttr::DESCRIPTION_ALT ||
+                             attributeId == OtbmAttr::TEXT ||
+                             attributeId == OtbmAttr::WRITTEN_BY);
+
+        if (!isStringType && attributeValueStream.status() != QDataStream::Ok) {
+             // If dataLength was 0, status might be Ok but nothing was read, which is fine.
+            if (dataLength > 0) {
+                qWarning() << "Item::unserializeOtbmAttributes - Error reading value for attribute ID" << attributeId
+                           << "Stream status:" << attributeValueStream.status();
+                // Depending on strictness, might return false here.
+                // For now, we'll continue and try to read other attributes.
+            }
+        }
+    }
+    return true; // Successfully read all available attributes
 }

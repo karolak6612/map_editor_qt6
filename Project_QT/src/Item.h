@@ -6,6 +6,7 @@
 #include <QMap>
 #include <QVariant>
 #include <QtGlobal> // For quint16
+#include <QDataStream> // For unserializeOtbmAttributes
 
 #include <QRectF> // For draw method targetRect
 #include "DrawingOptions.h" // For draw method options
@@ -154,6 +155,28 @@ public:
     void setLightLevel(quint16 level);
     void setLightColor(quint16 color);
     void setClassification(quint16 classification);
+
+    // Returns true if successful, false on error (e.g., stream error)
+    // Stream should be positioned at the start of the item's attribute block.
+    // This method will read all attributes for this item.
+    bool unserializeOtbmAttributes(QDataStream& stream);
+
+public:
+    // Attribute Keys
+    static const QString AttrCount;
+    static const QString AttrActionID;
+    static const QString AttrUniqueID;
+    static const QString AttrText;
+    static const QString AttrDescription; // Note: distinct from member description_ for "look" text
+    static const QString AttrCharges;     // Note: distinct from member charges_
+    static const QString AttrDuration;
+    static const QString AttrWriter;
+    static const QString AttrArticle;
+    static const QString AttrTier;
+    static const QString AttrTeleDestX;
+    static const QString AttrTeleDestY;
+    static const QString AttrTeleDestZ;
+    static const QString AttrDepotID;
 
 signals:
     void attributeChanged(const QString& key, const QVariant& newValue);
