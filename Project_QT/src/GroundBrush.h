@@ -51,9 +51,13 @@ public:
     void setCurrentGroundItemId(quint16 itemId);
     quint16 getCurrentGroundItemId() const;
 
+    // Optional border support
+    virtual bool hasOptionalBorder() const;
+
 private:
     quint16 currentGroundItemId_ = 0;
     // Add a known default if possible, e.g. common grass ID, otherwise 0 indicates "not set".
+    // bool m_supportsOptionalBorder = false; // Member for hasOptionalBorder - can be added later
 };
 
 #endif // GROUNDBRUSH_H

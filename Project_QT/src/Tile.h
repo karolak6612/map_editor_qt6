@@ -109,9 +109,13 @@ public:
 
     // Carpet specific methods
     bool hasCarpet() const;
-    Item* getCarpet() const; // Gets the first item that is a carpet
-    void cleanCarpets(Map* map, bool dontDelete = false); // Removes carpet items
-    void carpetize(Map* map); // Applies carpet connection logic
+    Item* getCarpet() const;
+    void cleanCarpets(Map* map, bool dontDelete = false);
+    void carpetize(Map* map);
+
+    // Optional Border specific methods
+    void setOptionalBorder(bool on);
+    bool hasSetOptionalBorder() const;
 
     // House ID
     quint32 getHouseId() const;

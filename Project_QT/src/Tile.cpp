@@ -3,7 +3,7 @@
 #include "Creature.h"
 #include "Spawn.h"
 #include "TableBrush.h"
-#include "CarpetBrush.h" // Required for CarpetBrush::doCarpets
+#include "CarpetBrush.h"
 #include "DrawingOptions.h"
 #include <QPainter>
 #include <QColor>
@@ -51,17 +51,14 @@ void Tile::addItem(Item* item) {
         if (item->parent() != this) {
            item->setParent(this); 
         }
-        // Table-specific logic
         if (item && item->isTable()) {
             setStateFlag(TileStateFlag::HasTable, true);
         }
-        // Carpet-specific logic
         if (item && item->isCarpet()) {
             setStateFlag(TileStateFlag::HasCarpet, true);
         }
-        // End carpet-specific logic
         emit tileChanged(x_, y_, z_);
-        emit visualChanged(x_, y_, z_); // visualChanged should be emitted if HasTable/HasCarpet potentially changed
+        // visualChanged is handled by setStateFlag if the flag causes a visual change
     }
 }
 
@@ -72,12 +69,8 @@ bool Tile::removeItem(Item* item) {
     if (ground_ == item) {
         delete ground_;
         ground_ = nullptr;
-        // Table-specific logic (if ground could be a table)
-        // if (item && item->isTable()) { ... }
-        // Carpet-specific logic (if ground could be a carpet)
-        // if (item && item->isCarpet()) { ... }
         emit tileChanged(x_, y_, z_);
-        emit visualChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_); // Ground change is always visual
         return true;
     }
 
@@ -99,7 +92,7 @@ bool Tile::removeItem(Item* item) {
             }
         }
         emit tileChanged(x_, y_, z_);
-        emit visualChanged(x_, y_, z_); // visualChanged should be emitted if HasTable/HasCarpet potentially changed
+        // visualChanged is handled by setStateFlag if flags changed
         return true;
     }
     return false;
@@ -123,7 +116,7 @@ Item* Tile::removeItem(int index) {
         }
     }
     emit tileChanged(x_, y_, z_);
-    emit visualChanged(x_, y_, z_); // visualChanged should be emitted if HasTable/HasCarpet potentially changed
+    // visualChanged is handled by setStateFlag if flags changed
     return item;
 }
 
@@ -134,9 +127,8 @@ void Tile::setGround(Item* groundItem) {
     if (ground_ && ground_->parent() != this) {
         ground_->setParent(this);
     }
-    // If ground items can be tables/carpets, update() should handle flag changes.
     emit tileChanged(x_, y_, z_);
-    emit visualChanged(x_, y_, z_);
+    emit visualChanged(x_, y_, z_); // Ground change is always visual
 }
 
 Item* Tile::getGround() const {
@@ -163,7 +155,7 @@ void Tile::setCreature(Creature* newCreature) {
         creature_->setParent(this);
     }
     emit tileChanged(x_, y_, z_);
-    emit visualChanged(x_, y_, z_);
+    emit visualChanged(x_, y_, z_); // Creature change is visual
 }
 
 Spawn* Tile::spawn() const {
@@ -174,6 +166,7 @@ void Tile::setSpawn(Spawn* newSpawn) {
     if (spawn_ == newSpawn) return;
     spawn_ = newSpawn;
     emit tileChanged(x_, y_, z_); 
+    emit visualChanged(x_, y_, z_); // Spawn visibility might change
 }
 
 QList<Item*> Tile::getWallItems() const {
@@ -315,7 +308,8 @@ void Tile::setStateFlag(TileStateFlag flag, bool on) {
             flag == TileStateFlag::Modified ||
             flag == TileStateFlag::Blocking ||
             flag == TileStateFlag::HasTable ||
-            flag == TileStateFlag::HasCarpet) { // Added HasCarpet here
+            flag == TileStateFlag::HasCarpet ||
+            flag == TileStateFlag::OptionalBorder) { // Added OptionalBorder here
              emit visualChanged(x_,y_,z_);
         }
     }
@@ -422,15 +416,17 @@ void Tile::update() {
     }
     setStateFlag(TileStateFlag::HasTable, currentHasTable);
 
-    // Update HasCarpet state
     bool currentHasCarpet = false;
     for (Item* item : items_) {
-        if (item && item->isCarpet()) { // Assumes Item::isCarpet()
+        if (item && item->isCarpet()) {
             currentHasCarpet = true;
             break;
         }
     }
     setStateFlag(TileStateFlag::HasCarpet, currentHasCarpet);
+
+    // Note: TileStateFlag::OptionalBorder is typically set explicitly by user actions,
+    // not derived during update(). So, no specific update logic for it here.
 
     emit visualChanged(x_, y_, z_);
 }
@@ -471,10 +467,10 @@ void Tile::cleanTables(Map* map_param, bool dontDelete) {
         if (map_param) {
              map_param->markModified();
              emit tileChanged(x_, y_, z_);
-             emit visualChanged(x_, y_, z_);
+             // visualChanged is handled by setStateFlag
         } else {
              emit tileChanged(x_, y_, z_);
-             emit visualChanged(x_, y_, z_);
+             // visualChanged is handled by setStateFlag
         }
     }
 }
@@ -483,7 +479,7 @@ void Tile::tableize(Map* map_param) {
     TableBrush::doTables(map_param, this);
     bool stillHasTable = (getTable() != nullptr);
     setStateFlag(TileStateFlag::HasTable, stillHasTable);
-    emit visualChanged(x_, y_, z_);
+    // visualChanged is handled by setStateFlag
 }
 
 // Carpet specific method implementations
@@ -522,10 +518,10 @@ void Tile::cleanCarpets(Map* map_param, bool dontDelete) {
         if (map_param) {
              map_param->markModified();
              emit tileChanged(x_, y_, z_);
-             emit visualChanged(x_, y_, z_);
+             // visualChanged is handled by setStateFlag
         } else {
              emit tileChanged(x_, y_, z_);
-             emit visualChanged(x_, y_, z_);
+             // visualChanged is handled by setStateFlag
         }
     }
 }
@@ -534,15 +530,28 @@ void Tile::carpetize(Map* map_param) {
     CarpetBrush::doCarpets(map_param, this);
     bool stillHasCarpet = (getCarpet() != nullptr);
     setStateFlag(TileStateFlag::HasCarpet, stillHasCarpet);
-    emit visualChanged(x_, y_, z_);
+    // visualChanged is handled by setStateFlag
+}
+
+// Optional Border specific methods
+bool Tile::hasSetOptionalBorder() const {
+    return hasStateFlag(TileStateFlag::OptionalBorder);
+}
+
+void Tile::setOptionalBorder(bool on) {
+    // setStateFlag will emit tileChanged and visualChanged if the flag value actually changes.
+    // The Map or BorderSystem should observe these signals to trigger border recalculation.
+    setStateFlag(TileStateFlag::OptionalBorder, on);
+    // Optional: Add a specific log if the flag was indeed changed to help trace border logic.
+    // if (hasStateFlag(TileStateFlag::OptionalBorder) == on) { // This check is implicitly handled by setStateFlag's oldFlags check
+    //     qDebug() << "Tile::setOptionalBorder flag set to" << on << "for" << mapPos() << ". Border recalculation should be triggered by observing signals.";
+    // }
 }
 
 Map* Tile::getMap() const {
-    // This is a placeholder implementation.
-    // The actual way to get the Map* depends on how Tiles are managed by Map.
-    // If Map is the QObject parent of Tile:
-    // return qobject_cast<Map*>(parent());
-    return nullptr; // Or throw/assert if map context is critical and not available
+    // Placeholder: returning nullptr. Proper implementation depends on project structure.
+    // qWarning() << "Tile::getMap() placeholder called. Actual implementation needed if Map context is required directly by Tile methods like setOptionalBorder for borderize calls.";
+    return qobject_cast<Map*>(parent()); // A common approach if Map is the parent
 }
 
 void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const DrawingOptions& options) const {
