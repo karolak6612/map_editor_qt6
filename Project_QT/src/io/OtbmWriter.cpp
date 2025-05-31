@@ -83,7 +83,7 @@ void OtbmWriter::writeAttributeData(OTBM_ItemAttribute attrId, const QByteArray&
 
 
 // Higher-level object writing
-void OtbmWriter::writeItemNode(const Item* item, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) {
+void OtbmWriter::writeItemNode(const Item* item, quint32 mapOtbmFormatVersion, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) {
     if (!item) {
         qWarning() << "OtbmWriter::writeItemNode - Attempted to write null item.";
         return;
@@ -92,7 +92,7 @@ void OtbmWriter::writeItemNode(const Item* item, quint32 otbItemsMajorVersion, q
     // its server ID, and then calling its own serializeOtbmAttributes method.
     // The OtbmWriter's beginNode/endNode are for higher-level nodes (MapData, TileArea, Tile etc.)
     // that would wrap item nodes or other data.
-    if (!item->serializeOtbmNode(m_stream, otbItemsMajorVersion, otbItemsMinorVersion)) {
+    if (!item->serializeOtbmNode(m_stream, mapOtbmFormatVersion, otbItemsMajorVersion, otbItemsMinorVersion)) {
          qWarning() << "OtbmWriter::writeItemNode - Failed to serialize item node for ID:" << item->getServerId();
     }
 }
