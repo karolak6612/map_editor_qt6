@@ -59,6 +59,29 @@ enum class DoorTypeQt {
     // Add any other specific door/window types if identified from wx sources
 };
 
+// Enum for specific border piece alignments, corresponding to indices 0-12
+// that wxAutoBorder::tiles array likely used.
+// Based on wxwidgets/brush_enums.h BorderType values and AutoBorder::edgeNameToID
+enum class BorderEdgeType {
+    InvalidOrNone = 0, // Corresponds to BORDER_NONE or an unused slot
+
+    NorthHorizontal = 1,    // wx BORDER_TYPE NORTH_HORIZONTAL
+    EastHorizontal = 2,     // wx BORDER_TYPE EAST_HORIZONTAL (usually means a vertical segment on the East side)
+    SouthHorizontal = 3,    // wx BORDER_TYPE SOUTH_HORIZONTAL
+    WestHorizontal = 4,     // wx BORDER_TYPE WEST_HORIZONTAL (usually means a vertical segment on the West side)
+    NorthWestCorner = 5,    // wx BORDER_TYPE NORTHWEST_CORNER
+    NorthEastCorner = 6,    // wx BORDER_TYPE NORTHEAST_CORNER
+    SouthWestCorner = 7,    // wx BORDER_TYPE SOUTHWEST_CORNER
+    SouthEastCorner = 8,    // wx BORDER_TYPE SOUTHEAST_CORNER
+    NorthWestDiagonal = 9,  // wx BORDER_TYPE NORTHWEST_DIAGONAL ( \ )
+    NorthEastDiagonal = 10, // wx BORDER_TYPE NORTHEAST_DIAGONAL ( / )
+    SouthEastDiagonal = 11, // wx BORDER_TYPE SOUTHEAST_DIAGONAL ( \ )
+    SouthWestDiagonal = 12, // wx BORDER_TYPE SOUTHWEST_DIAGONAL ( / )
+
+    MaxEdgeTypes // Helper for array sizing or iteration. Value will be 13.
+};
+
+
 // Other common brush-related enums or structs could go here in the future.
 
 #endif // BRUSHCOMMON_H
