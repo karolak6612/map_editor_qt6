@@ -17,6 +17,7 @@ class Creature;
 class Spawn;
 class QPainter; // For draw method
 // MapPos is now included via Map.h
+// class Map; // Already forward declared via Map.h inclusion or defined if Map.h is fully included.
 
 class Tile : public QObject {
     Q_OBJECT
@@ -103,6 +104,11 @@ public:
     bool isModified() const; void setModified(bool on = true);
     bool isSelected() const; void setSelected(bool on = true);
 
+    // Table specific methods
+    bool hasTable() const;
+    Item* getTable() const; // Gets the first item that is a table
+    void cleanTables(Map* map, bool dontDelete = false); // Removes table items, optionally preserving them
+    void tableize(Map* map); // Applies table connection logic
 
     // House ID
     quint32 getHouseId() const;
@@ -146,6 +152,7 @@ private:
     QVector<quint16> zoneIds_;
     
     // quint8 minimapColor_ = 0xFF; // To be calculated by update()
+    Map* getMap() const; // Helper to get map context if needed, assumes Tile knows its parent Map
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(Tile::TileMapFlags)

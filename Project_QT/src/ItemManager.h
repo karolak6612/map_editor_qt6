@@ -9,6 +9,7 @@
 
 // Forward declaration
 class Item;
+class Brush; // Added forward declaration
 
 // Define enums based on wxwidgets/items.h (can be moved to a common types file later)
 // These are typically used as flags or simple type identifiers.
@@ -113,6 +114,7 @@ struct ItemProperties {
     qint16 armor = 0;
     quint16 volume = 0;           // For containers
     quint16 classification = 0;   // For Tibia 12.81+ items
+    Brush* brush = nullptr;       // Added Brush pointer
 
     // Default constructor to initialize with sensible defaults
     ItemProperties() = default; 

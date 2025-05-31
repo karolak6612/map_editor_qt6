@@ -3,8 +3,8 @@
 #include <QPainter> // For drawText and draw
 #include <QRectF>   // For drawText and draw
 #include <QColor>   // For draw method placeholder
-// QMap and QVariant are included via Item.h
-// DrawingOptions.h is included via Item.h
+#include "ItemManager.h" // Required for ItemTypeData access
+#include "Brush.h"       // Required for Brush* return type and itemTypeData->brush
 
 Item::Item(quint16 serverId, QObject *parent) : QObject(parent),
     serverId_(serverId),
@@ -62,8 +62,6 @@ Item::~Item() {
 // Core Properties
 quint16 Item::getServerId() const { return serverId_; }
 void Item::setServerId(quint16 id) { 
-    // This is unusual to change after creation as it's the primary ID.
-    // If it must be settable, ensure all systems depending on it are updated.
     if (serverId_ != id) {
         quint16 oldId = serverId_;
         serverId_ = id;
@@ -99,7 +97,7 @@ void Item::setTypeName(const QString& typeName) {
 // Generic Attribute System
 void Item::setAttribute(const QString& key, const QVariant& value) {
     QVariant oldValue = attributes_.value(key);
-    if (oldValue != value) { // Only emit if value actually changes
+    if (oldValue != value) {
         attributes_.insert(key, value);
         emit attributeChanged(key, value);
     }
@@ -115,7 +113,7 @@ bool Item::hasAttribute(const QString& key) const {
 
 void Item::clearAttribute(const QString& key) {
     if (attributes_.remove(key)) {
-        emit attributeChanged(key, QVariant()); // Emit with an invalid QVariant to signify removal
+        emit attributeChanged(key, QVariant());
     }
 }
 
@@ -126,19 +124,16 @@ const QMap<QString, QVariant>& Item::getAttributes() const {
 // Specific Attribute Accessors
 int Item::getCount() const {
     if (isStackable_) {
-        // Stackable items store count in attributes, default to 1 if not set.
         return getAttribute(QStringLiteral("count"), 1).toInt(); 
     }
-    return 1; // Non-stackable items always have a count of 1
+    return 1;
 }
 
 void Item::setCount(int count) {
     if (isStackable_) {
-        if (count <= 0) count = 1; // Stackable items should have at least 1
+        if (count <= 0) count = 1;
         setAttribute(QStringLiteral("count"), count);
     } else if (count != 1) {
-        // It's a common operation to try to set count, even for non-stackables (e.g. from generic code).
-        // Silently ignore or log a warning. For now, ignore.
         // qWarning() << "Item (ID:" << serverId_ << ", Name:" << name_ << ") is not stackable, cannot set count to" << count;
     }
 }
@@ -165,17 +160,17 @@ void Item::setUniqueId(int id) {
 }
 
 // Boolean Flag Getters/Setters
-#define ITEM_BOOL_PROPERTY_IMPL(PropName, MemberName) \
-bool Item::is##PropName() const { return MemberName; } \
-void Item::set##PropName(bool on) { if (MemberName != on) { MemberName = on; emit propertyChanged(); } }
+#define ITEM_BOOL_PROPERTY_IMPL(PropNameCapital, MemberName) \
+bool Item::is##PropNameCapital() const { return MemberName; } \
+void Item::set##PropNameCapital(bool on) { if (MemberName != on) { MemberName = on; emit propertyChanged(); } }
 
 ITEM_BOOL_PROPERTY_IMPL(Moveable, isMoveable_)
 ITEM_BOOL_PROPERTY_IMPL(Blocking, isBlocking_)
 ITEM_BOOL_PROPERTY_IMPL(Stackable, isStackable_)
 ITEM_BOOL_PROPERTY_IMPL(GroundTile, isGroundTile_)
 ITEM_BOOL_PROPERTY_IMPL(AlwaysOnTop, isAlwaysOnTop_)
-ITEM_BOOL_PROPERTY_IMPL(Teleport, isTeleport_)
-ITEM_BOOL_PROPERTY_IMPL(Container, isContainer_)
+ITEM_BOOL_PROPERTY_IMPL(Teleport, isTeleport_) // Renamed setIsTeleport to setTeleport for macro
+ITEM_BOOL_PROPERTY_IMPL(Container, isContainer_) // Renamed setIsContainer to setContainer for macro
 ITEM_BOOL_PROPERTY_IMPL(Readable, isReadable_)
 ITEM_BOOL_PROPERTY_IMPL(CanWriteText, canWriteText_)
 ITEM_BOOL_PROPERTY_IMPL(Pickupable, isPickupable_)
@@ -185,7 +180,7 @@ ITEM_BOOL_PROPERTY_IMPL(HasHookSouth, hasHookSouth_)
 ITEM_BOOL_PROPERTY_IMPL(HasHookEast, hasHookEast_)
 ITEM_BOOL_PROPERTY_IMPL(HasHeight, hasHeight_)
 
-// These have different names or slightly different logic
+// These have different names or slightly different logic from the macro
 bool Item::blocksMissiles() const { return blocksMissiles_; }
 void Item::setBlocksMissiles(bool on) { if (blocksMissiles_ != on) { blocksMissiles_ = on; emit propertyChanged(); } }
 
@@ -195,6 +190,28 @@ void Item::setBlocksPathfind(bool on) { if (blocksPathfind_ != on) { blocksPathf
 int Item::getTopOrder() const { return topOrder_; }
 void Item::setTopOrder(int order) { if (topOrder_ != order) { topOrder_ = order; emit propertyChanged(); } }
 
+// Renamed setters for macro compatibility in Item.h, now implementing them directly for clarity
+void Item::setIsTeleport(bool on) { setTeleport(on); }
+void Item::setIsContainer(bool on) { setContainer(on); }
+
+
+// Brush-related property implementations
+bool Item::isTable() const {
+    const ItemTypeData* itemTypeData = ItemManager::getInstance().getItemTypeData(serverId_);
+    if (itemTypeData) {
+        return itemTypeData->isTable; // Assumes ItemTypeData has a public bool member 'isTable'
+    }
+    return false;
+}
+
+Brush* Item::getBrush() const {
+    const ItemTypeData* itemTypeData = ItemManager::getInstance().getItemTypeData(serverId_);
+    if (itemTypeData) {
+        return itemTypeData->brush; // Assumes ItemTypeData has a public Brush* member 'brush'
+    }
+    return nullptr;
+}
+
 
 // Other methods
 QString Item::getDescription() const {
@@ -203,7 +220,7 @@ QString Item::getDescription() const {
         desc += " ";
     }
     desc += QString("(ID: %1").arg(serverId_);
-    if (clientId_ != 0 && clientId_ != serverId_) { // Only show client ID if different and non-zero
+    if (clientId_ != 0 && clientId_ != serverId_) {
         desc += QString(", ClientID: %1").arg(clientId_);
     }
     desc += ")";
@@ -214,49 +231,35 @@ QString Item::getDescription() const {
              desc += "\n\"" + textAttr + "\"";
         }
     }
-    if (hasAttribute(QStringLiteral("description"))) { // A specific description attribute
+    if (hasAttribute(QStringLiteral("description"))) {
         desc += "\n" + getAttribute(QStringLiteral("description")).toString();
     }
-    // Add more attributes to description as needed
     return desc;
 }
 
 void Item::drawText(QPainter* painter, const QRectF& targetRect, const QMap<QString, QVariant>& options) {
-    // Placeholder for drawing item count or other text directly on the item
     if (painter && isStackable_ && getCount() > 1) {
-        // Basic example: draw count in a corner.
-        // Actual positioning and font will need refinement.
         QString countStr = QString::number(getCount());
         painter->save();
-        // Example: small font, red color, bottom-right
         QFont font = painter->font();
-        font.setPointSize(font.pointSize() - 2 > 0 ? font.pointSize() - 2 : 6); // Make it small
+        font.setPointSize(font.pointSize() - 2 > 0 ? font.pointSize() - 2 : 6);
         painter->setFont(font);
         painter->setPen(Qt::red); 
-        // painter->drawText(targetRect, Qt::AlignBottom | Qt::AlignRight, countStr);
-        // For more control, calculate text rect:
         QRectF textRect = painter->fontMetrics().boundingRect(countStr);
-        textRect.moveBottomRight(targetRect.bottomRight() - QPointF(1,1)); // Small offset
+        textRect.moveBottomRight(targetRect.bottomRight() - QPointF(1,1));
         painter->drawText(textRect, countStr);
         painter->restore();
-        // qDebug() << "Item::drawText placeholder for item ID" << serverId_ << "Count:" << getCount();
     }
-    // Other text drawing (e.g., from getText() if item is readable and text is short) could go here
 }
 
 Item* Item::deepCopy() const {
-    // Create with same ID, parent will be set by caller (e.g., Tile or when placing on map)
     Item* newItem = new Item(this->serverId_); 
     
     newItem->clientId_ = this->clientId_;
     newItem->name_ = this->name_;
     newItem->itemTypeName_ = this->itemTypeName_;
-    
-    // Deep copy attributes: QMap<QString, QVariant> performs a deep copy if QVariants are simple types.
-    // If QVariants store pointers, more care is needed for those specific attributes.
     newItem->attributes_ = this->attributes_; 
 
-    // Copy boolean flags
     newItem->isMoveable_ = this->isMoveable_;
     newItem->isBlocking_ = this->isBlocking_;
     newItem->blocksMissiles_ = this->blocksMissiles_;
@@ -276,45 +279,56 @@ Item* Item::deepCopy() const {
     newItem->hasHookEast_ = this->hasHookEast_;
     newItem->hasHeight_ = this->hasHeight_;
     
+    // Copy new dedicated members
+    newItem->description_ = this->description_;
+    newItem->editorSuffix_ = this->editorSuffix_;
+    newItem->itemGroup_ = this->itemGroup_;
+    newItem->itemType_ = this->itemType_;
+    newItem->weight_ = this->weight_;
+    newItem->attack_ = this->attack_;
+    newItem->defense_ = this->defense_;
+    newItem->armor_ = this->armor_;
+    newItem->charges_ = this->charges_;
+    newItem->maxTextLen_ = this->maxTextLen_;
+    newItem->rotateTo_ = this->rotateTo_;
+    newItem->volume_ = this->volume_;
+    newItem->slotPosition_ = this->slotPosition_;
+    newItem->weaponType_ = this->weaponType_;
+    newItem->lightLevel_ = this->lightLevel_;
+    newItem->lightColor_ = this->lightColor_;
+    newItem->classification_ = this->classification_;
+
     return newItem;
 }
 
 void Item::draw(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
     if (!painter) return;
     
-    // Placeholder: Draw a semi-transparent blueish rectangle for a generic item
     QColor itemColor = Qt::blue;
-    // Use serverId_ for varied color, it's a quint16
-    // To make it more visually distinct, ensure serverId_ doesn't map to similar hues too often.
-    // A simple way is to multiply by a prime or a number that distributes well across 360 degrees.
     itemColor.setHsv(((serverId_ * 37) % 360), 200, 220); 
     
-    painter->fillRect(targetRect, QColor(itemColor.red(), itemColor.green(), itemColor.blue(), 128)); // Semi-transparent
-    painter->setPen(Qt::black); // Explicitly set pen for outline after fillRect might change it
+    painter->fillRect(targetRect, QColor(itemColor.red(), itemColor.green(), itemColor.blue(), 128));
+    painter->setPen(Qt::black);
     painter->drawRect(targetRect);
 
     if (options.drawDebugInfo) {
         painter->save();
-        // Draw bounding box (already drawn above, but could be a different color for debug)
         QPen debugPen(Qt::magenta);
         debugPen.setStyle(Qt::DotLine);
         painter->setPen(debugPen);
         painter->drawRect(targetRect);
 
-        // Draw Server ID
         QString idText = QString("ID:%1").arg(serverId_);
         QFont font = painter->font();
-        font.setPointSize(8); // Small font for debug info
+        font.setPointSize(8);
         painter->setFont(font);
-        painter->setPen(Qt::white); // Ensure text is visible
-        // Position text inside the box, e.g., top-left
+        painter->setPen(Qt::white);
         painter->drawText(targetRect.adjusted(2, 2, -2, -2), Qt::AlignTop | Qt::AlignLeft | Qt::TextDontClip, idText);
         painter->restore();
     }
 }
 
 // --- New Dedicated Property Getters and Setters ---
-
 QString Item::descriptionText() const { return description_; }
 void Item::setDescriptionText(const QString& description) {
     if (description_ != description) {
@@ -349,7 +363,6 @@ void Item::setItemType(ItemTypes_t type) {
 
 float Item::weight() const { return weight_; }
 void Item::setWeight(float weight) {
-    // Compare floats with a small epsilon if exact comparison is problematic
     if (qAbs(weight_ - weight) > 0.0001f) { 
         weight_ = weight;
         emit propertyChanged();
@@ -406,7 +419,7 @@ void Item::setRotateTo(quint16 id) {
 
 quint16 Item::volume() const { return volume_; }
 void Item::setVolume(quint16 volume) {
-    if (this->volume_ != volume) { // Explicit this-> to avoid confusion with a potential local variable
+    if (this->volume_ != volume) {
         this->volume_ = volume;
         emit propertyChanged();
     }

@@ -9,6 +9,7 @@
 // Forward declarations
 class MapView;
 class Tile;
+class TableBrush;
 class BaseMap;
 class QUndoCommand; // Added
 class Map;          // Added
@@ -97,8 +98,16 @@ public:
     virtual bool isGround() const;
     virtual bool isWall() const;
     virtual bool isWallDecoration() const; // New
+    virtual bool isTable() const;
     // ... (add other is[Type] from wxBrush as needed, defaulting to false) ...
     virtual bool isEraser() const;
+
+    // Type casting methods (similar to as[Type] in wxBrush)
+    // Default to returning nullptr, overridden by specific brush types
+    // Example for WallBrush might be: virtual WallBrush* asWall() { return nullptr; }
+    // For TableBrush:
+    virtual class TableBrush* asTable();
+    virtual const class TableBrush* asTable() const;
 
     // Core brush action interface
     virtual bool canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr) const = 0;
