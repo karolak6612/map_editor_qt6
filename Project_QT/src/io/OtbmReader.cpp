@@ -213,7 +213,7 @@ Item* OtbmReader::readItem(ItemManager* itemManager) {
     // Item::unserializeOtbmAttributes is responsible for reading all attributes
     // until it encounters an OTBM_NODE_END or another indicator.
     // It will use this OtbmReader's stream.
-    if (!item->unserializeOtbmAttributes(m_stream)) { // Pass the stream by reference
+    if (!item->unserializeOtbmAttributes(m_stream, otbItemsMajorVersion, otbItemsMinorVersion)) { // Pass the stream by reference
         qWarning() << "OtbmReader::readItem - Failed to unserialize attributes for item ID:" << itemId;
         delete item; // Clean up partially created item
         // The stream status should already be set by unserializeOtbmAttributes or its callees on error

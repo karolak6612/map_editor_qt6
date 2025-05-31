@@ -39,7 +39,7 @@ public:
     bool nextAttributeId(quint8& attrId);
 
     // Higher-level object reading
-    Item* readItem(ItemManager* itemManager);
+    Item* readItem(ItemManager* itemManager, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion);
 
     QDataStream& stream() { return m_stream; }
 

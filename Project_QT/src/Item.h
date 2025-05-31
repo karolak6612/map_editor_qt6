@@ -160,19 +160,22 @@ public:
     void setLightColor(quint16 color);
     void setClassification(quint16 classification);
 
+    // Helper methods
+    bool isFluidContainer() const;
+    bool isSplash() const;
+    bool isCharged() const;
+
     // Returns true if successful, false on error (e.g., stream error)
     // Stream should be positioned at the start of the item's attribute block.
     // This method will read all attributes for this item.
     // TODO (Task51): Consider if client version is needed for attribute interpretation.
     // If so, this method might need access to Map's version information.
-    // bool unserializeOtbmAttributes(QDataStream& stream, quint32 mapMajorVersion, quint32 mapMinorVersion); // Example signature change
-    bool unserializeOtbmAttributes(QDataStream& stream); // Current
+    bool unserializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion); // NEW
 
     // Returns true if successful, false on stream error.
     // TODO (Task51): Consider if client version affects how attributes are written.
-    // bool serializeOtbmAttributes(QDataStream& stream, quint32 mapMajorVersion, quint32 mapMinorVersion) const; // Example signature change
-    bool serializeOtbmAttributes(QDataStream& stream) const; // Current
-    bool serializeOtbmNode(QDataStream& stream) const; // Writes node type, ID, then attributes
+    bool serializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const; // NEW
+    bool serializeOtbmNode(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const; // NEW
 
 public:
     // Attribute Keys

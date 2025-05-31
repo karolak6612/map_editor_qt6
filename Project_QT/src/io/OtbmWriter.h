@@ -41,7 +41,7 @@ public:
 
     // Higher-level object writing
     // This method will handle the OTBM_ITEM node itself.
-    void writeItemNode(const Item* item);
+    void writeItemNode(const Item* item, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion);
 
     QDataStream& stream() { return m_stream; }
 
