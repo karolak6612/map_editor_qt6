@@ -2,13 +2,14 @@
 #include "Item.h"
 #include "Creature.h"
 #include "Spawn.h"
-#include "TableBrush.h" // Required for TableBrush::doTables
+#include "TableBrush.h"
+#include "CarpetBrush.h" // Required for CarpetBrush::doCarpets
 #include "DrawingOptions.h"
 #include <QPainter>
 #include <QColor>
 #include <QDebug>
-#include <algorithm> // For std::sort for zoneIds, and potentially std::find if needed
-#include <QMutableVectorIterator> // For cleanTables
+#include <algorithm>
+#include <QMutableVectorIterator>
 
 // Constructor
 Tile::Tile(int x, int y, int z, QObject *parent) 
@@ -20,7 +21,6 @@ Tile::Tile(int x, int y, int z, QObject *parent)
       houseId_(0),
       mapFlags_(TileMapFlag::NoFlag),
       stateFlags_(TileStateFlag::NoState) {
-    // items_ and zoneIds_ are default initialized (empty QVector)
 }
 
 // Destructor
@@ -31,7 +31,6 @@ Tile::~Tile() {
     items_.clear();
     delete creature_;
     creature_ = nullptr;
-    // spawn_ is not owned by Tile
 }
 
 // Coordinate Getters
@@ -56,9 +55,13 @@ void Tile::addItem(Item* item) {
         if (item && item->isTable()) {
             setStateFlag(TileStateFlag::HasTable, true);
         }
-        // End table-specific logic
+        // Carpet-specific logic
+        if (item && item->isCarpet()) {
+            setStateFlag(TileStateFlag::HasCarpet, true);
+        }
+        // End carpet-specific logic
         emit tileChanged(x_, y_, z_);
-        emit visualChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_); // visualChanged should be emitted if HasTable/HasCarpet potentially changed
     }
 }
 
@@ -70,12 +73,9 @@ bool Tile::removeItem(Item* item) {
         delete ground_;
         ground_ = nullptr;
         // Table-specific logic (if ground could be a table)
-        // if (item && item->isTable()) { // item here is already ground_
-        //     if (!getTable()) { // Check if NO other table items remain (including items_)
-        //         setStateFlag(TileStateFlag::HasTable, false);
-        //     }
-        // }
-        // End table-specific logic
+        // if (item && item->isTable()) { ... }
+        // Carpet-specific logic (if ground could be a carpet)
+        // if (item && item->isCarpet()) { ... }
         emit tileChanged(x_, y_, z_);
         emit visualChanged(x_, y_, z_);
         return true;
@@ -85,17 +85,21 @@ bool Tile::removeItem(Item* item) {
     if (index != -1) {
         Item* removedItem = items_.takeAt(index);
         bool wasTable = removedItem && removedItem->isTable();
+        bool wasCarpet = removedItem && removedItem->isCarpet();
         delete removedItem;
 
-        // Table-specific logic
         if (wasTable) {
-            if (!getTable()) { // Check if NO other table items remain
+            if (!getTable()) {
                 setStateFlag(TileStateFlag::HasTable, false);
             }
         }
-        // End table-specific logic
+        if (wasCarpet) {
+            if (!getCarpet()) {
+                setStateFlag(TileStateFlag::HasCarpet, false);
+            }
+        }
         emit tileChanged(x_, y_, z_);
-        emit visualChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_); // visualChanged should be emitted if HasTable/HasCarpet potentially changed
         return true;
     }
     return false;
@@ -108,44 +112,29 @@ Item* Tile::removeItem(int index) {
     Item* item = items_.takeAt(index);
     item->setParent(nullptr);
 
-    // Table-specific logic
     if (item && item->isTable()) {
-        if (!getTable()) { // Check if NO other table items remain
+        if (!getTable()) {
             setStateFlag(TileStateFlag::HasTable, false);
         }
     }
-    // End table-specific logic
-
+    if (item && item->isCarpet()) {
+        if (!getCarpet()) {
+            setStateFlag(TileStateFlag::HasCarpet, false);
+        }
+    }
     emit tileChanged(x_, y_, z_);
-    emit visualChanged(x_, y_, z_);
+    emit visualChanged(x_, y_, z_); // visualChanged should be emitted if HasTable/HasCarpet potentially changed
     return item;
 }
 
 void Tile::setGround(Item* groundItem) {
     if (ground_ == groundItem) return;
-
-    // Table-specific logic (if old ground was a table)
-    // Item* oldGround = ground_; // Keep pointer to old ground for check after swapping
-
     delete ground_;
     ground_ = groundItem;
     if (ground_ && ground_->parent() != this) {
         ground_->setParent(this);
     }
-
-    // Table-specific logic
-    // bool oldGroundWasTable = oldGround && oldGround->isTable();
-    // bool newGroundIsTable = ground_ && ground_->isTable();
-    // if (oldGroundWasTable && !newGroundIsTable) { // If a table ground is replaced by non-table
-    //     if (!getTable()) { // Check items_ as well
-    //         setStateFlag(TileStateFlag::HasTable, false);
-    //     }
-    // } else if (newGroundIsTable) { // If new ground is a table
-    //     setStateFlag(TileStateFlag::HasTable, true);
-    // }
-    // A general update() call at the end is safer if ground items can be tables
-    // For now, assuming tables are primarily in items_ and update() will handle ground if it becomes a table.
-
+    // If ground items can be tables/carpets, update() should handle flag changes.
     emit tileChanged(x_, y_, z_);
     emit visualChanged(x_, y_, z_);
 }
@@ -232,15 +221,8 @@ void Tile::addWallItemById(quint16 wallItemId) {
 
 void Tile::removeGround() {
     if (ground_) {
-        // Table-specific logic (if ground was a table)
-        // bool groundWasTable = ground_ && ground_->isTable();
         delete ground_;
         ground_ = nullptr;
-        // if (groundWasTable) {
-        //     if (!getTable()) { // Check items_
-        //         setStateFlag(TileStateFlag::HasTable, false);
-        //     }
-        // }
         emit tileChanged(x_, y_, z_);
         emit visualChanged(x_, y_, z_);
         qDebug() << "Tile::removeGround called for" << mapPos();
@@ -279,7 +261,6 @@ bool Tile::isEmpty() const {
 Item* Tile::getTopLookItem() const {
     Item* topItem = nullptr;
     int currentTopOrder = -1;
-
     if (ground_ && ground_->getTopOrder() > currentTopOrder) {
         topItem = ground_;
         currentTopOrder = ground_->getTopOrder();
@@ -330,7 +311,11 @@ void Tile::setStateFlag(TileStateFlag flag, bool on) {
     stateFlags_.setFlag(flag, on);
      if (oldFlags != stateFlags_) {
         emit tileChanged(x_, y_, z_); 
-        if (flag == TileStateFlag::Selected || flag == TileStateFlag::Modified || flag == TileStateFlag::Blocking || flag == TileStateFlag::HasTable) { // Added HasTable
+        if (flag == TileStateFlag::Selected ||
+            flag == TileStateFlag::Modified ||
+            flag == TileStateFlag::Blocking ||
+            flag == TileStateFlag::HasTable ||
+            flag == TileStateFlag::HasCarpet) { // Added HasCarpet here
              emit visualChanged(x_,y_,z_);
         }
     }
@@ -428,7 +413,6 @@ void Tile::update() {
     }
     setStateFlag(TileStateFlag::Blocking, newBlockingState);
 
-    // Update HasTable state
     bool currentHasTable = false;
     for (Item* item : items_) {
         if (item && item->isTable()) {
@@ -436,11 +420,17 @@ void Tile::update() {
             break;
         }
     }
-    // If ground items can be tables, include this:
-    // if (!currentHasTable && ground_ && ground_->isTable()) {
-    //    currentHasTable = true;
-    // }
     setStateFlag(TileStateFlag::HasTable, currentHasTable);
+
+    // Update HasCarpet state
+    bool currentHasCarpet = false;
+    for (Item* item : items_) {
+        if (item && item->isCarpet()) { // Assumes Item::isCarpet()
+            currentHasCarpet = true;
+            break;
+        }
+    }
+    setStateFlag(TileStateFlag::HasCarpet, currentHasCarpet);
 
     emit visualChanged(x_, y_, z_);
 }
@@ -449,19 +439,14 @@ void Tile::update() {
 bool Tile::hasTable() const {
     return hasStateFlag(TileStateFlag::HasTable);
 }
-
 Item* Tile::getTable() const {
     for (Item* item : items_) {
         if (item && item->isTable()) {
             return item;
         }
     }
-    // if (ground_ && ground_->isTable()) { // If ground can be a table
-    //     return ground_;
-    // }
     return nullptr;
 }
-
 void Tile::cleanTables(Map* map_param, bool dontDelete) {
     bool changed = false;
     QMutableVectorIterator<Item*> it(items_);
@@ -477,59 +462,91 @@ void Tile::cleanTables(Map* map_param, bool dontDelete) {
             changed = true;
         }
     }
-
-    // If ground can be a table:
-    // if (ground_ && ground_->isTable()) {
-    //     if (dontDelete) {
-    //         // ground_ = nullptr; // Detach without deleting if caller handles it
-    //     } else {
-    //         delete ground_;
-    //         ground_ = nullptr;
-    //     }
-    //     changed = true;
-    // }
-
     if (changed) {
-        // Re-evaluate HasTable flag based on remaining items
         if (!getTable()) {
             setStateFlag(TileStateFlag::HasTable, false);
         } else {
-             setStateFlag(TileStateFlag::HasTable, true); // Should be redundant if getTable() is now null
+             setStateFlag(TileStateFlag::HasTable, true);
         }
-
         if (map_param) {
              map_param->markModified();
              emit tileChanged(x_, y_, z_);
              emit visualChanged(x_, y_, z_);
-        } else { // Still emit local signals if map context is not available
+        } else {
              emit tileChanged(x_, y_, z_);
              emit visualChanged(x_, y_, z_);
         }
     }
 }
-
 void Tile::tableize(Map* map_param) {
-    if (!map_param) {
-        // qDebug() << "Tile::tableize called with null map for tile at" << mapPos();
-        return;
-    }
+    if (!map_param) return;
     TableBrush::doTables(map_param, this);
-
     bool stillHasTable = (getTable() != nullptr);
     setStateFlag(TileStateFlag::HasTable, stillHasTable);
-    
     emit visualChanged(x_, y_, z_);
 }
 
-// Placeholder for Tile::getMap() - actual implementation depends on how Tile knows its Map
-// For example, if Map is always the parent QObject:
-// Map* Tile::getMap() const { return qobject_cast<Map*>(parent()); }
-// Or if it's passed around/stored differently.
-// This is not strictly needed for the current changes as map context is passed to tableize/cleanTables.
+// Carpet specific method implementations
+bool Tile::hasCarpet() const {
+    return hasStateFlag(TileStateFlag::HasCarpet);
+}
+Item* Tile::getCarpet() const {
+    for (Item* item : items_) {
+        if (item && item->isCarpet()) {
+            return item;
+        }
+    }
+    return nullptr;
+}
+void Tile::cleanCarpets(Map* map_param, bool dontDelete) {
+    bool changed = false;
+    QMutableVectorIterator<Item*> it(items_);
+    while (it.hasNext()) {
+        Item* item = it.next();
+        if (item && item->isCarpet()) {
+            if (dontDelete) {
+                it.remove();
+            } else {
+                it.remove();
+                delete item;
+            }
+            changed = true;
+        }
+    }
+    if (changed) {
+        if (!getCarpet()) {
+            setStateFlag(TileStateFlag::HasCarpet, false);
+        } else {
+             setStateFlag(TileStateFlag::HasCarpet, true);
+        }
+        if (map_param) {
+             map_param->markModified();
+             emit tileChanged(x_, y_, z_);
+             emit visualChanged(x_, y_, z_);
+        } else {
+             emit tileChanged(x_, y_, z_);
+             emit visualChanged(x_, y_, z_);
+        }
+    }
+}
+void Tile::carpetize(Map* map_param) {
+    if (!map_param) return;
+    CarpetBrush::doCarpets(map_param, this);
+    bool stillHasCarpet = (getCarpet() != nullptr);
+    setStateFlag(TileStateFlag::HasCarpet, stillHasCarpet);
+    emit visualChanged(x_, y_, z_);
+}
+
+Map* Tile::getMap() const {
+    // This is a placeholder implementation.
+    // The actual way to get the Map* depends on how Tiles are managed by Map.
+    // If Map is the QObject parent of Tile:
+    // return qobject_cast<Map*>(parent());
+    return nullptr; // Or throw/assert if map context is critical and not available
+}
 
 void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const DrawingOptions& options) const {
     if (!painter) return;
-
     if (options.highlightSelectedTile && isSelected()) {
         painter->save();
         QColor selectionColor = Qt::yellow;
@@ -541,7 +558,6 @@ void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const Drawing
         painter->drawRect(targetScreenRect);
         painter->restore();
     }
-
     if (options.showGround && ground_) {
         DrawingOptions groundOptions = options;
         ground_->draw(painter, targetScreenRect, groundOptions);
@@ -550,7 +566,6 @@ void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const Drawing
         painter->fillRect(targetScreenRect, QColor(50, 50, 50, 100));
         painter->restore();
     }
-
     if (options.showItems) {
         for (Item* item : items_) {
             if (item) {
@@ -559,11 +574,9 @@ void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const Drawing
             }
         }
     }
-
     if (options.showCreatures && creature_) {
         creature_->draw(painter, targetScreenRect, options);
     }
-
     if (options.showSpawns && spawn_) {
         painter->save();
         painter->setBrush(QColor(128, 0, 128, 100));
@@ -571,13 +584,11 @@ void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const Drawing
         painter->drawEllipse(targetScreenRect.topLeft() + QPointF(2,2), 4, 4); 
         painter->restore();
     }
-    
     if (options.showTileFlags) {
         QString flagsText;
         if (hasMapFlag(TileMapFlag::ProtectionZone)) flagsText += "PZ ";
         if (hasMapFlag(TileMapFlag::NoPVP)) flagsText += "NoPvP ";
         if (hasMapFlag(TileMapFlag::PVPZone)) flagsText += "PvP ";
-        
         if (!flagsText.isEmpty()) {
             painter->save();
             painter->setPen(Qt::white);
@@ -588,7 +599,6 @@ void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const Drawing
             painter->restore();
         }
     }
-
     if (options.drawDebugInfo) {
         painter->save();
         QFont font = painter->font();

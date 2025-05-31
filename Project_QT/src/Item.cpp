@@ -169,8 +169,8 @@ ITEM_BOOL_PROPERTY_IMPL(Blocking, isBlocking_)
 ITEM_BOOL_PROPERTY_IMPL(Stackable, isStackable_)
 ITEM_BOOL_PROPERTY_IMPL(GroundTile, isGroundTile_)
 ITEM_BOOL_PROPERTY_IMPL(AlwaysOnTop, isAlwaysOnTop_)
-ITEM_BOOL_PROPERTY_IMPL(Teleport, isTeleport_) // Renamed setIsTeleport to setTeleport for macro
-ITEM_BOOL_PROPERTY_IMPL(Container, isContainer_) // Renamed setIsContainer to setContainer for macro
+ITEM_BOOL_PROPERTY_IMPL(Teleport, isTeleport_)
+ITEM_BOOL_PROPERTY_IMPL(Container, isContainer_)
 ITEM_BOOL_PROPERTY_IMPL(Readable, isReadable_)
 ITEM_BOOL_PROPERTY_IMPL(CanWriteText, canWriteText_)
 ITEM_BOOL_PROPERTY_IMPL(Pickupable, isPickupable_)
@@ -197,9 +197,19 @@ void Item::setIsContainer(bool on) { setContainer(on); }
 
 // Brush-related property implementations
 bool Item::isTable() const {
+    // Assuming ItemManager::getInstance() and getItemTypeData() are thread-safe if used across threads.
+    // For typical editor usage, this might be single-threaded.
     const ItemTypeData* itemTypeData = ItemManager::getInstance().getItemTypeData(serverId_);
     if (itemTypeData) {
-        return itemTypeData->isTable; // Assumes ItemTypeData has a public bool member 'isTable'
+        return itemTypeData->isTable; // Assumes ItemTypeData struct has 'isTable'
+    }
+    return false;
+}
+
+bool Item::isCarpet() const {
+    const ItemTypeData* itemTypeData = ItemManager::getInstance().getItemTypeData(serverId_);
+    if (itemTypeData) {
+        return itemTypeData->isCarpet; // Assumes ItemTypeData struct has 'isCarpet'
     }
     return false;
 }
@@ -207,7 +217,7 @@ bool Item::isTable() const {
 Brush* Item::getBrush() const {
     const ItemTypeData* itemTypeData = ItemManager::getInstance().getItemTypeData(serverId_);
     if (itemTypeData) {
-        return itemTypeData->brush; // Assumes ItemTypeData has a public Brush* member 'brush'
+        return itemTypeData->brush; // Assumes ItemTypeData struct has 'brush'
     }
     return nullptr;
 }
@@ -279,7 +289,6 @@ Item* Item::deepCopy() const {
     newItem->hasHookEast_ = this->hasHookEast_;
     newItem->hasHeight_ = this->hasHeight_;
     
-    // Copy new dedicated members
     newItem->description_ = this->description_;
     newItem->editorSuffix_ = this->editorSuffix_;
     newItem->itemGroup_ = this->itemGroup_;

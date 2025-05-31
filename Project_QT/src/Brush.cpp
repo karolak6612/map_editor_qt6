@@ -1,5 +1,6 @@
 #include "Brush.h"
 #include "MapView.h" // Include MapView if used in method signatures or implementations
+// Intentionally not including TableBrush.h or CarpetBrush.h for default implementations
 
 // static uint32_t Brush::id_counter = 0; // If using static ID counter
 
@@ -46,10 +47,21 @@ bool Brush::isTerrain() const { return false; }
 bool Brush::isGround() const { return false; }
 bool Brush::isWall() const { return false; }
 bool Brush::isWallDecoration() const { return false; }
+bool Brush::isTable() const { return false; } // Ensured Table is here
+bool Brush::isCarpet() const { return false; } // Added Carpet
 // ... (add other is[Type] from wxBrush as needed, defaulting to false) ...
 bool Brush::isEraser() const { return false; }
 
+
+// Default implementations for as[Type]() methods
+TableBrush* Brush::asTable() { return nullptr; }
+const TableBrush* Brush::asTable() const { return nullptr; }
+
+CarpetBrush* Brush::asCarpet() { return nullptr; } // Added Carpet
+const CarpetBrush* Brush::asCarpet() const { return nullptr; } // Added Carpet
+
+
 // Implement other common methods or provide default behaviors here if any
 
-// Note: The pure virtual functions (mouse events, name, draw, undraw, canDraw)
+// Note: The pure virtual functions (mouse events, name, type, applyBrush, etc.)
 // do not have implementations in the base class cpp file.

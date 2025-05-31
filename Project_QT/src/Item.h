@@ -85,6 +85,7 @@ public:
 
     // Brush-related properties
     bool isTable() const;
+    bool isCarpet() const; // <-- ADDED THIS LINE
     // Add isCarpet(), isWall() etc. here if they follow the same pattern of querying ItemTypeData
 
     // Setters for these flags (mainly for ItemManager/subclass setup)

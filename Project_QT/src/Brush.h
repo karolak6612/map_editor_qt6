@@ -10,6 +10,7 @@
 class MapView;
 class Tile;
 class TableBrush;
+class CarpetBrush; // Added
 class BaseMap;
 class QUndoCommand; // Added
 class Map;          // Added
@@ -97,17 +98,19 @@ public:
     virtual bool isTerrain() const;
     virtual bool isGround() const;
     virtual bool isWall() const;
-    virtual bool isWallDecoration() const; // New
+    virtual bool isWallDecoration() const;
     virtual bool isTable() const;
+    virtual bool isCarpet() const; // Added
     // ... (add other is[Type] from wxBrush as needed, defaulting to false) ...
     virtual bool isEraser() const;
 
     // Type casting methods (similar to as[Type] in wxBrush)
     // Default to returning nullptr, overridden by specific brush types
     // Example for WallBrush might be: virtual WallBrush* asWall() { return nullptr; }
-    // For TableBrush:
     virtual class TableBrush* asTable();
     virtual const class TableBrush* asTable() const;
+    virtual class CarpetBrush* asCarpet(); // Added
+    virtual const class CarpetBrush* asCarpet() const; // Added
 
     // Core brush action interface
     virtual bool canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr) const = 0;
