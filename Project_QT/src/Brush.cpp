@@ -45,6 +45,7 @@ bool Brush::isDoodad() const { return false; }
 bool Brush::isTerrain() const { return false; }
 bool Brush::isGround() const { return false; }
 bool Brush::isWall() const { return false; }
+bool Brush::isWallDecoration() const { return false; }
 // ... (add other is[Type] from wxBrush as needed, defaulting to false) ...
 bool Brush::isEraser() const { return false; }
 

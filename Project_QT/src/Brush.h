@@ -96,6 +96,7 @@ public:
     virtual bool isTerrain() const;
     virtual bool isGround() const;
     virtual bool isWall() const;
+    virtual bool isWallDecoration() const; // New
     // ... (add other is[Type] from wxBrush as needed, defaulting to false) ...
     virtual bool isEraser() const;
 
