@@ -8,8 +8,17 @@
 #include <QDataStream>  // For unserializeOtbmAttributes
 #include <QByteArray>   // For unserializeOtbmAttributes
 #include <QIODevice>    // For QDataStream operations (usually included by QDataStream)
+#include "Tile.h"        // For qobject_cast<Tile*> in setModified
 
 #include "OtbmTypes.h" // For OTBM attribute enums
+
+// TODO (Task51): Implement client version specific logic for item attribute deserialization.
+// This might involve:
+// - Different attribute IDs for the same property in older versions.
+// - Different data types or interpretations for attribute values.
+// - Conditional reading based on map's client version (passed in or accessed globally/via parent).
+// Map* map = qobject_cast<Map*>(this->parent()->parent()); // Example if Item is child of Tile, child of Map
+// if (map && map->getOtbmMajorVersion() < SOME_VERSION) { /* handle old way */ }
 
 // Attribute Key Definitions
 const QString Item::AttrCount = QStringLiteral("count");
@@ -80,6 +89,41 @@ Item::~Item() {
     // QObject parent will handle deletion if parented.
 }
 
+void Item::setModified(bool modified) {
+    if (m_modified != modified) {
+        m_modified = modified;
+        if (m_modified) { // Only propagate upwards if item becomes modified
+            // Attempt to get Tile* from parent.
+            // This assumes Item is directly parented to Tile.
+            // If there's an intermediate QObject, this cast might fail or need adjustment.
+            QObject* p = parent();
+            if (p) {
+                // Check if parent is a Tile. This requires RTTI if Tile is not QObject base.
+                // For now, assume Tile is a QObject or inherits it.
+                // #include "Tile.h" // Make sure Tile.h is included in Item.cpp
+                // Tile* tile = qobject_cast<Tile*>(p);
+                // For now, to avoid circular dependency issues if Tile.h isn't already included
+                // for other reasons, we'll just log a placeholder or emit a generic signal.
+                // A more robust solution might involve a signal/slot mechanism if direct casting is problematic,
+                // or ensuring Tile is forward-declared and qobject_cast can work.
+                // The prompt implies qobject_cast<Tile*>(parent()) should work.
+                // This requires Tile to be a QObject and Tile.h to be included.
+                // Assuming Tile.h will be included for qobject_cast<Tile*> to compile.
+                // Let's add a placeholder for Tile.h inclusion if not present.
+                // #include "Tile.h" // If not already included
+                Tile* tile = qobject_cast<Tile*>(p); // Requires "Tile.h"
+                if (tile) {
+                    tile->setModified(true);
+                } else {
+                    // Optional: Log if parent is not a Tile, as propagation won't occur.
+                    // qDebug() << "Item::setModified - Parent is not a Tile, modified state not propagated to Tile.";
+                }
+            }
+        }
+        // Optionally, emit a signal if needed: emit modifiedStatusChanged(m_modified);
+    }
+}
+
 // Core Properties
 quint16 Item::getServerId() const { return serverId_; }
 void Item::setServerId(quint16 id) { 
@@ -95,6 +139,7 @@ quint16 Item::getClientId() const { return clientId_; }
 void Item::setClientId(quint16 id) {
     if (clientId_ != id) {
         clientId_ = id;
+        setModified(true);
         emit propertyChanged(); 
     }
 }
@@ -103,6 +148,7 @@ QString Item::name() const { return name_; }
 void Item::setName(const QString& name) {
     if (name_ != name) {
         name_ = name;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -111,6 +157,7 @@ QString Item::typeName() const { return itemTypeName_; }
 void Item::setTypeName(const QString& typeName) {
     if (itemTypeName_ != typeName) {
         itemTypeName_ = typeName;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -120,6 +167,7 @@ void Item::setAttribute(const QString& key, const QVariant& value) {
     QVariant oldValue = attributes_.value(key);
     if (oldValue != value) {
         attributes_.insert(key, value);
+        setModified(true);
         emit attributeChanged(key, value);
     }
 }
@@ -134,6 +182,7 @@ bool Item::hasAttribute(const QString& key) const {
 
 void Item::clearAttribute(const QString& key) {
     if (attributes_.remove(key)) {
+        setModified(true);
         emit attributeChanged(key, QVariant());
     }
 }
@@ -192,7 +241,7 @@ void Item::setUniqueId(int id) {
 // Boolean Flag Getters/Setters
 #define ITEM_BOOL_PROPERTY_IMPL(PropNameCapital, MemberName) \
 bool Item::is##PropNameCapital() const { return MemberName; } \
-void Item::set##PropNameCapital(bool on) { if (MemberName != on) { MemberName = on; emit propertyChanged(); } }
+void Item::set##PropNameCapital(bool on) { if (MemberName != on) { MemberName = on; setModified(true); emit propertyChanged(); } }
 
 ITEM_BOOL_PROPERTY_IMPL(Moveable, isMoveable_)
 ITEM_BOOL_PROPERTY_IMPL(Blocking, isBlocking_)
@@ -212,13 +261,13 @@ ITEM_BOOL_PROPERTY_IMPL(HasHeight, hasHeight_)
 
 // These have different names or slightly different logic from the macro
 bool Item::blocksMissiles() const { return blocksMissiles_; }
-void Item::setBlocksMissiles(bool on) { if (blocksMissiles_ != on) { blocksMissiles_ = on; emit propertyChanged(); } }
+void Item::setBlocksMissiles(bool on) { if (blocksMissiles_ != on) { blocksMissiles_ = on; setModified(true); emit propertyChanged(); } }
 
 bool Item::blocksPathfind() const { return blocksPathfind_; }
-void Item::setBlocksPathfind(bool on) { if (blocksPathfind_ != on) { blocksPathfind_ = on; emit propertyChanged(); } }
+void Item::setBlocksPathfind(bool on) { if (blocksPathfind_ != on) { blocksPathfind_ = on; setModified(true); emit propertyChanged(); } }
 
 int Item::getTopOrder() const { return topOrder_; }
-void Item::setTopOrder(int order) { if (topOrder_ != order) { topOrder_ = order; emit propertyChanged(); } }
+void Item::setTopOrder(int order) { if (topOrder_ != order) { topOrder_ = order; setModified(true); emit propertyChanged(); } }
 
 // Renamed setters for macro compatibility in Item.h, now implementing them directly for clarity
 void Item::setIsTeleport(bool on) { setTeleport(on); }
@@ -375,6 +424,7 @@ QString Item::descriptionText() const { return description_; }
 void Item::setDescriptionText(const QString& description) {
     if (description_ != description) {
         description_ = description;
+        setModified(true); // Also sets modified if direct member changes
         setAttribute(Item::AttrDescription, description_); // Keep attributes_ in sync
         emit propertyChanged();
     }
@@ -384,6 +434,7 @@ QString Item::editorSuffix() const { return editorSuffix_; }
 void Item::setEditorSuffix(const QString& suffix) {
     if (editorSuffix_ != suffix) {
         editorSuffix_ = suffix;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -392,6 +443,7 @@ ItemGroup_t Item::itemGroup() const { return itemGroup_; }
 void Item::setItemGroup(ItemGroup_t group) {
     if (itemGroup_ != group) {
         itemGroup_ = group;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -400,6 +452,7 @@ ItemTypes_t Item::itemType() const { return itemType_; }
 void Item::setItemType(ItemTypes_t type) {
     if (itemType_ != type) {
         itemType_ = type;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -408,6 +461,7 @@ float Item::weight() const { return weight_; }
 void Item::setWeight(float weight) {
     if (qAbs(weight_ - weight) > 0.0001f) { 
         weight_ = weight;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -416,6 +470,7 @@ qint16 Item::attack() const { return attack_; }
 void Item::setAttack(qint16 attack) {
     if (attack_ != attack) {
         attack_ = attack;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -424,6 +479,7 @@ qint16 Item::defense() const { return defense_; }
 void Item::setDefense(qint16 defense) {
     if (defense_ != defense) {
         defense_ = defense;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -432,6 +488,7 @@ qint16 Item::armor() const { return armor_; }
 void Item::setArmor(qint16 armor) {
     if (armor_ != armor) {
         armor_ = armor;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -440,6 +497,7 @@ quint16 Item::charges() const { return charges_; }
 void Item::setCharges(quint16 charges) {
     if (charges_ != charges) {
         charges_ = charges;
+        setModified(true); // Also sets modified if direct member changes
         setAttribute(Item::AttrCharges, charges_); // Keep attributes_ in sync
         emit propertyChanged();
     }
@@ -449,6 +507,7 @@ quint16 Item::maxTextLen() const { return maxTextLen_; }
 void Item::setMaxTextLen(quint16 len) {
     if (maxTextLen_ != len) {
         maxTextLen_ = len;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -457,6 +516,7 @@ quint16 Item::rotateTo() const { return rotateTo_; }
 void Item::setRotateTo(quint16 id) {
     if (rotateTo_ != id) {
         rotateTo_ = id;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -465,6 +525,7 @@ quint16 Item::volume() const { return volume_; }
 void Item::setVolume(quint16 volume) {
     if (this->volume_ != volume) {
         this->volume_ = volume;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -473,6 +534,7 @@ quint32 Item::slotPosition() const { return slotPosition_; }
 void Item::setSlotPosition(quint32 slotPos) {
     if (slotPosition_ != slotPos) {
         slotPosition_ = slotPos;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -481,6 +543,7 @@ quint8 Item::weaponType() const { return weaponType_; }
 void Item::setWeaponType(quint8 type) {
     if (weaponType_ != type) {
         weaponType_ = type;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -489,6 +552,7 @@ quint16 Item::lightLevel() const { return lightLevel_; }
 void Item::setLightLevel(quint16 level) {
     if (lightLevel_ != level) {
         lightLevel_ = level;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -497,6 +561,7 @@ quint16 Item::lightColor() const { return lightColor_; }
 void Item::setLightColor(quint16 color) {
     if (lightColor_ != color) {
         lightColor_ = color;
+        setModified(true);
         emit propertyChanged();
     }
 }
@@ -505,6 +570,7 @@ quint16 Item::classification() const { return classification_; }
 void Item::setClassification(quint16 classification) {
     if (classification_ != classification) {
         classification_ = classification;
+        setModified(true); // Also sets modified if direct member changes
         setAttribute(Item::AttrTier, classification_); // Keep attributes_ in sync using AttrTier
         emit propertyChanged();
     }
@@ -666,10 +732,18 @@ bool Item::unserializeOtbmAttributes(QDataStream& stream) {
             }
         }
     }
+    this->setModified(false); // Item state reflects persistent storage
     return true; // Successfully read all available attributes
 }
 
 bool Item::serializeOtbmAttributes(QDataStream& stream) const {
+    // TODO (Task51): Implement client version specific logic for item attribute serialization.
+    // This might involve:
+    // - Writing different attribute IDs based on target client version.
+    // - Converting values to older formats if necessary.
+    // Map* map = qobject_cast<Map*>(this->parent()->parent()); // Example
+    // if (map && map->getOtbmMajorVersion() < SOME_VERSION) { /* save old way */ }
+
     stream.setByteOrder(QDataStream::LittleEndian);
 
     // Helper lambda to write string attributes

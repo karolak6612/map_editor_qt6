@@ -66,6 +66,19 @@ public:
     Map(int width, int height, int floors, const QString& description = QString(), QObject *parent = nullptr);
     ~Map() override;
 
+    // OTBM Version getters
+    quint32 getOtbmMajorVersion() const { return m_otbmMajorVersion; }
+    quint32 getOtbmMinorVersion() const { return m_otbmMinorVersion; }
+    quint32 getOtbmBuildVersion() const { return m_otbmBuildVersion; }
+    QString getOtbmVersionDescription() const { return m_otbmVersionDescription; }
+    bool isModified() const { return m_modified; }
+    void setModified(bool modified) {
+        if (m_modified != modified) {
+            m_modified = modified;
+            // Potentially emit a signal here if needed: emit mapModifiedStatusChanged(m_modified);
+        }
+    }
+
     void initialize(int width, int height, int floors, const QString& description = QString());
     void clear(); // Deletes all tiles and resets map
 
@@ -144,6 +157,13 @@ private:
     QList<House*> houses_;     
     QList<Waypoint*> waypoints_; 
     Selection* selection_ = nullptr;
+
+    // OTBM Versioning information
+    quint32 m_otbmMajorVersion = 0;
+    quint32 m_otbmMinorVersion = 0;
+    quint32 m_otbmBuildVersion = 0; // Using quint32 for build, can be string too
+    QString m_otbmVersionDescription;
+    mutable bool m_modified = false; // Add modified flag, default to false
 };
 
 #endif // MAP_H

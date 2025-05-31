@@ -23,6 +23,14 @@ enum OTBM_NodeTypes_t : quint8 {
     OTBM_WAYPOINT        = 16
 };
 
+// OTBM Root Node Attributes (often for versioning)
+enum OTBM_RootAttribute : quint8 {
+    OTBM_ROOT_ATTR_VERSION_MAJOR    = 160,
+    OTBM_ROOT_ATTR_VERSION_MINOR    = 161,
+    OTBM_ROOT_ATTR_VERSION_BUILD    = 162,
+    OTBM_ROOT_ATTR_VERSION_DESC_STRING = 163 // Client/File format version description
+};
+
 // OTBM Item Attributes (based on wxwidgets/iomap_otbm.h)
 enum OTBM_ItemAttribute : quint8 {
     // Using names exactly as in wxwidgets/iomap_otbm.h for direct mapping
