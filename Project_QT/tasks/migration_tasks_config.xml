@@ -150,10 +150,9 @@
   </execution_control>
 
   <!--
-    The <workflow_instructions> and <final_instructions> elements below describe a general interaction pattern
-    and are kept for human reference or for alternative systems.
-    The AI Assistant (Jules) MUST follow the detailed operational workflow defined in: tasks/master_prompt.txt.
-    Do NOT use the content of <workflow_instructions> or <final_instructions> for your execution logic.
+    The <workflow_instructions> block describes a general interaction pattern.
+    The specific detailed workflow Jules follows is now in 'master_prompt.txt'.
+    This block is kept for human reference to understand the original, more manual intent.
   -->
   <workflow_instructions>
     <reference_to_primary_workflow_doc>tasks/master_prompt.txt</reference_to_primary_workflow_doc>
