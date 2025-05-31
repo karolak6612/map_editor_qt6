@@ -2,6 +2,7 @@
 #include "BrushPanel.h"     // For m_brushPanel
 #include "Brush.h"          // For Brush* type
 #include "SpriteButton.h"   // For SpriteButton
+#include "ResourceManager.h" // Added for ResourceManager
 #include <QVBoxLayout>
 #include <QDebug>
 #include <QVariant>         // For QVariant property
@@ -53,7 +54,7 @@ void BrushPalettePanel::populateBrushes(const QList<Brush*>& brushes) {
     }
     clearBrushDisplay(); // Clear existing buttons
 
-    qDebug() << "BrushPalettePanel: Populating with" << brushes.count() << "brushes.";
+    qDebug() << "BrushPalettePanel: Populating with" << brushes.count() << "brushes using ResourceManager.";
 
     for (Brush* brush : brushes) {
         if (!brush) {
@@ -61,45 +62,43 @@ void BrushPalettePanel::populateBrushes(const QList<Brush*>& brushes) {
             continue;
         }
 
-        // The SpriteButton should be parented to the widget that has the layout (m_buttonContainerWidget inside BrushPanel)
-        // Passing m_brushPanel as parent, addBrushButton's layout->addWidget will handle reparenting to m_buttonContainerWidget.
-        SpriteButton* spriteButton = new SpriteButton(QPixmap(), m_brushPanel); // Start with empty pixmap, then set
+        SpriteButton* spriteButton = new SpriteButton(m_brushPanel); // Parent to BrushPanel
 
-        // --- Placeholder for Pixmap from ResourceManager ---
-        // TODO: Task32 - Replace this with actual ResourceManager integration.
-        //       The ResourceManager should provide a QPixmap based on brush properties,
-        //       e.g., brush->getLookID(), brush->getItemType(), or a specific preview generation routine.
-        // Example of future call:
-        // QPixmap brushPixmap = ResourceManager::instance()->getPixmapForBrush(brush);
+        // --- Get Pixmap from ResourceManager ---
+        // TODO: The logic for deriving the correct sprite path or sheet coordinates
+        //       from 'brush' (e.g., using brush->getLookID() to consult ItemManager
+        //       for sprite details) needs full implementation.
+        //       For now, we use a placeholder path convention.
 
-        qDebug() << "BrushPalettePanel: Populating brush -" << brush->name() << "(ID:" << brush->getLookID() << "). Using placeholder icon.";
-        QPixmap iconPlaceholder(32, 32); // Standard size for now
+        QPixmap brushPixmap;
+        if (brush->getLookID() != 0) { // Attempt specific icon if lookID is valid
+            QString potentialPath = QString(":/sprites/item_%1.png").arg(brush->getLookID());
+            brushPixmap = ResourceManager::instance().getPixmap(potentialPath);
 
-        // Current simple visual differentiation for testing - RETAIN THIS or similar for now
-        if (brush->name().contains("Eraser", Qt::CaseInsensitive)) {
-            iconPlaceholder.fill(Qt::red);
-        } else if (brush->name().contains("Door", Qt::CaseInsensitive)) {
-            iconPlaceholder.fill(Qt::blue);
-        } else if (brush->name().contains("Zone", Qt::CaseInsensitive)) {
-            iconPlaceholder.fill(Qt::yellow);
-        } else if (brush->name().contains("Border", Qt::CaseInsensitive)) {
-            iconPlaceholder.fill(Qt::magenta);
-        } else if (brush->getLookID() != 0) { // Add some variation based on LookID if name doesn't match
-            int lookId = brush->getLookID();
-            if (lookId % 5 == 0) iconPlaceholder.fill(Qt::cyan);
-            else if (lookId % 5 == 1) iconPlaceholder.fill(Qt::darkCyan);
-            else if (lookId % 5 == 2) iconPlaceholder.fill(Qt::darkMagenta);
-            else if (lookId % 5 == 3) iconPlaceholder.fill(Qt::darkYellow);
-            else iconPlaceholder.fill(Qt::darkGreen);
-        } else {
-            iconPlaceholder.fill(Qt::gray); // Default placeholder for others
+            if (brushPixmap.isNull()) {
+                qDebug() << "BrushPalettePanel: Specific brush icon for ID" << brush->getLookID()
+                         << "at path" << potentialPath << "not found via ResourceManager. Trying generic placeholder.";
+            }
         }
-        // --- End of Placeholder ---
 
-        spriteButton->setPixmap(iconPlaceholder);
-        // Assuming Brush has a name() and getLookID() method as per the task description.
+        if (brushPixmap.isNull()) { // If specific icon failed or lookID was 0
+            brushPixmap = ResourceManager::instance().getPixmap(":/icons/generic_item_placeholder.png");
+        }
+
+        if (brushPixmap.isNull()) { // If generic placeholder also failed
+            qWarning() << "BrushPalettePanel: Generic item placeholder ':/icons/generic_item_placeholder.png' not found via ResourceManager. Using fallback color fill for brush:" << brush->name();
+            brushPixmap = QPixmap(32, 32); // Default size
+
+            // Fallback visual differentiation (can be simpler than before)
+            if (brush->name().contains("Eraser", Qt::CaseInsensitive)) brushPixmap.fill(Qt::red);
+            else if (brush->name().contains("Door", Qt::CaseInsensitive)) brushPixmap.fill(Qt::blue);
+            else brushPixmap.fill(Qt::darkGray); // General fallback color
+        }
+        // --- End of Get Pixmap ---
+
+        spriteButton->setPixmap(brushPixmap);
         spriteButton->setToolTip(brush->name() + QString(" (ID: %1)").arg(brush->getLookID()));
-        spriteButton->setFixedSize(36,36); // Fixed size for uniformity
+        spriteButton->setFixedSize(36, 36);
 
         // Store a pointer to the Brush object with the button
         spriteButton->setProperty("brush_ptr", QVariant::fromValue(reinterpret_cast<void*>(brush)));
