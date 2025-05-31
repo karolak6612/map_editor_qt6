@@ -7,22 +7,73 @@
 #include <QMouseEvent> // For event details if needed by brushes
 
 // Forward declarations
-class MapView; // Assuming MapView is the class interacting with brushes
-class Tile;    // Placeholder for Tile interactions
-class BaseMap; // Placeholder for Map interactions (consider if Map or Editor is better)
+class MapView;
+class Tile;
+class BaseMap;
+class QUndoCommand; // Added
+class Map;          // Added
+class QUndoStack;   // Added
+
+// Define BrushShape enum here or in a common types header
+enum class BrushShape {
+    Square,
+    Circle
+    // Add other shapes like Line, Custom etc. if needed
+};
+// Q_ENUM(BrushShape) // Moved inside class if Brush is QObject
 
 class Brush : public QObject {
     Q_OBJECT
-
 public:
+    // Make enums part of the class and use Q_ENUM if Brush is QObject
+    enum class BrushShape { // Re-declared inside class for Q_ENUM
+        Square,
+        Circle
+    };
+    Q_ENUM(BrushShape)
+
+    enum class Type {
+        Unknown,
+        Raw,
+        Doodad,
+        Terrain,
+        Ground,
+        Wall,
+        WallDecoration,
+        Table,
+        Carpet,
+        Door,
+        OptionalBorder,
+        Creature,
+        Spawn,
+        House,
+        HouseExit,
+        Waypoint,
+        Flag,
+        Eraser,
+        Pixel
+        // TODO: Add any other brush types from wxwidgets/brush_enums.h
+    };
+    Q_ENUM(Type)
+
     explicit Brush(QObject *parent = nullptr);
     virtual ~Brush();
 
+    // Method to get brush type
+    virtual Type type() const = 0;
+
     // Pure virtual methods for mouse interaction
     // These will be called by MapViewInputHandler, passing necessary context.
-    virtual void mousePressEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView) = 0;
-    virtual void mouseMoveEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView) = 0;
-    virtual void mouseReleaseEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView) = 0;
+    virtual QUndoCommand* mousePressEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) = 0;
+    virtual QUndoCommand* mouseMoveEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) = 0;
+    virtual QUndoCommand* mouseReleaseEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) = 0;
+
+    // Method to cancel ongoing brush operation
+    virtual void cancel() = 0; // Added based on MapViewInputHandler usage
+
+    // Brush properties
+    virtual int getBrushSize() const = 0;    // Size typically means radius or half-width
+    virtual BrushShape getBrushShape() const = 0;
 
     // Pure virtual methods for core brush properties/actions (from wxBrush)
     // virtual void draw(BaseMap* map, Tile* tile, void* parameter = nullptr) = 0; // Actual drawing logic deferred
@@ -45,14 +96,28 @@ public:
     virtual bool isTerrain() const;
     virtual bool isGround() const;
     virtual bool isWall() const;
+    virtual bool isWallDecoration() const; // New
     // ... (add other is[Type] from wxBrush as needed, defaulting to false) ...
     virtual bool isEraser() const;
 
+    // Core brush action interface
+    virtual bool canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr) const = 0;
+    virtual QUndoCommand* applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) = 0;
+    virtual QUndoCommand* removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) = 0;
+
+    // Shared properties and accessors
+    bool isVisibleInPalette() const { return isVisibleInPalette_; }
+    void setVisibleInPalette(bool visible) { isVisibleInPalette_ = visible; }
+
+    bool usesCollection() const { return usesCollection_; }
+    void setUsesCollection(bool uses) { usesCollection_ = uses; }
 
     // Add other common properties or methods if identified
 
 protected:
     // Common properties like brush ID can be added if necessary
+    bool isVisibleInPalette_ = true;
+    bool usesCollection_ = false;
     // static uint32_t id_counter; // If unique IDs are needed for Qt brushes
     // uint32_t id_;
 };

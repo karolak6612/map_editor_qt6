@@ -141,6 +141,114 @@ void Tile::setSpawn(Spawn* newSpawn) {
     // For now, assuming general tileChanged covers it.
 }
 
+// --- New methods for command interactions ---
+
+QList<Item*> Tile::getWallItems() const {
+    QList<Item*> wallItems;
+    // Ground is typically not a wall, but some specific ground items might be.
+    // Iterate through items_ list to find items that are walls.
+    for (Item* item : items_) {
+        if (item && item->isWall()) { // Assumes Item::isWall() exists
+            wallItems.append(item);
+        }
+    }
+    // If your game logic allows ground items to also function as walls (e.g. cave walls):
+    // if (ground_ && ground_->isWall()) {
+    //     wallItems.append(ground_);
+    // }
+    return wallItems;
+}
+
+void Tile::clearWalls() {
+    bool changed = false;
+    // Iterate backwards for safe removal from QVector
+    for (int i = items_.size() - 1; i >= 0; --i) {
+        if (items_[i] && items_[i]->isWall()) { // Assumes Item::isWall()
+            Item* removedItem = items_.takeAt(i);
+            delete removedItem; // Tile owns items in items_
+            changed = true;
+        }
+    }
+    // If ground can be a wall:
+    // if (ground_ && ground_->isWall()) {
+    //     delete ground_;
+    //     ground_ = nullptr;
+    //     changed = true;
+    // }
+    if (changed) {
+        emit tileChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_); // Wall changes definitely affect visuals
+    }
+    qDebug() << "Tile::clearWalls called for" << mapPos();
+}
+
+void Tile::addWallItemById(quint16 wallItemId) {
+    if (wallItemId == 0) { // 0 might mean "no item" or "invalid item"
+        qWarning() << "Tile::addWallItemById: Attempted to add wall with ID 0 to" << mapPos();
+        return;
+    }
+    // Item creation logic:
+    // Option 1: Direct creation (requires Item to have appropriate constructor and type info)
+    Item* wallItem = new Item(wallItemId); // Assumes Item(quint16 id) constructor sets up the item
+                                          // and that Item::isWall() can be determined from this.
+    // Option 2: ItemFactory (safer if item properties are complex)
+    // Item* wallItem = ItemFactory::getInstance()->createItem(wallItemId);
+
+    if (wallItem) {
+        // Optional: Check if the created item is actually a wall type
+        if (!wallItem->isWall()) {
+            qWarning() << "Tile::addWallItemById: Item ID" << wallItemId << "is not a wall type. Adding anyway to" << mapPos();
+            // If strict, delete wallItem and return.
+            // delete wallItem;
+            // return;
+        }
+        addItem(wallItem); // addItem handles parenting, signals, and adding to items_ or ground_
+                           // If addItem distinguishes ground/non-ground, ensure wallItem is not ground type
+                           // or that addItem correctly places it in items_ if it's a wall.
+                           // Current addItem puts ground types as ground_. Walls are usually not ground.
+                           // So this should add to items_ if wallItem->isGroundTile() is false.
+        qDebug() << "Tile::addWallItemById: Added wall ID" << wallItemId << "to" << mapPos();
+    } else {
+        qWarning() << "Tile::addWallItemById: Could not create item for ID" << wallItemId << "at" << mapPos();
+    }
+}
+
+void Tile::removeGround() {
+    if (ground_) {
+        delete ground_;
+        ground_ = nullptr;
+        emit tileChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_);
+        qDebug() << "Tile::removeGround called for" << mapPos();
+    }
+}
+
+void Tile::setGroundById(quint16 groundItemId) {
+    if (groundItemId == 0) { // ID 0 means remove ground
+        removeGround();
+        return;
+    }
+    // Item creation logic:
+    // Option 1: Direct creation
+    Item* newGround = new Item(groundItemId); // Assumes Item(quint16 id) constructor
+    // Option 2: ItemFactory
+    // Item* newGround = ItemFactory::getInstance()->createItem(groundItemId);
+
+    if (newGround) {
+        // Optional: Check if it's a valid ground type
+        if (!newGround->isGroundTile()) { // Assuming Item::isGroundTile()
+            qWarning() << "Tile::setGroundById: Item ID" << groundItemId << "is not a ground type for tile" << mapPos();
+            // delete newGround; // Avoid setting non-ground as ground
+            // return; // Or set it anyway if this check is not strict
+        }
+        setGround(newGround); // setGround(Item*) handles deletion of old, parenting, signals
+        qDebug() << "Tile::setGroundById: Set ground ID" << groundItemId << "for" << mapPos();
+    } else {
+        qWarning() << "Tile::setGroundById: Could not create item for ID" << groundItemId << "for" << mapPos();
+    }
+}
+
+
 int Tile::itemCount() const {
     return (ground_ ? 1 : 0) + items_.size();
 }
