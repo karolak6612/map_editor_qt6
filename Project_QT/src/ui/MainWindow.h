@@ -18,6 +18,7 @@ class PlaceholderPaletteWidget;     // Added
 class PlaceholderMinimapWidget;     // Added
 class PlaceholderPropertiesWidget;  // Added
 class QStatusBar;                   // Added for statusBar_ member or statusBar() usage
+class QCloseEvent; // Added for closeEvent
 class AutomagicSettingsDialog; // Forward declaration
 class ClipboardData;           // Forward declaration for clipboard
 class Map;                     // Already forward declared in Map.h, but good practice if Map.h isn't fully included here
@@ -64,6 +65,9 @@ public: // Public methods for other status updates if not slots (canPaste kept h
     void mainUpdateAutomagicSettings(bool automagicEnabled, bool sameGround, bool wallsRepel, bool layerCarpets, bool borderizeDelete, bool customBorder, int customBorderId);
     void mainTriggerMapOrUIRefreshForAutomagic();
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private slots:
     void onMenuActionTriggered(); 
     void onPositionGo();
@@ -81,7 +85,7 @@ private:
     void setupStatusBar();
 
     // Helper method for creating actions
-    QAction* createAction(const QString& text, const QString& objectName, const QString& shortcut = "", const QString& statusTip = "", bool checkable = false, bool checked = false);
+    QAction* createAction(const QString& text, const QString& objectName, const QIcon& icon = QIcon(), const QString& shortcut = "", const QString& statusTip = "", bool checkable = false, bool checked = false, bool connectToGenericHandler = true);
 
     // Menu creation helpers
     QMenu* createFileMenu();
@@ -170,6 +174,10 @@ private:
 // private: // Making them private as they are internal helpers for clipboard ops
     Map* getCurrentMap() const; 
     MapPos getPasteTargetPosition() const;
+
+private:
+    void saveToolBarState();
+    void restoreToolBarState();
 };
 
 #endif // MAINWINDOW_H
