@@ -54,6 +54,7 @@ class Item;
 class Creature;
 class Spawn;
 class House;
+class Town; // Forward-declare Town
 class Waypoint;
 class Selection; // Forward-declare Selection
 // Add any other classes that Map might store by pointer and need forward declaration
@@ -65,6 +66,19 @@ public:
     explicit Map(QObject *parent = nullptr);
     Map(int width, int height, int floors, const QString& description = QString(), QObject *parent = nullptr);
     ~Map() override;
+
+    // OTBM Version getters
+    quint32 getOtbmMajorVersion() const { return m_otbmMajorVersion; }
+    quint32 getOtbmMinorVersion() const { return m_otbmMinorVersion; }
+    quint32 getOtbmBuildVersion() const { return m_otbmBuildVersion; }
+    QString getOtbmVersionDescription() const { return m_otbmVersionDescription; }
+    bool isModified() const { return m_modified; }
+    void setModified(bool modified) {
+        if (m_modified != modified) {
+            m_modified = modified;
+            // Potentially emit a signal here if needed: emit mapModifiedStatusChanged(m_modified);
+        }
+    }
 
     void initialize(int width, int height, int floors, const QString& description = QString());
     void clear(); // Deletes all tiles and resets map
@@ -93,8 +107,36 @@ public:
     const QList<House*>& getHouses() const;
     
     void addWaypoint(Waypoint* waypoint);
-    void removeWaypoint(Waypoint* waypoint);
-    const QList<Waypoint*>& getWaypoints() const;
+    // void removeWaypoint(Waypoint* waypoint); // Old one, effectively removed by new m_waypoints
+    // const QList<Waypoint*>& getWaypoints() const; // Old one, replaced by new m_waypoints getter
+
+    const QList<Town*>& getTowns() const { return m_towns; }
+    // void addTown(Town* town); // To be implemented with load logic
+    // void removeTown(Town* town); // To be implemented with load logic
+
+    const QList<Waypoint*>& getWaypoints() const { return m_waypoints; } // New getter for m_waypoints
+    // void addWaypoint(Waypoint* waypoint); // To be implemented with load logic
+    // void removeWaypoint(Waypoint* waypoint); // To be implemented with load logic
+
+    QString getExternalSpawnFile() const { return m_externalSpawnFile; }
+    void setExternalSpawnFile(const QString& fileName) {
+        if (m_externalSpawnFile != fileName) {
+            m_externalSpawnFile = fileName;
+            setModified(true);
+        }
+    }
+
+    QString getExternalHouseFile() const { return m_externalHouseFile; }
+    void setExternalHouseFile(const QString& fileName) {
+        if (m_externalHouseFile != fileName) {
+            m_externalHouseFile = fileName;
+            setModified(true);
+        }
+    }
+
+    quint32 getOtbItemsMajorVersion() const { return m_otbItemsMajorVersion; }
+    quint32 getOtbItemsMinorVersion() const { return m_otbItemsMinorVersion; }
+    // void setOtbItemsVersions(quint32 major, quint32 minor); // Optional setter
 
     // Selection methods
     Selection* getSelection() const;
@@ -142,8 +184,23 @@ private:
     // The remove methods only remove from list, not delete.
     QList<Spawn*> spawns_;     
     QList<House*> houses_;     
-    QList<Waypoint*> waypoints_; 
     Selection* selection_ = nullptr;
+
+    QList<Town*> m_towns;
+    QList<Waypoint*> m_waypoints; // Re-declaring here to ensure it's part of the new block
+    QString m_externalSpawnFile;
+    QString m_externalHouseFile;
+
+    // OTB Item Versioning information (from items.otb, typically stored in map)
+    quint32 m_otbItemsMajorVersion = 0;
+    quint32 m_otbItemsMinorVersion = 0;
+
+    // OTBM Versioning information
+    quint32 m_otbmMajorVersion = 0;
+    quint32 m_otbmMinorVersion = 0;
+    quint32 m_otbmBuildVersion = 0; // Using quint32 for build, can be string too
+    QString m_otbmVersionDescription;
+    mutable bool m_modified = false; // Add modified flag, default to false
 };
 
 #endif // MAP_H

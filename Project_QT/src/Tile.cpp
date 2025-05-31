@@ -57,6 +57,7 @@ void Tile::addItem(Item* item) {
         if (item && item->isCarpet()) {
             setStateFlag(TileStateFlag::HasCarpet, true);
         }
+        setModified(true);
         emit tileChanged(x_, y_, z_);
         // visualChanged is handled by setStateFlag if the flag causes a visual change
     }
@@ -69,6 +70,7 @@ bool Tile::removeItem(Item* item) {
     if (ground_ == item) {
         delete ground_;
         ground_ = nullptr;
+        setModified(true);
         emit tileChanged(x_, y_, z_);
         emit visualChanged(x_, y_, z_); // Ground change is always visual
         return true;
@@ -91,6 +93,7 @@ bool Tile::removeItem(Item* item) {
                 setStateFlag(TileStateFlag::HasCarpet, false);
             }
         }
+        setModified(true);
         emit tileChanged(x_, y_, z_);
         // visualChanged is handled by setStateFlag if flags changed
         return true;
@@ -115,6 +118,7 @@ Item* Tile::removeItem(int index) {
             setStateFlag(TileStateFlag::HasCarpet, false);
         }
     }
+    setModified(true);
     emit tileChanged(x_, y_, z_);
     // visualChanged is handled by setStateFlag if flags changed
     return item;
@@ -127,6 +131,7 @@ void Tile::setGround(Item* groundItem) {
     if (ground_ && ground_->parent() != this) {
         ground_->setParent(this);
     }
+    setModified(true);
     emit tileChanged(x_, y_, z_);
     emit visualChanged(x_, y_, z_); // Ground change is always visual
 }
@@ -154,6 +159,7 @@ void Tile::setCreature(Creature* newCreature) {
     if (creature_ && creature_->parent() != this) {
         creature_->setParent(this);
     }
+    setModified(true);
     emit tileChanged(x_, y_, z_);
     emit visualChanged(x_, y_, z_); // Creature change is visual
 }
@@ -189,6 +195,7 @@ void Tile::clearWalls() {
         }
     }
     if (changed) {
+        setModified(true);
         emit tileChanged(x_, y_, z_);
         emit visualChanged(x_, y_, z_);
     }
@@ -287,6 +294,7 @@ void Tile::setMapFlag(TileMapFlag flag, bool on) {
     TileMapFlags oldFlags = mapFlags_;
     mapFlags_.setFlag(flag, on);
     if (oldFlags != mapFlags_) {
+        setModified(true);
         emit tileChanged(x_, y_, z_);
     }
 }
@@ -303,6 +311,12 @@ void Tile::setStateFlag(TileStateFlag flag, bool on) {
     TileStateFlags oldFlags = stateFlags_;
     stateFlags_.setFlag(flag, on);
      if (oldFlags != stateFlags_) {
+       if (flag == TileStateFlag::Modified && on) {
+           Map* map = qobject_cast<Map*>(parent());
+           if (map) {
+               map->setModified(true);
+           }
+       }
         emit tileChanged(x_, y_, z_); 
         if (flag == TileStateFlag::Selected ||
             flag == TileStateFlag::Modified ||
@@ -356,6 +370,7 @@ quint32 Tile::getHouseId() const {
 void Tile::setHouseId(quint32 id) {
     if (houseId_ != id) {
         houseId_ = id;
+        setModified(true);
         emit tileChanged(x_, y_, z_);
         emit visualChanged(x_,y_,z_);
     }
@@ -368,12 +383,14 @@ void Tile::addZoneId(quint16 zoneId) {
     if (!zoneIds_.contains(zoneId)) {
         zoneIds_.append(zoneId);
         std::sort(zoneIds_.begin(), zoneIds_.end());
+        setModified(true);
         emit tileChanged(x_, y_, z_);
     }
 }
 bool Tile::removeZoneId(quint16 zoneId) {
     int removedCount = zoneIds_.removeAll(zoneId); 
     if (removedCount > 0) {
+        setModified(true);
         emit tileChanged(x_, y_, z_);
         return true;
     }
@@ -382,6 +399,7 @@ bool Tile::removeZoneId(quint16 zoneId) {
 void Tile::clearZoneIds() {
     if (!zoneIds_.isEmpty()) {
         zoneIds_.clear();
+        setModified(true);
         emit tileChanged(x_, y_, z_);
     }
 }
