@@ -14,7 +14,7 @@ class QComboBox;
 class QLabel;      
 class QActionGroup;
 class QDockWidget;                  // Added
-class PlaceholderPaletteWidget;     // Added
+class BrushPalettePanel;     // Renamed from PlaceholderPaletteWidget
 class PlaceholderMinimapWidget;     // Added
 class PlaceholderPropertiesWidget;  // Added
 class QStatusBar;                   // Added for statusBar_ member or statusBar() usage

@@ -14,7 +14,7 @@
 #include <QPushButton>  
 #include <QDockWidget> // Added for QDockWidget
 #include <QStatusBar>  // Added for QStatusBar
-#include "PlaceholderPaletteWidget.h"   
+#include "BrushPalettePanel.h"   // Renamed from PlaceholderPaletteWidget.h
 #include "PlaceholderMinimapWidget.h"
 #include "PlaceholderPropertiesWidget.h"
 #include "AutomagicSettingsDialog.h" // Include for AutomagicSettingsDialog
@@ -103,7 +103,7 @@ void MainWindow::setupDockWidgets() {
     paletteDock_ = new QDockWidget(tr("Palette"), this);
     paletteDock_->setObjectName(QStringLiteral("PaletteDock"));
     paletteDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
-    PlaceholderPaletteWidget* paletteContent = new PlaceholderPaletteWidget("Palette", paletteDock_);
+    BrushPalettePanel* paletteContent = new BrushPalettePanel("Palette", paletteDock_); // Renamed class
     paletteDock_->setWidget(paletteContent);
     addDockWidget(Qt::LeftDockWidgetArea, paletteDock_);
     paletteDock_->setVisible(true); 
