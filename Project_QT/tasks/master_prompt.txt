@@ -43,6 +43,10 @@ All task definitions are in the XML file: `tasks/migration_tasks_config.xml` (re
     *   Determine the next main task. This will be the first task in the XML with `status_initial='PENDING'` (or equivalent based on XML structure) that has not yet received formal `APPROVED` status from me in this session.
     *   If all main tasks are formally `APPROVED`, proceed to Step 7 (Project Completion).
     *   Announce: "STARTING MAIN TASK: [Task ID] - [Task Title from XML]"
+    *   **Process Pre-Flight Check (if present):** After announcing the task, check the corresponding `tasks/tasks_definitions/[TaskID].md` file for a section titled "**Pre-Flight Check**".
+        *   If found, list each item from this checklist in your activity feed. For each item, briefly state its status based on your initial understanding (e.g., "Confirmed", "Noted", "Question: [clarification needed]").
+        *   If any checklist item immediately highlights a critical blocker or a misunderstanding of task scope, use a `CLARIFICATION_REQUEST` to the Auditor/Reviewer before proceeding to Step 2.
+        *   If not found, state in your activity feed: `"INFO: No Pre-Flight Check section found in [TaskID].md."`
 
 2.  **Preliminary Analysis and Mandatory Refactoring for Modularity & Operational Limits:**
     *   **a. Analyze `wxwidgets` for Task Scope:** Thoroughly understand the functionality, classes, and logic in the `wxwidgets` directory relevant to the current [Task ID].
@@ -123,6 +127,7 @@ Then proceed to Step 3.`
           - [Project_QT/src/path/to/another_file.cpp]
         NEW_FILES_FOR_CMAKE: [new_file1.cpp], [new_file1.h], [...] (List only if new files were created, otherwise 'None')
         WXWIDGETS_CROSS_REFERENCE_CONFIRMATION: [Briefly state how original wxwidgets files/logic for this task's scope were used as the primary reference for the Qt6 implementation, and list key wxwidgets files consulted for this specific task.]
+        TASK_RETROSPECTIVE_SNIPPET: [Optional: Note any unexpected complexities, useful patterns discovered, or parts of the instructions that were particularly clear/unclear for this type of task.]
         LINE_CHANGES_APPROXIMATE: +[lines_added] / -[lines_deleted] (Provide best estimate)
         RUNTIME_APPROXIMATE: [HH:MM:SS] (Your processing time for this task)
         \`\`\`

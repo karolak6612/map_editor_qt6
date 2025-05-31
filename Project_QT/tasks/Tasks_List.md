@@ -24,7 +24,7 @@ This folder contains all configuration and instruction files for guiding the AI 
     *   **Local Commit:** Upon believing a Main Task is fully complete (including addressing iterative feedback and ensuring 100% feature parity for the task's scope), Jules commits all changes (including any new files from refactoring) to a new local feature branch on its VM using the format specified in `master_prompt.txt`. Jules does *not* push to GitHub.
 
 3.  **User-Facilitated Push to GitHub & Formal Review:**
-    *   Jules signals Main Task completion by providing a **structured final task summary** (as defined in `master_prompt.txt`, including TASK_ID, LOCAL_BRANCH, COMMIT_SHA_FULL, FILES_MODIFIED, NEW_FILES_FOR_CMAKE, etc.).
+    *   Jules signals Main Task completion by providing a **structured final task summary** (as defined in `master_prompt.txt`, including TASK_ID, LOCAL_BRANCH, COMMIT_SHA_FULL, FILES_MODIFIED, NEW_FILES_FOR_CMAKE, an optional `TASK_RETROSPECTIVE_SNIPPET`, etc.).
     *   The user (Auditor/Reviewer) then uses the **Jules interface's "Create branch" functionality**. This action pushes Jules's locally committed feature branch (using `LOCAL_BRANCH` and `COMMIT_SHA_FULL` from summary) to the main GitHub repository.
     *   The user creates a Pull Request (PR) on GitHub from this newly pushed branch.
     *   The user reviews the code in the PR.
