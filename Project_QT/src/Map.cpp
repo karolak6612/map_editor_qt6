@@ -4,15 +4,25 @@
 #include "Selection.h"
 #include "Spawn.h"
 #include "Waypoint.h"
+#include "Waypoints.h"
 #include "io/OtbmReader.h" // For OTBM reading logic
 #include "io/OtbmWriter.h" // For OTBM writing logic
 #include "OtbmTypes.h"     // For OTBM node and attribute types
 #include "ItemManager.h"   // For ItemManager::getInstancePtr()
 #include "Town.h"
-#include "Waypoint.h" // Ensure Waypoint.h is included for QList<Waypoint*>
+#include "MapIterator.h"   // For MapIterator implementation
 #include <QDebug>
 #include <QSet>
 #include <QVector3D>
+#include <QReadLocker>     // For thread safety
+#include <QWriteLocker>    // For thread safety
+#include <QFile>
+#include <QFileInfo>
+#include <QXmlStreamReader>
+#include <QXmlStreamWriter>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 // #include <algorithm>
 
 // Note: MapPos struct is assumed to be defined in Map.h as per previous step.
@@ -21,6 +31,7 @@
 Map::Map(QObject *parent) : QObject(parent) {
     initialize(0, 0, 0);
     selection_ = new Selection(this);
+    waypoints_ = new Waypoints(*this, this);
     m_modified = false;
     m_otbmMajorVersion = 0;
     m_otbmMinorVersion = 0;
@@ -35,6 +46,7 @@ Map::Map(QObject *parent) : QObject(parent) {
 Map::Map(int width, int height, int floors, const QString& description, QObject *parent) : QObject(parent) {
     initialize(width, height, floors, description);
     selection_ = new Selection(this);
+    waypoints_ = new Waypoints(*this, this);
     m_modified = false;
     m_otbmMajorVersion = 0;
     m_otbmMinorVersion = 0;
@@ -51,6 +63,8 @@ Map::~Map() {
     // *before* clearing the map's core data (like tiles_).
     delete selection_;
     selection_ = nullptr;
+    delete waypoints_;
+    waypoints_ = nullptr;
     clear();
 }
 
@@ -171,6 +185,7 @@ int Map::getTileIndex(int x, int y, int z) const {
 }
 
 Tile* Map::getTile(int x, int y, int z) const {
+    QReadLocker locker(&mapLock_);
     int index = getTileIndex(x, y, z);
     if (index != -1 && index < tiles_.size()) { // Check index < tiles_.size() for safety
         return tiles_.value(index); // QVector::value is safe for out-of-bounds
@@ -214,6 +229,8 @@ bool Map::setTile(int x, int y, int z, Tile* tile) {
 }
 
 Tile* Map::createTile(int x, int y, int z) {
+    QWriteLocker locker(&mapLock_);
+
     if (!isCoordValid(x, y, z)) {
         qWarning() << "createTile: Invalid coordinates (" << x << "," << y << "," << z << ")";
         return nullptr;
@@ -225,13 +242,21 @@ Tile* Map::createTile(int x, int y, int z) {
          return nullptr;
     }
 
-    if (tiles_.value(index) != nullptr) { // Use .value for safety, though index should be valid
+    bool hadTile = (tiles_.value(index) != nullptr);
+    if (hadTile) { // Use .value for safety, though index should be valid
         delete tiles_[index];
         tiles_[index] = nullptr;
     }
 
     Tile* newTile = new Tile(x, y, z, this); // Pass coordinates and parent
     tiles_[index] = newTile;
+
+    // Update tile count cache
+    if (!hadTile) {
+        ++tileCount_;
+        tileCountDirty_ = false; // We updated the count manually
+    }
+
     setModified(true);
     emit mapChanged();
     emit tileChanged(x, y, z);
@@ -314,13 +339,100 @@ void Map::removeGround(const QPointF& pos) {
     }
 }
 
+// Task 52: Enhanced border update methods with Qt integration
 void Map::requestBorderUpdate(const QPointF& tilePos) {
-    Q_UNUSED(tilePos); // Mark as unused if no specific logic yet
-    qDebug() << "Map::requestBorderUpdate (placeholder) called for tile:" << tilePos;
-    // This would typically add tilePos and its orthogonal neighbors to a list
-    // of tiles that need their border graphics recalculated.
-    // For now, just emit a generic signal for the specific tile.
-    emit tileChanged(qFloor(tilePos.x()), qFloor(tilePos.y()), qFloor(tilePos.z()));
+    QList<QPoint3D> affectedTiles;
+
+    int x = qFloor(tilePos.x());
+    int y = qFloor(tilePos.y());
+    int z = qFloor(tilePos.z());
+
+    // Add the tile itself and its neighbors
+    affectedTiles.append(QPoint3D(x, y, z));
+
+    // Add orthogonal neighbors
+    const int dx[] = {0, 0, 1, -1};
+    const int dy[] = {-1, 1, 0, 0};
+
+    for (int i = 0; i < 4; ++i) {
+        int nx = x + dx[i];
+        int ny = y + dy[i];
+
+        if (isCoordValid(nx, ny, z)) {
+            affectedTiles.append(QPoint3D(nx, ny, z));
+        }
+    }
+
+    // Emit signals for Qt rendering system
+    emit borderUpdateRequested(affectedTiles);
+    emit tilesChanged(affectedTiles);
+
+    qDebug() << "Map::requestBorderUpdate called for tile:" << tilePos
+             << "affecting" << affectedTiles.size() << "tiles";
+}
+
+void Map::requestBorderUpdate(const QList<QPointF>& tilePositions) {
+    if (tilePositions.isEmpty()) {
+        return;
+    }
+
+    QList<QPoint3D> affectedTiles;
+
+    for (const QPointF& pos : tilePositions) {
+        int x = qFloor(pos.x());
+        int y = qFloor(pos.y());
+        int z = qFloor(pos.z());
+
+        // Add the tile itself
+        affectedTiles.append(QPoint3D(x, y, z));
+
+        // Add orthogonal neighbors
+        const int dx[] = {0, 0, 1, -1};
+        const int dy[] = {-1, 1, 0, 0};
+
+        for (int i = 0; i < 4; ++i) {
+            int nx = x + dx[i];
+            int ny = y + dy[i];
+
+            if (isCoordValid(nx, ny, z)) {
+                QPoint3D neighbor(nx, ny, z);
+                if (!affectedTiles.contains(neighbor)) {
+                    affectedTiles.append(neighbor);
+                }
+            }
+        }
+    }
+
+    // Emit signals for Qt rendering system
+    emit borderUpdateRequested(affectedTiles);
+    emit tilesChanged(affectedTiles);
+
+    qDebug() << "Map::requestBorderUpdate called for" << tilePositions.size()
+             << "positions affecting" << affectedTiles.size() << "tiles";
+}
+
+void Map::requestBorderUpdate(const QRect& area) {
+    QList<QPoint3D> affectedTiles;
+
+    // Process all tiles in the area plus a border around it
+    QRect expandedArea = area.adjusted(-1, -1, 1, 1);
+
+    for (int x = expandedArea.left(); x <= expandedArea.right(); ++x) {
+        for (int y = expandedArea.top(); y <= expandedArea.bottom(); ++y) {
+            for (int z = 0; z < floors_; ++z) {
+                if (isCoordValid(x, y, z)) {
+                    affectedTiles.append(QPoint3D(x, y, z));
+                }
+            }
+        }
+    }
+
+    // Emit signals for Qt rendering system
+    emit borderUpdateRequested(affectedTiles);
+    emit visualUpdateNeeded(expandedArea);
+
+    qDebug() << "Map::requestBorderUpdate called for area:" << area
+             << "affecting" << affectedTiles.size() << "tiles";
 }
 
 void Map::requestWallUpdate(const QPointF& tilePos) {
@@ -391,97 +503,303 @@ const QList<House*>& Map::getHouses() const {
 }
 
 void Map::addWaypoint(Waypoint* waypoint) {
-    if (waypoint) {
-        if (!m_waypoints.contains(waypoint)) { // Optional: prevent duplicates
+    if (waypoint && waypoints_) {
+        waypoints_->addWaypoint(waypoint);
+        // Also add to legacy list for OTBM compatibility
+        if (!m_waypoints.contains(waypoint)) {
             m_waypoints.append(waypoint);
-            qDebug() << "Waypoint" << waypoint->name() << "added to map at position (" << waypoint->position().x << "," << waypoint->position().y << "," << waypoint->position().z << ")";
-            setModified(true);
-            // emit waypointAdded(waypoint); // Optional: more specific signal
-            emit mapChanged();
-        } else {
-            qWarning() << "Map::addWaypoint - Waypoint" << waypoint->name() << "already exists.";
         }
+        setModified(true);
+        emit waypointAdded(waypoint);
+        emit waypointsChanged();
+        emit mapChanged();
     } else {
-        qWarning("Map::addWaypoint - Attempted to add null waypoint.");
+        qWarning("Map::addWaypoint - Attempted to add null waypoint or waypoints collection not initialized.");
     }
 }
 
 void Map::removeWaypoint(Waypoint* waypoint) {
-    if (waypoint) {
-        if (m_waypoints.removeOne(waypoint)) { // removeOne returns true if item was found and removed
-            qDebug() << "Waypoint" << waypoint->name() << "removed from map and deleted.";
-            delete waypoint; // Map owns the waypoint
-            setModified(true);
-            // emit waypointRemoved(waypoint); // Optional: more specific signal
-            emit mapChanged();
-        } else {
-            qWarning() << "Map::removeWaypoint - Waypoint" << waypoint->name() << "not found in map.";
-        }
+    if (waypoint && waypoints_) {
+        QString waypointName = waypoint->name();
+        // Remove from legacy list first
+        m_waypoints.removeOne(waypoint);
+        // Remove from waypoints collection (this will delete the waypoint)
+        waypoints_->removeWaypoint(waypoint);
+        setModified(true);
+        emit waypointRemoved(waypoint);
+        emit waypointRemoved(waypointName);
+        emit waypointsChanged();
+        emit mapChanged();
     } else {
-        qWarning("Map::removeWaypoint - Attempted to remove null waypoint.");
+        qWarning("Map::removeWaypoint - Attempted to remove null waypoint or waypoints collection not initialized.");
     }
 }
 
-const QList<Waypoint*>& Map::getWaypoints() const {
-    // This const method should now refer to m_waypoints as per Map.h
-    // The Map.h has: const QList<Waypoint*>& getWaypoints() const { return m_waypoints; }
-    // So, this implementation in Map.cpp might be redundant if it was just returning the member.
-    // However, if Map.h only *declares* it and Map.cpp *defines* it, this change is needed.
-    // Looking at Map.h, the getter is defined inline. This means this Map.cpp version of getWaypoints()
-    // is either dead code or there's a mix-up.
-    // For safety, I will update this one too, though it might be shadowed by an inline getter in the header.
-    return m_waypoints;
+void Map::removeWaypoint(const QString& name) {
+    if (waypoints_) {
+        Waypoint* waypoint = waypoints_->getWaypoint(name);
+        if (waypoint) {
+            removeWaypoint(waypoint);
+        }
+    }
+}
+
+Waypoint* Map::getWaypoint(const QString& name) const {
+    if (waypoints_) {
+        return waypoints_->getWaypoint(name);
+    }
+    return nullptr;
+}
+
+const QList<Waypoint*> Map::getWaypoints() const {
+    if (waypoints_) {
+        return waypoints_->getAllWaypoints();
+    }
+    return QList<Waypoint*>(); // Return empty list if waypoints collection not initialized
+}
+
+// Task 71: Additional waypoint methods for full functionality
+Waypoint* Map::findWaypoint(const QString& name) const {
+    return getWaypoint(name); // Delegate to existing method
+}
+
+Waypoint* Map::findWaypointAt(const MapPos& position) const {
+    return findWaypointAt(position.x, position.y, position.z);
+}
+
+Waypoint* Map::findWaypointAt(int x, int y, int z) const {
+    if (!waypoints_) {
+        return nullptr;
+    }
+
+    QList<Waypoint*> allWaypoints = waypoints_->getAllWaypoints();
+    for (Waypoint* waypoint : allWaypoints) {
+        if (waypoint && waypoint->position().x == x &&
+            waypoint->position().y == y && waypoint->position().z == z) {
+            return waypoint;
+        }
+    }
+    return nullptr;
+}
+
+QList<Waypoint*> Map::findWaypointsInArea(const QRect& area, int z) const {
+    QList<Waypoint*> result;
+    if (!waypoints_) {
+        return result;
+    }
+
+    QList<Waypoint*> allWaypoints = waypoints_->getAllWaypoints();
+    for (Waypoint* waypoint : allWaypoints) {
+        if (waypoint && waypoint->position().z == z) {
+            QPoint waypointPos(waypoint->position().x, waypoint->position().y);
+            if (area.contains(waypointPos)) {
+                result.append(waypoint);
+            }
+        }
+    }
+    return result;
+}
+
+bool Map::hasWaypoint(const QString& name) const {
+    return findWaypoint(name) != nullptr;
+}
+
+bool Map::hasWaypointAt(const MapPos& position) const {
+    return findWaypointAt(position) != nullptr;
+}
+
+int Map::getWaypointCount() const {
+    if (waypoints_) {
+        return waypoints_->getWaypointCount();
+    }
+    return 0;
+}
+
+void Map::clearWaypoints() {
+    if (waypoints_) {
+        waypoints_->clear();
+        m_waypoints.clear();
+        setModified(true);
+        emit waypointsCleared();
+        emit waypointsChanged();
+        emit mapChanged();
+    }
+}
+
+// Task 71: Waypoint validation and utilities
+bool Map::isValidWaypointName(const QString& name) const {
+    QString trimmedName = name.trimmed();
+    if (trimmedName.isEmpty()) {
+        return false;
+    }
+
+    // Check if name already exists (case-insensitive)
+    return !hasWaypoint(trimmedName);
+}
+
+QString Map::generateUniqueWaypointName(const QString& baseName) const {
+    QString base = baseName.isEmpty() ? "Waypoint" : baseName;
+    QString candidateName = base;
+    int counter = 1;
+
+    while (hasWaypoint(candidateName)) {
+        candidateName = QString("%1 %2").arg(base).arg(counter);
+        counter++;
+    }
+
+    return candidateName;
+}
+
+QStringList Map::getWaypointNames() const {
+    QStringList names;
+    if (waypoints_) {
+        QList<Waypoint*> allWaypoints = waypoints_->getAllWaypoints();
+        for (Waypoint* waypoint : allWaypoints) {
+            if (waypoint) {
+                names.append(waypoint->name());
+            }
+        }
+        names.sort(Qt::CaseInsensitive);
+    }
+    return names;
+}
+
+// Task 71: Waypoint navigation and interaction
+bool Map::centerOnWaypoint(const QString& name) {
+    Waypoint* waypoint = findWaypoint(name);
+    return centerOnWaypoint(waypoint);
+}
+
+bool Map::centerOnWaypoint(Waypoint* waypoint) {
+    if (!waypoint) {
+        return false;
+    }
+
+    // This would typically emit a signal that the MapView can connect to
+    // For now, we'll emit a custom signal that can be connected to the view
+    emit waypointCenterRequested(waypoint);
+    return true;
+}
+
+QList<Waypoint*> Map::getWaypointsInRadius(const MapPos& center, int radius) const {
+    QList<Waypoint*> result;
+    if (!waypoints_ || radius < 0) {
+        return result;
+    }
+
+    QList<Waypoint*> allWaypoints = waypoints_->getAllWaypoints();
+    for (Waypoint* waypoint : allWaypoints) {
+        if (waypoint && waypoint->position().z == center.z) {
+            int dx = waypoint->position().x - center.x;
+            int dy = waypoint->position().y - center.y;
+            int distance = qSqrt(dx * dx + dy * dy);
+
+            if (distance <= radius) {
+                result.append(waypoint);
+            }
+        }
+    }
+    return result;
 }
 
 #include <QFile>
 #include <QFileInfo>
 // QDataStream is already included for loadFromOTBM/saveToOTBM
 
-// Load/Save Stubs
+// Task 51: Enhanced load/save with format detection
 bool Map::load(const QString& path) {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "Map::load - Could not open file for reading:" << path << "Error:" << file.errorString();
+    QString format = detectFileFormat(path);
+    return loadByFormat(path, format);
+}
+
+QString Map::detectFileFormat(const QString& path) const {
+    QString extension = QFileInfo(path).suffix().toLower();
+
+    if (extension == "otbm") {
+        return "otbm";
+    } else if (extension == "xml") {
+        return "xml";
+    } else if (extension == "json") {
+        return "json";
+    } else {
+        // Try to detect by content
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray header = file.read(16);
+            file.close();
+
+            if (header.startsWith("<?xml")) {
+                return "xml";
+            } else if (header.startsWith("{") || header.startsWith("[")) {
+                return "json";
+            } else {
+                return "otbm"; // Default to OTBM for binary files
+            }
+        }
+    }
+
+    return "otbm"; // Default fallback
+}
+
+bool Map::loadByFormat(const QString& path, const QString& format) {
+    qDebug() << "Map::loadByFormat - Loading" << path << "as format:" << format;
+
+    if (format == "otbm") {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) {
+            qWarning() << "Map::loadByFormat - Could not open OTBM file for reading:" << path;
+            return false;
+        }
+
+        QDataStream stream(&file);
+        stream.setByteOrder(QDataStream::LittleEndian);
+        bool success = loadFromOTBM(stream);
+        file.close();
+        return success;
+
+    } else if (format == "xml") {
+        return loadFromXML(path);
+
+    } else if (format == "json") {
+        return loadFromJSON(path);
+
+    } else {
+        qWarning() << "Map::loadByFormat - Unsupported format:" << format;
         return false;
     }
-
-    QDataStream stream(&file);
-    stream.setByteOrder(QDataStream::LittleEndian); // Ensure consistent byte order for initial checks if any, or for reader
-
-    qDebug() << "Map::load - Attempting to load from OTBM file:" << path;
-    bool success = loadFromOTBM(stream); // Delegate to the new method
-
-    if (success) {
-        qDebug() << "Map::load - Successfully loaded from OTBM file:" << path;
-    } else {
-        qWarning() << "Map::load - Failed to load from OTBM file:" << path << "Stream status:" << stream.status();
-    }
-
-    file.close();
-    return success;
 }
 
 bool Map::save(const QString& path) const {
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly)) {
-        qWarning() << "Map::save - Could not open file for writing:" << path << "Error:" << file.errorString();
+    QString format = detectFileFormat(path);
+    return saveByFormat(path, format);
+}
+
+bool Map::saveByFormat(const QString& path, const QString& format) const {
+    qDebug() << "Map::saveByFormat - Saving" << path << "as format:" << format;
+
+    if (format == "otbm") {
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly)) {
+            qWarning() << "Map::saveByFormat - Could not open OTBM file for writing:" << path;
+            return false;
+        }
+
+        QDataStream stream(&file);
+        stream.setByteOrder(QDataStream::LittleEndian);
+        bool success = saveToOTBM(stream);
+        file.close();
+        return success;
+
+    } else if (format == "xml") {
+        return saveToXML(path);
+
+    } else if (format == "json") {
+        return saveToJSON(path);
+
+    } else {
+        qWarning() << "Map::saveByFormat - Unsupported format:" << format;
         return false;
     }
-
-    QDataStream stream(&file);
-    stream.setByteOrder(QDataStream::LittleEndian); // Ensure consistent byte order
-
-    qDebug() << "Map::save - Attempting to save to OTBM file:" << path;
-    bool success = saveToOTBM(stream); // Delegate to the new method
-
-    if (success) {
-        qDebug() << "Map::save - Successfully saved to OTBM file:" << path;
-    } else {
-        qWarning() << "Map::save - Failed to save to OTBM file:" << path << "Stream status:" << stream.status();
-    }
-
-    file.close();
-    return success;
 }
 
 // Selection method implementations
@@ -1083,4 +1401,560 @@ bool Map::saveToOTBM(QDataStream& stream) const {
         qDebug() << "Map::saveToOTBM - Successfully saved OTBM data. Map set to unmodified.";
     }
     return stream.status() == QDataStream::Ok;
+}
+
+// Task 51: XML Serialization Implementation
+bool Map::loadFromXML(const QString& path) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "Map::loadFromXML - Could not open file for reading:" << path;
+        return false;
+    }
+
+    QXmlStreamReader xml(&file);
+    clear(); // Clear existing map data
+
+    while (!xml.atEnd() && !xml.hasError()) {
+        QXmlStreamReader::TokenType token = xml.readNext();
+
+        if (token == QXmlStreamReader::StartElement) {
+            if (xml.name() == "map") {
+                // Read map attributes
+                QXmlStreamAttributes attributes = xml.attributes();
+                if (attributes.hasAttribute("width")) {
+                    width_ = attributes.value("width").toInt();
+                }
+                if (attributes.hasAttribute("height")) {
+                    height_ = attributes.value("height").toInt();
+                }
+                if (attributes.hasAttribute("floors")) {
+                    floors_ = attributes.value("floors").toInt();
+                }
+                if (attributes.hasAttribute("description")) {
+                    description_ = attributes.value("description").toString();
+                }
+
+                // Initialize map with new dimensions
+                initialize(width_, height_, floors_, description_);
+
+            } else if (xml.name() == "tile") {
+                // Read tile data
+                QXmlStreamAttributes attributes = xml.attributes();
+                int x = attributes.value("x").toInt();
+                int y = attributes.value("y").toInt();
+                int z = attributes.value("z").toInt();
+
+                Tile* tile = getTile(x, y, z);
+                if (!tile) {
+                    tile = new Tile(x, y, z);
+                    setTile(x, y, z, tile);
+                }
+
+                // Read tile items
+                while (xml.readNextStartElement()) {
+                    if (xml.name() == "item") {
+                        QXmlStreamAttributes itemAttrs = xml.attributes();
+                        quint16 itemId = itemAttrs.value("id").toInt();
+
+                        ItemManager* itemManager = ItemManager::getInstancePtr();
+                        Item* item = itemManager->createItem(itemId);
+                        if (item) {
+                            // Read item attributes
+                            if (itemAttrs.hasAttribute("count")) {
+                                item->setCount(itemAttrs.value("count").toInt());
+                            }
+                            if (itemAttrs.hasAttribute("actionId")) {
+                                item->setActionId(itemAttrs.value("actionId").toInt());
+                            }
+                            if (itemAttrs.hasAttribute("uniqueId")) {
+                                item->setUniqueId(itemAttrs.value("uniqueId").toInt());
+                            }
+                            if (itemAttrs.hasAttribute("text")) {
+                                item->setText(itemAttrs.value("text").toString());
+                            }
+
+                            tile->addItem(item);
+                        }
+                        xml.skipCurrentElement();
+                    } else {
+                        xml.skipCurrentElement();
+                    }
+                }
+            } else if (xml.name() == "spawns") {
+                // Load spawns from XML
+                // Implementation would go here
+                xml.skipCurrentElement();
+            } else if (xml.name() == "houses") {
+                // Load houses from XML
+                // Implementation would go here
+                xml.skipCurrentElement();
+            } else if (xml.name() == "waypoints") {
+                // Load waypoints from XML
+                // Implementation would go here
+                xml.skipCurrentElement();
+            }
+        }
+    }
+
+    if (xml.hasError()) {
+        qWarning() << "Map::loadFromXML - XML parsing error:" << xml.errorString();
+        return false;
+    }
+
+    setModified(false);
+    qDebug() << "Map::loadFromXML - Successfully loaded XML map:" << path;
+    return true;
+}
+
+MapIterator Map::begin() {
+    QWriteLocker locker(&mapLock_);
+    return MapIterator(this, false);
+}
+
+MapIterator Map::end() {
+    QWriteLocker locker(&mapLock_);
+    return MapIterator(this, true);
+}
+
+ConstMapIterator Map::begin() const {
+    QReadLocker locker(&mapLock_);
+    return ConstMapIterator(this, false);
+}
+
+ConstMapIterator Map::end() const {
+    QReadLocker locker(&mapLock_);
+    return ConstMapIterator(this, true);
+}
+
+// --- Performance Utilities ---
+
+quint64 Map::getTileCount() const {
+    QReadLocker locker(&mapLock_);
+
+    if (tileCountDirty_) {
+        tileCount_ = 0;
+        for (const Tile* tile : tiles_) {
+            if (tile) {
+                ++tileCount_;
+            }
+        }
+        tileCountDirty_ = false;
+    }
+    return tileCount_;
+}
+
+Tile* Map::swapTile(int x, int y, int z, Tile* newTile) {
+    QWriteLocker locker(&mapLock_);
+
+    int index = getTileIndex(x, y, z);
+    if (index == -1 || index >= tiles_.size()) {
+        qWarning() << "Map::swapTile: Invalid coordinates or index" << x << y << z;
+        return nullptr;
+    }
+
+    Tile* oldTile = tiles_[index];
+    tiles_[index] = newTile;
+
+    if (newTile) {
+        newTile->x = x;
+        newTile->y = y;
+        newTile->z = z;
+    }
+
+    // Update tile count cache
+    if (oldTile && !newTile) {
+        --tileCount_;
+    } else if (!oldTile && newTile) {
+        ++tileCount_;
+    }
+
+    setModified(true);
+    emit tileChanged(x, y, z);
+    return oldTile;
+}
+
+Tile* Map::swapTile(const MapPos& pos, Tile* newTile) {
+    return swapTile(pos.x, pos.y, pos.z, newTile);
+}
+
+// --- Advanced Tile Operations ---
+
+void Map::clearTile(int x, int y, int z) {
+    QWriteLocker locker(&mapLock_);
+
+    int index = getTileIndex(x, y, z);
+    if (index != -1 && index < tiles_.size() && tiles_[index]) {
+        tiles_[index] = nullptr; // Clear without deleting
+        --tileCount_;
+        tileCountDirty_ = false; // We updated the count manually
+        setModified(true);
+        emit tileChanged(x, y, z);
+    }
+}
+
+void Map::clearTile(const MapPos& pos) {
+    clearTile(pos.x, pos.y, pos.z);
+}
+
+bool Map::hasTile(int x, int y, int z) const {
+    QReadLocker locker(&mapLock_);
+    return getTile(x, y, z) != nullptr;
+}
+
+bool Map::hasTile(const MapPos& pos) const {
+    return hasTile(pos.x, pos.y, pos.z);
+}
+
+// --- Thread Safety Utilities ---
+
+void Map::lockForReading() const {
+    mapLock_.lockForRead();
+}
+
+void Map::lockForWriting() {
+    mapLock_.lockForWrite();
+}
+
+void Map::unlock() const {
+    mapLock_.unlock();
+}
+
+void Map::unlockWrite() {
+    mapLock_.unlock();
+}
+
+// --- Map Cleanup and Optimization Utilities ---
+
+quint32 Map::cleanDuplicateItems(const QVector<QPair<quint16, quint16>>& ranges) {
+    QWriteLocker locker(&mapLock_);
+
+    quint32 removedCount = 0;
+
+    // Iterate through all tiles and remove duplicate items
+    for (Tile* tile : tiles_) {
+        if (!tile) continue;
+
+        QVector<Item*>& items = tile->items();
+        QSet<quint16> seenItemIds;
+
+        for (int i = items.size() - 1; i >= 0; --i) {
+            Item* item = items[i];
+            if (!item) continue;
+
+            quint16 itemId = item->getID();
+
+            // Check if item ID is in specified ranges (if any)
+            bool inRange = ranges.isEmpty();
+            if (!inRange) {
+                for (const auto& range : ranges) {
+                    if (itemId >= range.first && itemId <= range.second) {
+                        inRange = true;
+                        break;
+                    }
+                }
+            }
+
+            if (inRange && seenItemIds.contains(itemId)) {
+                // Remove duplicate item
+                items.removeAt(i);
+                delete item;
+                ++removedCount;
+            } else if (inRange) {
+                seenItemIds.insert(itemId);
+            }
+        }
+    }
+
+    if (removedCount > 0) {
+        setModified(true);
+        emit mapChanged();
+        qDebug() << "Map::cleanDuplicateItems: Removed" << removedCount << "duplicate items";
+    }
+
+    return removedCount;
+}
+
+void Map::optimizeMemory() {
+    QWriteLocker locker(&mapLock_);
+
+    // Compact tiles vector by removing trailing nulls
+    while (!tiles_.isEmpty() && tiles_.last() == nullptr) {
+        tiles_.removeLast();
+    }
+
+    // Squeeze to free unused capacity
+    tiles_.squeeze();
+
+    // Force tile count recalculation
+    tileCountDirty_ = true;
+
+    qDebug() << "Map::optimizeMemory: Memory optimization completed";
+}
+
+void Map::rebuildTileIndex() {
+    QWriteLocker locker(&mapLock_);
+
+    // Force recalculation of tile count
+    tileCountDirty_ = true;
+    getTileCount(); // This will recalculate
+
+    qDebug() << "Map::rebuildTileIndex: Tile index rebuilt, count:" << tileCount_;
+}
+
+// --- QGraphicsView Integration Helpers ---
+
+QVector<Tile*> Map::getTilesInRegion(const QRect& region, int floor) const {
+    QReadLocker locker(&mapLock_);
+
+    QVector<Tile*> result;
+
+    // Clamp region to map bounds
+    int startX = qMax(0, region.left());
+    int endX = qMin(width_ - 1, region.right());
+    int startY = qMax(0, region.top());
+    int endY = qMin(height_ - 1, region.bottom());
+
+    if (floor < 0 || floor >= floors_) {
+        return result; // Invalid floor
+    }
+
+    // Collect tiles in the specified region
+    for (int y = startY; y <= endY; ++y) {
+        for (int x = startX; x <= endX; ++x) {
+            Tile* tile = getTile(x, y, floor);
+            if (tile) {
+                result.append(tile);
+            }
+        }
+    }
+
+    return result;
+}
+
+QVector<Tile*> Map::getTilesInRadius(const MapPos& center, int radius) const {
+    QReadLocker locker(&mapLock_);
+
+    QVector<Tile*> result;
+
+    if (radius < 0) {
+        return result; // Invalid radius
+    }
+
+    // Calculate bounding box for the radius
+    int startX = qMax(0, center.x - radius);
+    int endX = qMin(width_ - 1, center.x + radius);
+    int startY = qMax(0, center.y - radius);
+    int endY = qMin(height_ - 1, center.y + radius);
+
+    if (center.z < 0 || center.z >= floors_) {
+        return result; // Invalid floor
+    }
+
+    // Collect tiles within the radius
+    for (int y = startY; y <= endY; ++y) {
+        for (int x = startX; x <= endX; ++x) {
+            // Check if point is within circular radius
+            int dx = x - center.x;
+            int dy = y - center.y;
+            if (dx * dx + dy * dy <= radius * radius) {
+                Tile* tile = getTile(x, y, center.z);
+                if (tile) {
+                    result.append(tile);
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+void Map::invalidateRegion(const QRect& region, int floor) {
+    QReadLocker locker(&mapLock_);
+
+    // Clamp region to map bounds
+    int startX = qMax(0, region.left());
+    int endX = qMin(width_ - 1, region.right());
+    int startY = qMax(0, region.top());
+    int endY = qMin(height_ - 1, region.bottom());
+
+    if (floor < 0 || floor >= floors_) {
+        return; // Invalid floor
+    }
+
+    // Emit tileChanged signals for all tiles in the region
+    for (int y = startY; y <= endY; ++y) {
+        for (int x = startX; x <= endX; ++x) {
+            emit tileChanged(x, y, floor);
+        }
+    }
+
+    qDebug() << "Map::invalidateRegion: Invalidated region" << region << "on floor" << floor;
+}
+
+// Task 66: Enhanced house management implementation
+void Map::addHouse(House* house) {
+    if (!house) return;
+
+    // Check if house already exists
+    for (House* existingHouse : houses_) {
+        if (existingHouse && existingHouse->getId() == house->getId()) {
+            qWarning() << "Map::addHouse: House with ID" << house->getId() << "already exists";
+            return;
+        }
+    }
+
+    houses_.append(house);
+
+    // Connect house signals for automatic map updates
+    connect(house, &House::houseChanged, this, [this, house]() {
+        emit houseDataChanged(house);
+        setModified(true);
+    });
+
+    connect(house, &House::tileAdded, this, [this](const MapPos& position) {
+        emit tileChanged(position.x, position.y, position.z);
+        setModified(true);
+    });
+
+    connect(house, &House::tileRemoved, this, [this](const MapPos& position) {
+        emit tileChanged(position.x, position.y, position.z);
+        setModified(true);
+    });
+
+    emit houseAdded(house);
+    setModified(true);
+    qDebug() << "Map::addHouse: Added house" << house->getName() << "ID:" << house->getId();
+}
+
+void Map::removeHouse(House* house) {
+    if (!house) return;
+
+    int index = houses_.indexOf(house);
+    if (index != -1) {
+        houses_.removeAt(index);
+
+        // Disconnect signals
+        disconnect(house, nullptr, this, nullptr);
+
+        quint32 houseId = house->getId();
+        emit houseRemoved(houseId);
+        setModified(true);
+        qDebug() << "Map::removeHouse: Removed house" << house->getName() << "ID:" << houseId;
+    }
+}
+
+void Map::removeHouse(quint32 houseId) {
+    House* house = getHouse(houseId);
+    if (house) {
+        removeHouse(house);
+    }
+}
+
+House* Map::getHouse(quint32 houseId) const {
+    for (House* house : houses_) {
+        if (house && house->getId() == houseId) {
+            return house;
+        }
+    }
+    return nullptr;
+}
+
+void Map::clearHouses() {
+    for (House* house : houses_) {
+        if (house) {
+            disconnect(house, nullptr, this, nullptr);
+            emit houseRemoved(house->getId());
+        }
+    }
+    houses_.clear();
+    setModified(true);
+    qDebug() << "Map::clearHouses: Cleared all houses";
+}
+
+quint32 Map::getNextHouseId() const {
+    quint32 maxId = 0;
+    for (House* house : houses_) {
+        if (house && house->getId() > maxId) {
+            maxId = house->getId();
+        }
+    }
+    return maxId + 1;
+}
+
+// Task 66: Enhanced town management implementation
+void Map::addTown(Town* town) {
+    if (!town) return;
+
+    // Check if town already exists
+    for (Town* existingTown : m_towns) {
+        if (existingTown && existingTown->getId() == town->getId()) {
+            qWarning() << "Map::addTown: Town with ID" << town->getId() << "already exists";
+            return;
+        }
+    }
+
+    m_towns.append(town);
+    emit townAdded(town);
+    setModified(true);
+    qDebug() << "Map::addTown: Added town" << town->getName() << "ID:" << town->getId();
+}
+
+void Map::removeTown(Town* town) {
+    if (!town) return;
+
+    int index = m_towns.indexOf(town);
+    if (index != -1) {
+        m_towns.removeAt(index);
+
+        quint32 townId = town->getId();
+        emit townRemoved(townId);
+        setModified(true);
+        qDebug() << "Map::removeTown: Removed town" << town->getName() << "ID:" << townId;
+    }
+}
+
+void Map::removeTown(quint32 townId) {
+    Town* town = getTown(townId);
+    if (town) {
+        removeTown(town);
+    }
+}
+
+Town* Map::getTown(quint32 townId) const {
+    for (Town* town : m_towns) {
+        if (town && town->getId() == townId) {
+            return town;
+        }
+    }
+    return nullptr;
+}
+
+Town* Map::getTown(const QString& townName) const {
+    for (Town* town : m_towns) {
+        if (town && town->getName() == townName) {
+            return town;
+        }
+    }
+    return nullptr;
+}
+
+void Map::clearTowns() {
+    for (Town* town : m_towns) {
+        if (town) {
+            emit townRemoved(town->getId());
+        }
+    }
+    m_towns.clear();
+    setModified(true);
+    qDebug() << "Map::clearTowns: Cleared all towns";
+}
+
+quint32 Map::getNextTownId() const {
+    quint32 maxId = 0;
+    for (Town* town : m_towns) {
+        if (town && town->getId() > maxId) {
+            maxId = town->getId();
+        }
+    }
+    return maxId + 1;
 }

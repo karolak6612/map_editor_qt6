@@ -5,6 +5,8 @@
 #include <QColor>   // For draw method placeholder
 #include "ItemManager.h" // Required for ItemTypeData access
 #include "Brush.h"       // Required for Brush* return type and itemTypeData->brush
+#include "SpriteManager.h" // Task 54: For sprite integration
+#include "GameSprite.h"    // Task 54: For GameSpriteData
 #include <QDataStream>  // For unserializeOtbmAttributes
 #include <QByteArray>   // For unserializeOtbmAttributes
 #include <QIODevice>    // For QDataStream operations (usually included by QDataStream)
@@ -35,6 +37,55 @@ const QString Item::AttrTeleDestX = QStringLiteral("teleportDestX");
 const QString Item::AttrTeleDestY = QStringLiteral("teleportDestY");
 const QString Item::AttrTeleDestZ = QStringLiteral("teleportDestZ");
 const QString Item::AttrDepotID = QStringLiteral("depotId");
+const QString Item::AttrFluidType = QStringLiteral("fluidType");
+const QString Item::AttrDecayTo = QStringLiteral("decayTo");
+const QString Item::AttrDecayTime = QStringLiteral("decayTime");
+const QString Item::AttrSplashType = QStringLiteral("splashType");
+const QString Item::AttrRuneSpellName = QStringLiteral("runeSpellName");
+const QString Item::AttrRuneLevel = QStringLiteral("runeLevel");
+const QString Item::AttrRuneMagicLevel = QStringLiteral("runeMagicLevel");
+
+// Task 48: Additional OTBM attribute constants
+const QString Item::AttrRuneCharges = QStringLiteral("runeCharges");
+const QString Item::AttrWrittenDate = QStringLiteral("writtenDate");
+const QString Item::AttrSleeperGuid = QStringLiteral("sleeperGuid");
+const QString Item::AttrSleepStart = QStringLiteral("sleepStart");
+const QString Item::AttrDecayingState = QStringLiteral("decayingState");
+const QString Item::AttrHouseDoorId = QStringLiteral("houseDoorId");
+const QString Item::AttrPodiumOutfit = QStringLiteral("podiumOutfit");
+const QString Item::AttrOwner = QStringLiteral("owner");
+const QString Item::AttrSpecialDescription = QStringLiteral("specialDescription");
+const QString Item::AttrCustomAttributes = QStringLiteral("customAttributes");
+
+// Task 55: Advanced property attribute constants
+const QString Item::AttrDoorId = QStringLiteral("doorId");
+const QString Item::AttrDoorType = QStringLiteral("doorType");
+const QString Item::AttrDoorOpen = QStringLiteral("doorOpen");
+const QString Item::AttrDoorLocked = QStringLiteral("doorLocked");
+const QString Item::AttrContainerCapacity = QStringLiteral("containerCapacity");
+const QString Item::AttrContainerContents = QStringLiteral("containerContents");
+const QString Item::AttrContainerRestrictions = QStringLiteral("containerRestrictions");
+const QString Item::AttrBedSleeperId = QStringLiteral("bedSleeperId");
+const QString Item::AttrBedSleepStart = QStringLiteral("bedSleepStart");
+const QString Item::AttrBedRegenerationRate = QStringLiteral("bedRegenerationRate");
+const QString Item::AttrPodiumDirection = QStringLiteral("podiumDirection");
+const QString Item::AttrPodiumShowOutfit = QStringLiteral("podiumShowOutfit");
+const QString Item::AttrPodiumShowMount = QStringLiteral("podiumShowMount");
+const QString Item::AttrPodiumShowPlatform = QStringLiteral("podiumShowPlatform");
+const QString Item::AttrPodiumOutfitLookType = QStringLiteral("podiumOutfitLookType");
+const QString Item::AttrPodiumOutfitHead = QStringLiteral("podiumOutfitHead");
+const QString Item::AttrPodiumOutfitBody = QStringLiteral("podiumOutfitBody");
+const QString Item::AttrPodiumOutfitLegs = QStringLiteral("podiumOutfitLegs");
+const QString Item::AttrPodiumOutfitFeet = QStringLiteral("podiumOutfitFeet");
+const QString Item::AttrPodiumOutfitAddon = QStringLiteral("podiumOutfitAddon");
+const QString Item::AttrBreakChance = QStringLiteral("breakChance");
+const QString Item::AttrDuration = QStringLiteral("duration");
+const QString Item::AttrMaxDuration = QStringLiteral("maxDuration");
+const QString Item::AttrCreatureType = QStringLiteral("creatureType");
+const QString Item::AttrCreatureName = QStringLiteral("creatureName");
+const QString Item::AttrSpawnRadius = QStringLiteral("spawnRadius");
+const QString Item::AttrSpawnInterval = QStringLiteral("spawnInterval");
+const QString Item::AttrSpawnMaxCreatures = QStringLiteral("spawnMaxCreatures");
 
 Item::Item(quint16 serverId, QObject *parent) : QObject(parent),
     serverId_(serverId),
@@ -77,7 +128,10 @@ Item::Item(quint16 serverId, QObject *parent) : QObject(parent),
     weaponType_(0), // Assuming 0 is WEAPON_NONE or similar default
     lightLevel_(0),
     lightColor_(0),
-    classification_(0)
+    classification_(0),
+    height_(0),
+    drawOffsetX_(0),
+    drawOffsetY_(0)
 {
     // Name, ClientID, and flags are often set by an ItemManager after creation
     // based on the serverId by reading an items.xml or similar definition file.
@@ -276,29 +330,20 @@ void Item::setIsContainer(bool on) { setContainer(on); }
 
 // Brush-related property implementations
 bool Item::isTable() const {
-    // Assuming ItemManager::getInstance() and getItemTypeData() are thread-safe if used across threads.
+    // Assuming ItemManager::getInstance() and getItemProperties() are thread-safe if used across threads.
     // For typical editor usage, this might be single-threaded.
-    const ItemTypeData* itemTypeData = ItemManager::getInstance().getItemTypeData(serverId_);
-    if (itemTypeData) {
-        return itemTypeData->isTable; // Assumes ItemTypeData struct has 'isTable'
-    }
-    return false;
+    const ItemProperties& itemProps = ItemManager::getInstance().getItemProperties(serverId_);
+    return itemProps.isTable;
 }
 
 bool Item::isCarpet() const {
-    const ItemTypeData* itemTypeData = ItemManager::getInstance().getItemTypeData(serverId_);
-    if (itemTypeData) {
-        return itemTypeData->isCarpet; // Assumes ItemTypeData struct has 'isCarpet'
-    }
-    return false;
+    const ItemProperties& itemProps = ItemManager::getInstance().getItemProperties(serverId_);
+    return itemProps.isCarpet;
 }
 
 Brush* Item::getBrush() const {
-    const ItemTypeData* itemTypeData = ItemManager::getInstance().getItemTypeData(serverId_);
-    if (itemTypeData) {
-        return itemTypeData->brush; // Assumes ItemTypeData struct has 'brush'
-    }
-    return nullptr;
+    const ItemProperties& itemProps = ItemManager::getInstance().getItemProperties(serverId_);
+    return itemProps.brush;
 }
 
 
@@ -314,6 +359,32 @@ QString Item::getDescription() const {
     }
     desc += ")";
 
+    // Add weight information if available
+    if (weight() > 0.0f) {
+        desc += QString("\nWeight: %1 oz").arg(weight(), 0, 'f', 2);
+    }
+
+    // Add stackable count if applicable
+    if (isStackable() && getCount() > 1) {
+        desc += QString("\nCount: %1").arg(getCount());
+    }
+
+    // Add charges information if applicable
+    if (isCharged() && charges() > 0) {
+        desc += QString("\nCharges: %1").arg(charges());
+    }
+
+    // Add attack/defense/armor if applicable
+    if (attack() > 0) {
+        desc += QString("\nAttack: %1").arg(attack());
+    }
+    if (defense() > 0) {
+        desc += QString("\nDefense: %1").arg(defense());
+    }
+    if (armor() > 0) {
+        desc += QString("\nArmor: %1").arg(armor());
+    }
+
     // Append text from AttrText if available
     if (hasAttribute(Item::AttrText)) {
         QString textAttr = getText(); // getText() now uses Item::AttrText
@@ -321,11 +392,21 @@ QString Item::getDescription() const {
              desc += "\n\"" + textAttr + "\"";
         }
     }
+
     // Append additional description from AttrDescription if available
     // This is different from the primary item look description stored in member description_
     if (hasAttribute(Item::AttrDescription)) {
         desc += "\n" + getAttribute(Item::AttrDescription).toString();
     }
+
+    // Add fluid type for fluid containers
+    if (isFluidContainer() && hasAttribute(Item::AttrFluidType)) {
+        int fluidType = getAttribute(Item::AttrFluidType).toInt();
+        if (fluidType > 0) {
+            desc += QString("\nFluid Type: %1").arg(fluidType);
+        }
+    }
+
     return desc;
 }
 
@@ -388,34 +469,681 @@ Item* Item::deepCopy() const {
     newItem->lightLevel_ = this->lightLevel_;
     newItem->lightColor_ = this->lightColor_;
     newItem->classification_ = this->classification_;
+    newItem->height_ = this->height_;
+    newItem->drawOffsetX_ = this->drawOffsetX_;
+    newItem->drawOffsetY_ = this->drawOffsetY_;
 
     return newItem;
 }
 
 void Item::draw(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
     if (!painter) return;
-    
-    QColor itemColor = Qt::blue;
-    itemColor.setHsv(((serverId_ * 37) % 360), 200, 220); 
-    
-    painter->fillRect(targetRect, QColor(itemColor.red(), itemColor.green(), itemColor.blue(), 128));
-    painter->setPen(Qt::black);
+
+    painter->save();
+
+    // Task 54: Full sprite integration for production-quality rendering
+    if (options.useSprites && clientId_ > 0) {
+        drawWithSprites(painter, targetRect, options);
+    } else {
+        // Fallback to placeholder rendering
+        drawPlaceholder(painter, targetRect, options);
+    }
+
+    // Task 76: Draw special item flags
+    drawSpecialFlags(painter, targetRect, options);
+
+    // Draw debug information if enabled
+    if (options.drawDebugInfo) {
+        drawDebugInfo(painter, targetRect, options);
+    }
+
+    // Draw bounding box if debug mode is enabled
+    if (options.drawDebugInfo) {
+        drawBoundingBox(painter, targetRect, options);
+    }
+
+    painter->restore();
+}
+
+// Task 54: Full sprite integration implementation
+void Item::drawWithSprites(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter || clientId_ == 0) {
+        return;
+    }
+
+    // Get SpriteManager instance
+    SpriteManager* spriteManager = SpriteManager::getInstance();
+    if (!spriteManager) {
+        qWarning() << "Item::drawWithSprites: SpriteManager not available";
+        drawPlaceholder(painter, targetRect, options);
+        return;
+    }
+
+    // Get GameSprite data for this item
+    QSharedPointer<const GameSpriteData> spriteData = spriteManager->getGameSpriteData(clientId_);
+    if (!spriteData) {
+        qWarning() << "Item::drawWithSprites: No sprite data for client ID" << clientId_;
+        drawPlaceholder(painter, targetRect, options);
+        return;
+    }
+
+    // Apply item opacity
+    qreal opacity = painter->opacity();
+    painter->setOpacity(opacity * options.itemOpacity);
+
+    // Apply transparency for items if enabled
+    if (options.transparentItems && !isGroundTile()) {
+        painter->setOpacity(painter->opacity() * 0.7f);
+    }
+
+    // Calculate animation frame
+    int currentFrame = calculateCurrentFrame(options);
+
+    // Calculate pattern coordinates based on item state
+    int patternX = 0, patternY = 0, patternZ = 0;
+    calculatePatternCoordinates(patternX, patternY, patternZ, options);
+
+    // Draw all sprite layers
+    for (int layer = 0; layer < spriteData->layers; ++layer) {
+        drawSpriteLayer(painter, targetRect, spriteData, currentFrame,
+                       patternX, patternY, patternZ, layer, options);
+    }
+
+    // Restore opacity
+    painter->setOpacity(opacity);
+}
+
+void Item::drawSpriteLayer(QPainter* painter, const QRectF& targetRect,
+                          QSharedPointer<const GameSpriteData> spriteData,
+                          int frame, int patternX, int patternY, int patternZ,
+                          int layer, const DrawingOptions& options) const {
+    if (!painter || !spriteData) {
+        return;
+    }
+
+    SpriteManager* spriteManager = SpriteManager::getInstance();
+    if (!spriteManager) {
+        return;
+    }
+
+    // Get the frame image for this layer
+    QImage frameImage = spriteManager->getFrameImage(clientId_, frame,
+                                                    patternX, patternY, patternZ, layer);
+
+    if (frameImage.isNull()) {
+        return;
+    }
+
+    // Calculate target position with offsets
+    QRectF drawRect = targetRect;
+
+    // Apply draw offsets from sprite data or item properties
+    drawRect.translate(drawOffsetX_, drawOffsetY_);
+
+    // Apply sprite-specific offsets if available
+    if (spriteData->drawOffsetX != 0 || spriteData->drawOffsetY != 0) {
+        drawRect.translate(spriteData->drawOffsetX, spriteData->drawOffsetY);
+    }
+
+    // Handle multi-tile sprites (width > 1 or height > 1)
+    if (spriteData->width > 1 || spriteData->height > 1) {
+        drawMultiTileSprite(painter, drawRect, frameImage, spriteData, options);
+    } else {
+        // Single tile sprite - direct draw
+        painter->drawImage(drawRect, frameImage);
+    }
+}
+
+void Item::drawMultiTileSprite(QPainter* painter, const QRectF& baseRect,
+                              const QImage& frameImage,
+                              QSharedPointer<const GameSpriteData> spriteData,
+                              const DrawingOptions& options) const {
+    Q_UNUSED(options);
+
+    if (!painter || frameImage.isNull() || !spriteData) {
+        return;
+    }
+
+    // Calculate tile size
+    int tileSize = static_cast<int>(baseRect.width());
+
+    // Draw each tile part of the multi-tile sprite
+    for (int cx = 0; cx < spriteData->width; ++cx) {
+        for (int cy = 0; cy < spriteData->height; ++cy) {
+            // Calculate source rectangle for this tile part
+            QRect sourceRect(cx * tileSize, cy * tileSize, tileSize, tileSize);
+
+            // Calculate target rectangle for this tile part
+            QRectF targetRect(baseRect.x() - cx * tileSize,
+                             baseRect.y() - cy * tileSize,
+                             tileSize, tileSize);
+
+            // Draw this part of the sprite
+            painter->drawImage(targetRect, frameImage, sourceRect);
+        }
+    }
+}
+
+int Item::calculateCurrentFrame(const DrawingOptions& options) const {
+    // For animated items, calculate current frame based on time
+    if (isAnimated()) {
+        // Use global animation time or item-specific animation state
+        qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+
+        // Default animation speed (can be customized per item type)
+        int animationSpeed = 500; // milliseconds per frame
+
+        // Get frame count from sprite data
+        SpriteManager* spriteManager = SpriteManager::getInstance();
+        if (spriteManager) {
+            QSharedPointer<const GameSpriteData> spriteData = spriteManager->getGameSpriteData(clientId_);
+            if (spriteData && spriteData->frames > 1) {
+                int frameIndex = (currentTime / animationSpeed) % spriteData->frames;
+                return frameIndex;
+            }
+        }
+    }
+
+    // For non-animated items or if animation is disabled
+    return 0;
+}
+
+void Item::calculatePatternCoordinates(int& patternX, int& patternY, int& patternZ,
+                                      const DrawingOptions& options) const {
+    Q_UNUSED(options);
+
+    // Default pattern coordinates
+    patternX = 0;
+    patternY = 0;
+    patternZ = 0;
+
+    // Calculate pattern based on item state and properties
+
+    // Pattern X: Often used for item variations or count-based patterns
+    if (isStackable() && getCount() > 1) {
+        // Use count to determine pattern (for stackable items with different visuals)
+        int count = getCount();
+        if (count >= 5) patternX = 2;
+        else if (count >= 2) patternX = 1;
+        else patternX = 0;
+    }
+
+    // Pattern Y: Often used for item state (open/closed, on/off, etc.)
+    if (hasCharges() && getCharges() > 0) {
+        // Use charges for pattern variation
+        patternY = qMin(getCharges() - 1, 3); // Limit to available patterns
+    }
+
+    // Pattern Z: Often used for direction or orientation
+    if (isRotatable()) {
+        // Use rotation state if available
+        // This would need to be stored in item attributes
+        patternZ = attributes_.value("rotation", 0).toInt();
+    }
+}
+
+bool Item::isAnimated() const {
+    // Check if this item type supports animation
+    // This could be determined from ItemType data or sprite properties
+    SpriteManager* spriteManager = SpriteManager::getInstance();
+    if (spriteManager) {
+        QSharedPointer<const GameSpriteData> spriteData = spriteManager->getGameSpriteData(clientId_);
+        if (spriteData) {
+            return spriteData->frames > 1;
+        }
+    }
+
+    return false;
+}
+
+// Task 55: Advanced property accessor implementations
+
+// Door properties
+quint8 Item::getDoorId() const {
+    return getAttribute(AttrDoorId, 0).toUInt();
+}
+
+void Item::setDoorId(quint8 doorId) {
+    setAttribute(AttrDoorId, doorId);
+}
+
+bool Item::isDoorOpen() const {
+    return getAttribute(AttrDoorOpen, false).toBool();
+}
+
+void Item::setDoorOpen(bool open) {
+    setAttribute(AttrDoorOpen, open);
+}
+
+bool Item::isDoorLocked() const {
+    return getAttribute(AttrDoorLocked, false).toBool();
+}
+
+void Item::setDoorLocked(bool locked) {
+    setAttribute(AttrDoorLocked, locked);
+}
+
+// Container properties
+int Item::getContainerCapacity() const {
+    return getAttribute(AttrContainerCapacity, 20).toInt(); // Default capacity
+}
+
+void Item::setContainerCapacity(int capacity) {
+    setAttribute(AttrContainerCapacity, capacity);
+}
+
+QVariantList Item::getContainerContents() const {
+    return getAttribute(AttrContainerContents, QVariantList()).toList();
+}
+
+void Item::setContainerContents(const QVariantList& contents) {
+    setAttribute(AttrContainerContents, contents);
+}
+
+QStringList Item::getContainerRestrictions() const {
+    return getAttribute(AttrContainerRestrictions, QStringList()).toStringList();
+}
+
+void Item::setContainerRestrictions(const QStringList& restrictions) {
+    setAttribute(AttrContainerRestrictions, restrictions);
+}
+
+// Teleport properties
+QPoint Item::getTeleportDestination() const {
+    QVariantList coords = getAttribute(AttrDestination, QVariantList()).toList();
+    if (coords.size() >= 2) {
+        return QPoint(coords[0].toInt(), coords[1].toInt());
+    }
+    return QPoint(0, 0);
+}
+
+void Item::setTeleportDestination(const QPoint& destination) {
+    setTeleportDestination(destination.x(), destination.y(), 0);
+}
+
+void Item::setTeleportDestination(int x, int y, int z) {
+    QVariantList coords;
+    coords << x << y << z;
+    setAttribute(AttrDestination, coords);
+}
+
+// Bed properties
+quint32 Item::getBedSleeperId() const {
+    return getAttribute(AttrBedSleeperId, 0).toUInt();
+}
+
+void Item::setBedSleeperId(quint32 sleeperId) {
+    setAttribute(AttrBedSleeperId, sleeperId);
+}
+
+quint32 Item::getBedSleepStart() const {
+    return getAttribute(AttrBedSleepStart, 0).toUInt();
+}
+
+void Item::setBedSleepStart(quint32 sleepStart) {
+    setAttribute(AttrBedSleepStart, sleepStart);
+}
+
+int Item::getBedRegenerationRate() const {
+    return getAttribute(AttrBedRegenerationRate, 1).toInt();
+}
+
+void Item::setBedRegenerationRate(int rate) {
+    setAttribute(AttrBedRegenerationRate, rate);
+}
+
+// Podium properties
+int Item::getPodiumDirection() const {
+    return getAttribute(AttrPodiumDirection, 0).toInt();
+}
+
+void Item::setPodiumDirection(int direction) {
+    setAttribute(AttrPodiumDirection, direction);
+}
+
+bool Item::getPodiumShowOutfit() const {
+    return getAttribute(AttrPodiumShowOutfit, true).toBool();
+}
+
+void Item::setPodiumShowOutfit(bool show) {
+    setAttribute(AttrPodiumShowOutfit, show);
+}
+
+bool Item::getPodiumShowMount() const {
+    return getAttribute(AttrPodiumShowMount, false).toBool();
+}
+
+void Item::setPodiumShowMount(bool show) {
+    setAttribute(AttrPodiumShowMount, show);
+}
+
+bool Item::getPodiumShowPlatform() const {
+    return getAttribute(AttrPodiumShowPlatform, false).toBool();
+}
+
+void Item::setPodiumShowPlatform(bool show) {
+    setAttribute(AttrPodiumShowPlatform, show);
+}
+
+// Podium outfit properties
+quint16 Item::getPodiumOutfitLookType() const {
+    return getAttribute(AttrPodiumOutfitLookType, 0).toUInt();
+}
+
+void Item::setPodiumOutfitLookType(quint16 lookType) {
+    setAttribute(AttrPodiumOutfitLookType, lookType);
+}
+
+quint8 Item::getPodiumOutfitHead() const {
+    return getAttribute(AttrPodiumOutfitHead, 0).toUInt();
+}
+
+void Item::setPodiumOutfitHead(quint8 head) {
+    setAttribute(AttrPodiumOutfitHead, head);
+}
+
+quint8 Item::getPodiumOutfitBody() const {
+    return getAttribute(AttrPodiumOutfitBody, 0).toUInt();
+}
+
+void Item::setPodiumOutfitBody(quint8 body) {
+    setAttribute(AttrPodiumOutfitBody, body);
+}
+
+quint8 Item::getPodiumOutfitLegs() const {
+    return getAttribute(AttrPodiumOutfitLegs, 0).toUInt();
+}
+
+void Item::setPodiumOutfitLegs(quint8 legs) {
+    setAttribute(AttrPodiumOutfitLegs, legs);
+}
+
+quint8 Item::getPodiumOutfitFeet() const {
+    return getAttribute(AttrPodiumOutfitFeet, 0).toUInt();
+}
+
+void Item::setPodiumOutfitFeet(quint8 feet) {
+    setAttribute(AttrPodiumOutfitFeet, feet);
+}
+
+quint8 Item::getPodiumOutfitAddon() const {
+    return getAttribute(AttrPodiumOutfitAddon, 0).toUInt();
+}
+
+void Item::setPodiumOutfitAddon(quint8 addon) {
+    setAttribute(AttrPodiumOutfitAddon, addon);
+}
+
+// Item durability and timing properties
+int Item::getBreakChance() const {
+    return getAttribute(AttrBreakChance, 0).toInt();
+}
+
+void Item::setBreakChance(int chance) {
+    setAttribute(AttrBreakChance, chance);
+}
+
+quint32 Item::getDuration() const {
+    return getAttribute(AttrDuration, 0).toUInt();
+}
+
+void Item::setDuration(quint32 duration) {
+    setAttribute(AttrDuration, duration);
+}
+
+quint32 Item::getMaxDuration() const {
+    return getAttribute(AttrMaxDuration, 0).toUInt();
+}
+
+void Item::setMaxDuration(quint32 maxDuration) {
+    setAttribute(AttrMaxDuration, maxDuration);
+}
+
+// Creature/Spawn properties
+QString Item::getCreatureType() const {
+    return getAttribute(AttrCreatureType, QString()).toString();
+}
+
+void Item::setCreatureType(const QString& type) {
+    setAttribute(AttrCreatureType, type);
+}
+
+QString Item::getCreatureName() const {
+    return getAttribute(AttrCreatureName, QString()).toString();
+}
+
+void Item::setCreatureName(const QString& name) {
+    setAttribute(AttrCreatureName, name);
+}
+
+int Item::getSpawnRadius() const {
+    return getAttribute(AttrSpawnRadius, 3).toInt();
+}
+
+void Item::setSpawnRadius(int radius) {
+    setAttribute(AttrSpawnRadius, radius);
+}
+
+quint32 Item::getSpawnInterval() const {
+    return getAttribute(AttrSpawnInterval, 10000).toUInt(); // 10 seconds default
+}
+
+void Item::setSpawnInterval(quint32 interval) {
+    setAttribute(AttrSpawnInterval, interval);
+}
+
+int Item::getSpawnMaxCreatures() const {
+    return getAttribute(AttrSpawnMaxCreatures, 3).toInt();
+}
+
+void Item::setSpawnMaxCreatures(int maxCreatures) {
+    setAttribute(AttrSpawnMaxCreatures, maxCreatures);
+}
+
+// --- Enhanced Placeholder Rendering Methods ---
+
+void Item::drawPlaceholder(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter) return;
+
+    painter->save();
+
+    // Generate color based on item type and ID for visual distinction
+    QColor itemColor = getPlaceholderColor();
+
+    // Draw filled rectangle with transparency
+    QColor fillColor = itemColor;
+    fillColor.setAlpha(options.transparentItems ? 100 : 180);
+    painter->fillRect(targetRect, fillColor);
+
+    // Draw border
+    QPen borderPen(itemColor.darker(150), 1);
+    painter->setPen(borderPen);
     painter->drawRect(targetRect);
 
-    if (options.drawDebugInfo) {
-        painter->save();
-        QPen debugPen(Qt::magenta);
-        debugPen.setStyle(Qt::DotLine);
-        painter->setPen(debugPen);
-        painter->drawRect(targetRect);
+    // Draw item ID text if there's enough space
+    if (targetRect.width() > 20 && targetRect.height() > 15) {
+        drawItemIdText(painter, targetRect, options);
+    }
 
-        QString idText = QString("ID:%1").arg(serverId_);
+    // Draw type indicator if there's space
+    if (targetRect.width() > 30 && targetRect.height() > 25) {
+        drawTypeIndicator(painter, targetRect, options);
+    }
+
+    painter->restore();
+}
+
+void Item::drawDebugInfo(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter || !options.drawDebugInfo) return;
+
+    painter->save();
+
+    QFont debugFont = painter->font();
+    debugFont.setPointSize(qMax(6, debugFont.pointSize() - 2));
+    painter->setFont(debugFont);
+    painter->setPen(Qt::cyan);
+
+    QStringList debugInfo;
+    debugInfo << QString("ID:%1").arg(serverId_);
+
+    if (isStackable() && getCount() > 1) {
+        debugInfo << QString("x%1").arg(getCount());
+    }
+
+    if (getCharges() > 0) {
+        debugInfo << QString("C:%1").arg(getCharges());
+    }
+
+    if (getActionId() > 0) {
+        debugInfo << QString("AID:%1").arg(getActionId());
+    }
+
+    if (getUniqueId() > 0) {
+        debugInfo << QString("UID:%1").arg(getUniqueId());
+    }
+
+    QString debugText = debugInfo.join(" ");
+    QRectF textRect = targetRect.adjusted(1, 1, -1, -1);
+    painter->drawText(textRect, Qt::AlignTop | Qt::AlignLeft | Qt::TextWordWrap, debugText);
+
+    painter->restore();
+}
+
+void Item::drawBoundingBox(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter || !options.drawDebugInfo) return;
+
+    painter->save();
+
+    QPen boundingPen(Qt::magenta, 1, Qt::DotLine);
+    painter->setPen(boundingPen);
+    painter->setBrush(Qt::NoBrush);
+    painter->drawRect(targetRect);
+
+    // Draw corner markers for better visibility
+    const qreal markerSize = 3.0;
+    QRectF topLeft(targetRect.topLeft(), QSizeF(markerSize, markerSize));
+    QRectF topRight(targetRect.topRight() - QPointF(markerSize, 0), QSizeF(markerSize, markerSize));
+    QRectF bottomLeft(targetRect.bottomLeft() - QPointF(0, markerSize), QSizeF(markerSize, markerSize));
+    QRectF bottomRight(targetRect.bottomRight() - QPointF(markerSize, markerSize), QSizeF(markerSize, markerSize));
+
+    painter->fillRect(topLeft, Qt::magenta);
+    painter->fillRect(topRight, Qt::magenta);
+    painter->fillRect(bottomLeft, Qt::magenta);
+    painter->fillRect(bottomRight, Qt::magenta);
+
+    painter->restore();
+}
+
+// --- Helper Methods for Placeholder Rendering ---
+
+QColor Item::getPlaceholderColor() const {
+    // Generate color based on item properties for visual distinction
+    QColor baseColor;
+
+    // Color by item type/group
+    const ItemProperties& props = ItemManager::instance()->getItemProperties(getServerId());
+
+    switch (props.group) {
+        case ITEM_GROUP_GROUND:
+            baseColor = QColor(139, 69, 19);  // Brown for ground
+            break;
+        case ITEM_GROUP_CONTAINER:
+            baseColor = QColor(160, 82, 45);  // Saddle brown for containers
+            break;
+        case ITEM_GROUP_WEAPON:
+            baseColor = QColor(220, 20, 60);  // Crimson for weapons
+            break;
+        case ITEM_GROUP_AMMUNITION:
+            baseColor = QColor(255, 140, 0);  // Dark orange for ammo
+            break;
+        case ITEM_GROUP_ARMOR:
+            baseColor = QColor(70, 130, 180); // Steel blue for armor
+            break;
+        case ITEM_GROUP_CHARGES:
+            baseColor = QColor(138, 43, 226); // Blue violet for charged items
+            break;
+        case ITEM_GROUP_TELEPORT:
+            baseColor = QColor(255, 20, 147); // Deep pink for teleports
+            break;
+        case ITEM_GROUP_MAGICFIELD:
+            baseColor = QColor(50, 205, 50);  // Lime green for magic fields
+            break;
+        case ITEM_GROUP_WRITEABLE:
+            baseColor = QColor(255, 255, 224); // Light yellow for writeable
+            break;
+        case ITEM_GROUP_KEY:
+            baseColor = QColor(255, 215, 0);  // Gold for keys
+            break;
+        case ITEM_GROUP_SPLASH:
+            baseColor = QColor(0, 191, 255);  // Deep sky blue for splash
+            break;
+        case ITEM_GROUP_FLUID:
+            baseColor = QColor(30, 144, 255); // Dodger blue for fluids
+            break;
+        case ITEM_GROUP_DOOR:
+            baseColor = QColor(165, 42, 42);  // Brown for doors
+            break;
+        default:
+            // Use HSV color based on server ID for consistent but varied colors
+            baseColor.setHsv((serverId_ * 37) % 360, 200, 220);
+            break;
+    }
+
+    return baseColor;
+}
+
+void Item::drawItemIdText(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    Q_UNUSED(options);
+
+    QString idText = QString::number(serverId_);
+    QFont font = painter->font();
+    font.setPointSize(qMax(6, font.pointSize() - 1));
+    font.setBold(true);
+    painter->setFont(font);
+
+    // Use contrasting color
+    QColor textColor = getPlaceholderColor().lightness() > 128 ? Qt::black : Qt::white;
+    painter->setPen(textColor);
+
+    QRectF textRect = targetRect.adjusted(2, 2, -2, -2);
+    painter->drawText(textRect, Qt::AlignCenter, idText);
+}
+
+void Item::drawTypeIndicator(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    Q_UNUSED(options);
+
+    const ItemProperties& props = ItemManager::instance()->getItemProperties(getServerId());
+    QString typeIndicator;
+
+    // Short type indicators
+    switch (props.group) {
+        case ITEM_GROUP_GROUND: typeIndicator = "G"; break;
+        case ITEM_GROUP_CONTAINER: typeIndicator = "C"; break;
+        case ITEM_GROUP_WEAPON: typeIndicator = "W"; break;
+        case ITEM_GROUP_AMMUNITION: typeIndicator = "A"; break;
+        case ITEM_GROUP_ARMOR: typeIndicator = "R"; break;
+        case ITEM_GROUP_CHARGES: typeIndicator = "H"; break;
+        case ITEM_GROUP_TELEPORT: typeIndicator = "T"; break;
+        case ITEM_GROUP_MAGICFIELD: typeIndicator = "M"; break;
+        case ITEM_GROUP_WRITEABLE: typeIndicator = "N"; break;
+        case ITEM_GROUP_KEY: typeIndicator = "K"; break;
+        case ITEM_GROUP_SPLASH: typeIndicator = "S"; break;
+        case ITEM_GROUP_FLUID: typeIndicator = "F"; break;
+        case ITEM_GROUP_DOOR: typeIndicator = "D"; break;
+        default: typeIndicator = "?"; break;
+    }
+
+    if (!typeIndicator.isEmpty()) {
         QFont font = painter->font();
-        font.setPointSize(8);
+        font.setPointSize(qMax(8, font.pointSize()));
+        font.setBold(true);
         painter->setFont(font);
-        painter->setPen(Qt::white);
-        painter->drawText(targetRect.adjusted(2, 2, -2, -2), Qt::AlignTop | Qt::AlignLeft | Qt::TextDontClip, idText);
-        painter->restore();
+
+        QColor textColor = getPlaceholderColor().darker(200);
+        painter->setPen(textColor);
+
+        QRectF typeRect = QRectF(targetRect.right() - 12, targetRect.bottom() - 12, 10, 10);
+        painter->drawText(typeRect, Qt::AlignCenter, typeIndicator);
     }
 }
 
@@ -742,8 +1470,56 @@ bool Item::unserializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorV
                 setClassification(val); // This will also set AttrTier via the setter
                 break;
             }
-            // case OTBM_ATTR_WRITTENDATE: // Example: quint32
-            // case OTBM_ATTR_HOUSEDOORID: // Example: quint8
+
+            // Task 48: Additional OTBM attributes
+            case OTBM_ATTR_RUNE_CHARGES: { // quint16 - Rune charges
+                if (dataLength < sizeof(quint16)) { qWarning("ATTR_RUNE_CHARGES data too short"); break; }
+                quint16 val; attributeValueStream >> val;
+                setAttribute(Item::AttrRuneCharges, val);
+                break;
+            }
+            case OTBM_ATTR_WRITTENDATE: { // quint32 - Written date timestamp
+                if (dataLength < sizeof(quint32)) { qWarning("ATTR_WRITTENDATE data too short"); break; }
+                quint32 val; attributeValueStream >> val;
+                setAttribute(Item::AttrWrittenDate, val);
+                break;
+            }
+            case OTBM_ATTR_HOUSEDOORID: { // quint8 - House door ID
+                if (dataLength < sizeof(quint8)) { qWarning("ATTR_HOUSEDOORID data too short"); break; }
+                quint8 val; attributeValueStream >> val;
+                setAttribute(Item::AttrHouseDoorId, val);
+                break;
+            }
+            case OTBM_ATTR_SLEEPERGUID: { // quint32 - Sleeper GUID
+                if (dataLength < sizeof(quint32)) { qWarning("ATTR_SLEEPERGUID data too short"); break; }
+                quint32 val; attributeValueStream >> val;
+                setAttribute(Item::AttrSleeperGuid, val);
+                break;
+            }
+            case OTBM_ATTR_SLEEPSTART: { // quint32 - Sleep start timestamp
+                if (dataLength < sizeof(quint32)) { qWarning("ATTR_SLEEPSTART data too short"); break; }
+                quint32 val; attributeValueStream >> val;
+                setAttribute(Item::AttrSleepStart, val);
+                break;
+            }
+            case OTBM_ATTR_DECAYING_STATE: { // quint8 - Decaying state
+                if (dataLength < sizeof(quint8)) { qWarning("ATTR_DECAYING_STATE data too short"); break; }
+                quint8 val; attributeValueStream >> val;
+                setAttribute(Item::AttrDecayingState, val);
+                break;
+            }
+            case OTBM_ATTR_PODIUMOUTFIT: { // Complex data - Podium outfit
+                // Store raw bytes for complex podium outfit data
+                setAttribute(Item::AttrPodiumOutfit, QVariant(attributeDataBytes));
+                break;
+            }
+            case OTBM_ATTR_ATTRIBUTE_MAP: { // Complex data - TFS 1.x+ style custom attributes
+                // Parse custom attribute map (Task 48 requirement)
+                if (!unserializeCustomAttributeMap(attributeDataBytes)) {
+                    qWarning() << "Failed to parse OTBM_ATTR_ATTRIBUTE_MAP";
+                }
+                break;
+            }
 
             default:
                 qDebug() << "Item::unserializeOtbmAttributes - Unhandled attribute ID:" << Qt::hex << attributeId << "Length:" << dataLength;
@@ -894,9 +1670,41 @@ bool Item::serializeOtbmAttributes(QDataStream& stream, quint32 mapOtbmFormatVer
         stream << static_cast<quint8>(getAttribute(Item::AttrTeleDestZ).toUInt());
     }
 
-    // TODO: Serialize other generic attributes from m_attributes if they don't map to known OTBM types
-    // This might involve using OTBM_ATTR_ATTRIBUTE_MAP for TFS 1.x+ style custom attributes.
-    // For now, only known/typed attributes are serialized.
+    // Task 48: Serialize additional OTBM attributes
+    if (hasAttribute(Item::AttrRuneCharges) && getAttribute(Item::AttrRuneCharges).toUInt() > 0) {
+        writeNumericAttribute<quint16>(OTBM_ATTR_RUNE_CHARGES, getAttribute(Item::AttrRuneCharges).toUInt());
+    }
+    if (hasAttribute(Item::AttrWrittenDate) && getAttribute(Item::AttrWrittenDate).toUInt() > 0) {
+        writeNumericAttribute<quint32>(OTBM_ATTR_WRITTENDATE, getAttribute(Item::AttrWrittenDate).toUInt());
+    }
+    if (hasAttribute(Item::AttrHouseDoorId) && getAttribute(Item::AttrHouseDoorId).toUInt() > 0) {
+        writeNumericAttribute<quint8>(OTBM_ATTR_HOUSEDOORID, getAttribute(Item::AttrHouseDoorId).toUInt());
+    }
+    if (hasAttribute(Item::AttrSleeperGuid) && getAttribute(Item::AttrSleeperGuid).toUInt() > 0) {
+        writeNumericAttribute<quint32>(OTBM_ATTR_SLEEPERGUID, getAttribute(Item::AttrSleeperGuid).toUInt());
+    }
+    if (hasAttribute(Item::AttrSleepStart) && getAttribute(Item::AttrSleepStart).toUInt() > 0) {
+        writeNumericAttribute<quint32>(OTBM_ATTR_SLEEPSTART, getAttribute(Item::AttrSleepStart).toUInt());
+    }
+    if (hasAttribute(Item::AttrDecayingState) && getAttribute(Item::AttrDecayingState).toUInt() > 0) {
+        writeNumericAttribute<quint8>(OTBM_ATTR_DECAYING_STATE, getAttribute(Item::AttrDecayingState).toUInt());
+    }
+    if (hasAttribute(Item::AttrPodiumOutfit)) {
+        QByteArray podiumData = getAttribute(Item::AttrPodiumOutfit).toByteArray();
+        if (!podiumData.isEmpty()) {
+            stream << static_cast<quint8>(OTBM_ATTR_PODIUMOUTFIT);
+            stream << static_cast<quint16>(podiumData.size());
+            stream.writeRawData(podiumData.constData(), podiumData.size());
+        }
+    }
+
+    // Serialize custom attributes using OTBM_ATTR_ATTRIBUTE_MAP for TFS 1.x+ style custom attributes
+    QByteArray customAttributeData = serializeCustomAttributeMap();
+    if (!customAttributeData.isEmpty()) {
+        stream << static_cast<quint8>(OTBM_ATTR_ATTRIBUTE_MAP);
+        stream << static_cast<quint16>(customAttributeData.size());
+        stream.writeRawData(customAttributeData.constData(), customAttributeData.size());
+    }
 
     return stream.status() == QDataStream::Ok;
 }
@@ -919,4 +1727,415 @@ bool Item::serializeOtbmNode(QDataStream& stream, quint32 mapOtbmFormatVersion, 
     // This method only serializes the item's direct properties. Node structure is for OtbmWriter.
 
     return stream.status() == QDataStream::Ok;
+}
+
+// --- Additional Brush-related Properties ---
+
+bool Item::isWall() const {
+    const ItemProperties& itemProps = ItemManager::getInstance().getItemProperties(serverId_);
+    return itemProps.isWall;
+}
+
+bool Item::isBorder() const {
+    const ItemProperties& itemProps = ItemManager::getInstance().getItemProperties(serverId_);
+    return itemProps.isBorder;
+}
+
+// --- Selection Methods ---
+
+bool Item::isSelected() const {
+    return isSelected_;
+}
+
+void Item::select() {
+    if (!isSelected_) {
+        isSelected_ = true;
+        setModified(true);
+        emit propertyChanged();
+    }
+}
+
+void Item::deselect() {
+    if (isSelected_) {
+        isSelected_ = false;
+        setModified(true);
+        emit propertyChanged();
+    }
+}
+
+// --- Memory and Utility Methods ---
+
+quint32 Item::memsize() const {
+    quint32 size = sizeof(Item);
+
+    // Add size of string members
+    size += name_.size() * sizeof(QChar);
+    size += itemTypeName_.size() * sizeof(QChar);
+    size += description_.size() * sizeof(QChar);
+    size += editorSuffix_.size() * sizeof(QChar);
+
+    // Add size of attributes map
+    for (auto it = attributes_.begin(); it != attributes_.end(); ++it) {
+        size += it.key().size() * sizeof(QChar);
+        size += sizeof(QVariant); // Approximate size of QVariant
+    }
+
+    return size;
+}
+
+bool Item::hasProperty(int property) const {
+    // Enhanced property checking based on ITEMPROPERTY enum values
+    switch (static_cast<ITEMPROPERTY>(property)) {
+        case BLOCKSOLID:
+            return isBlocking_;
+        case HASHEIGHT:
+            return hasHeight_;
+        case BLOCKPROJECTILE:
+            return blocksMissiles_;
+        case BLOCKPATHFIND:
+            return blocksPathfind_;
+        case PROTECTIONZONE:
+            // Protection zone is typically a tile property, not item property
+            return false;
+        case HOOK_SOUTH:
+            return hasHookSouth_;
+        case HOOK_EAST:
+            return hasHookEast_;
+        case MOVEABLE:
+            return isMoveable_ && getUniqueId() == 0;
+        case BLOCKINGANDNOTMOVEABLE:
+            return isBlocking_ && (!isMoveable_ || getUniqueId() != 0);
+        case HASLIGHT:
+            return hasLight();
+        default:
+            return false;
+    }
+}
+
+quint8 Item::getMiniMapColor() const {
+    const ItemProperties& itemProps = ItemManager::getInstance().getItemProperties(serverId_);
+    return itemProps.minimapColor;
+}
+
+// --- Enhanced Helper Methods ---
+
+bool Item::isClientCharged() const {
+    const ItemProperties& itemProps = ItemManager::getInstance().getItemProperties(serverId_);
+    return itemProps.clientCharges;
+}
+
+bool Item::isExtraCharged() const {
+    const ItemProperties& itemProps = ItemManager::getInstance().getItemProperties(serverId_);
+    return itemProps.extraChargeable;
+}
+
+bool Item::canHoldText() const {
+    return isReadable() || canWriteText();
+}
+
+bool Item::canHoldDescription() const {
+    const ItemProperties& itemProps = ItemManager::getInstance().getItemProperties(serverId_);
+    return itemProps.allowDistRead;
+}
+
+bool Item::hasLight() const {
+    return lightLevel_ > 0;
+}
+
+bool Item::isAlwaysOnBottom() const {
+    const ItemProperties& itemProps = ItemManager::getInstance().getItemProperties(serverId_);
+    return itemProps.alwaysOnBottom;
+}
+
+int Item::getHeight() const {
+    return height_;
+}
+
+std::pair<int, int> Item::getDrawOffset() const {
+    return std::make_pair(drawOffsetX_, drawOffsetY_);
+}
+
+double Item::getWeight() const {
+    const ItemProperties& itemProps = ItemManager::getInstance().getItemProperties(serverId_);
+    if (isStackable()) {
+        return itemProps.weight * getCount();
+    }
+    return itemProps.weight;
+}
+
+// --- Additional Setters ---
+
+void Item::setHeight(int height) {
+    if (height_ != height) {
+        height_ = height;
+        setModified(true);
+        emit propertyChanged();
+    }
+}
+
+void Item::setDrawOffset(int x, int y) {
+    if (drawOffsetX_ != x || drawOffsetY_ != y) {
+        drawOffsetX_ = x;
+        drawOffsetY_ = y;
+        setModified(true);
+        emit propertyChanged();
+    }
+}
+
+// Task 48: Complex data handling methods
+bool Item::unserializeCustomAttributeMap(const QByteArray& data)
+{
+    if (data.isEmpty()) {
+        return true; // Empty attribute map is valid
+    }
+
+    QDataStream stream(data);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    try {
+        while (!stream.atEnd()) {
+            // Read attribute key (string)
+            QString key;
+            stream >> key;
+
+            if (stream.status() != QDataStream::Ok) {
+                qWarning() << "Item::unserializeCustomAttributeMap: Failed to read attribute key";
+                return false;
+            }
+
+            // Read attribute type
+            quint8 type;
+            stream >> type;
+
+            if (stream.status() != QDataStream::Ok) {
+                qWarning() << "Item::unserializeCustomAttributeMap: Failed to read attribute type for key:" << key;
+                return false;
+            }
+
+            // Read attribute value based on type
+            QVariant value;
+            switch (type) {
+                case 1: { // String
+                    QString stringValue;
+                    stream >> stringValue;
+                    value = stringValue;
+                    break;
+                }
+                case 2: { // Integer (32-bit)
+                    qint32 intValue;
+                    stream >> intValue;
+                    value = intValue;
+                    break;
+                }
+                case 3: { // Float
+                    float floatValue;
+                    stream >> floatValue;
+                    value = floatValue;
+                    break;
+                }
+                case 4: { // Boolean
+                    quint8 boolValue;
+                    stream >> boolValue;
+                    value = (boolValue != 0);
+                    break;
+                }
+                case 5: { // Double
+                    double doubleValue;
+                    stream >> doubleValue;
+                    value = doubleValue;
+                    break;
+                }
+                default:
+                    qWarning() << "Item::unserializeCustomAttributeMap: Unknown attribute type:" << type << "for key:" << key;
+                    return false;
+            }
+
+            if (stream.status() != QDataStream::Ok) {
+                qWarning() << "Item::unserializeCustomAttributeMap: Failed to read attribute value for key:" << key;
+                return false;
+            }
+
+            // Store the custom attribute with a prefix to distinguish from standard attributes
+            QString customKey = QString("custom_%1").arg(key);
+            setAttribute(customKey, value);
+
+            qDebug() << "Item::unserializeCustomAttributeMap: Loaded custom attribute:" << customKey << "=" << value;
+        }
+
+        return true;
+
+    } catch (...) {
+        qWarning() << "Item::unserializeCustomAttributeMap: Exception occurred while parsing custom attributes";
+        return false;
+    }
+}
+
+QByteArray Item::serializeCustomAttributeMap() const
+{
+    QByteArray data;
+    QDataStream stream(&data, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    // Find all custom attributes (those with "custom_" prefix)
+    QMap<QString, QVariant>::const_iterator it;
+    for (it = attributes_.constBegin(); it != attributes_.constEnd(); ++it) {
+        const QString& key = it.key();
+        if (!key.startsWith("custom_")) {
+            continue; // Skip non-custom attributes
+        }
+
+        // Remove the "custom_" prefix for serialization
+        QString originalKey = key.mid(7); // Remove "custom_" prefix
+        const QVariant& value = it.value();
+
+        // Write attribute key
+        stream << originalKey;
+
+        // Determine and write attribute type, then value
+        if (value.type() == QVariant::String) {
+            stream << static_cast<quint8>(1); // String type
+            stream << value.toString();
+        } else if (value.type() == QVariant::Int || value.type() == QVariant::LongLong) {
+            stream << static_cast<quint8>(2); // Integer type
+            stream << value.toInt();
+        } else if (value.type() == QVariant::Double) {
+            double doubleVal = value.toDouble();
+            if (doubleVal == static_cast<float>(doubleVal)) {
+                stream << static_cast<quint8>(3); // Float type
+                stream << static_cast<float>(doubleVal);
+            } else {
+                stream << static_cast<quint8>(5); // Double type
+                stream << doubleVal;
+            }
+        } else if (value.type() == QVariant::Bool) {
+            stream << static_cast<quint8>(4); // Boolean type
+            stream << static_cast<quint8>(value.toBool() ? 1 : 0);
+        } else {
+            // For unknown types, convert to string
+            stream << static_cast<quint8>(1); // String type
+            stream << value.toString();
+        }
+
+        qDebug() << "Item::serializeCustomAttributeMap: Serialized custom attribute:" << originalKey << "=" << value;
+    }
+
+    return data;
+}
+
+// Task 76: Special item flag rendering implementation
+void Item::drawSpecialFlags(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter) return;
+
+    // Draw selection highlight if item is selected
+    if (isSelected() && options.highlightSelectedTile) {
+        drawSelectionHighlight(painter, targetRect, options);
+    }
+
+    // Draw locked door highlight if enabled
+    if (options.highlightLockedDoors && isDoor() && isLocked()) {
+        drawLockedDoorHighlight(painter, targetRect, options);
+    }
+
+    // Draw wall hook indicator if enabled
+    if (options.showWallHooks && isWallHook()) {
+        drawWallHookIndicator(painter, targetRect, options);
+    }
+
+    // Draw blocking indicator if enabled
+    if (options.showBlocking && isBlocking()) {
+        drawBlockingIndicator(painter, targetRect, options);
+    }
+}
+
+void Item::drawSelectionHighlight(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter) return;
+
+    painter->save();
+
+    // Draw animated selection highlight
+    QColor highlightColor(0, 255, 255, 100); // Cyan highlight
+
+    // Add pulsing animation effect
+    if (options.showPreview) {
+        qreal time = QTime::currentTime().msecsSinceStartOfDay() / 1000.0;
+        qreal pulse = (qSin(time * 3.0) + 1.0) * 0.5; // 0.0 to 1.0
+        highlightColor.setAlpha(50 + static_cast<int>(pulse * 100));
+    }
+
+    // Draw highlight border
+    QPen highlightPen(highlightColor.lighter(150), 2);
+    painter->setPen(highlightPen);
+    painter->setBrush(QBrush(highlightColor));
+    painter->drawRect(targetRect);
+
+    painter->restore();
+}
+
+void Item::drawLockedDoorHighlight(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter) return;
+
+    painter->save();
+
+    // Draw red highlight for locked doors
+    QColor lockColor(255, 0, 0, 80); // Red highlight
+    QPen lockPen(lockColor.darker(150), 2);
+    painter->setPen(lockPen);
+    painter->setBrush(QBrush(lockColor));
+    painter->drawRect(targetRect);
+
+    // Draw lock icon if there's space
+    if (targetRect.width() > 16 && targetRect.height() > 16) {
+        QRectF iconRect = targetRect.adjusted(2, 2, -2, -2);
+        painter->setPen(QPen(Qt::white, 1));
+        painter->setBrush(Qt::NoBrush);
+
+        // Simple lock icon
+        QRectF lockBody = iconRect.adjusted(iconRect.width() * 0.3, iconRect.height() * 0.4,
+                                           -iconRect.width() * 0.3, -iconRect.height() * 0.1);
+        QRectF lockShackle = iconRect.adjusted(iconRect.width() * 0.35, iconRect.height() * 0.1,
+                                              -iconRect.width() * 0.35, -iconRect.height() * 0.5);
+
+        painter->drawRect(lockBody);
+        painter->drawArc(lockShackle, 0, 180 * 16); // Half circle for shackle
+    }
+
+    painter->restore();
+}
+
+void Item::drawWallHookIndicator(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter) return;
+
+    painter->save();
+
+    // Draw wall hook indicator
+    QColor hookColor(255, 255, 0, 120); // Yellow indicator
+    QPen hookPen(hookColor.darker(150), 1);
+    painter->setPen(hookPen);
+
+    // Draw hook shape
+    QPointF center = targetRect.center();
+    qreal radius = qMin(targetRect.width(), targetRect.height()) * 0.3;
+
+    // Draw hook as a small arc
+    QRectF hookRect(center.x() - radius, center.y() - radius, radius * 2, radius * 2);
+    painter->drawArc(hookRect, 45 * 16, 180 * 16); // Quarter circle hook
+
+    painter->restore();
+}
+
+void Item::drawBlockingIndicator(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
+    if (!painter) return;
+
+    painter->save();
+
+    // Draw blocking indicator with cross pattern
+    QColor blockColor(255, 128, 0, 100); // Orange indicator
+    QPen blockPen(blockColor.darker(150), 2);
+    painter->setPen(blockPen);
+
+    // Draw X pattern to indicate blocking
+    painter->drawLine(targetRect.topLeft(), targetRect.bottomRight());
+    painter->drawLine(targetRect.topRight(), targetRect.bottomLeft());
+
+    painter->restore();
 }

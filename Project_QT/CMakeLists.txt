@@ -66,6 +66,16 @@ set(PROJECT_SOURCES
     src/maintoolbar.h
     src/mainwindow.cpp
     src/mainwindow.h
+    src/ui/MenuActionHandler.cpp
+    src/ui/MenuActionHandler.h
+    src/ui/StatusBarManager.cpp
+    src/ui/StatusBarManager.h
+    src/ui/ToolBarManager.cpp
+    src/ui/ToolBarManager.h
+    src/ui/DialogManager.cpp
+    src/ui/DialogManager.h
+    src/ui/PerspectiveManager.cpp
+    src/ui/PerspectiveManager.h
     src/map.cpp
     src/map.h
     src/mapcommand.cpp

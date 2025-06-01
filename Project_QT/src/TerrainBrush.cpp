@@ -1,11 +1,16 @@
 #include "TerrainBrush.h"
-#include <QDebug> // For potential future debugging, not strictly needed for this part
+#include "Map.h"
+#include "Tile.h"
+#include <QDebug>
+#include <QUndoCommand>
 
 TerrainBrush::TerrainBrush(QObject* parent)
     : Brush(parent),
       specificBrushName_("Unnamed Terrain"),
       lookId_(0),
+      zOrder_(0),
       hatesFriends_(false) {
+    qDebug() << "TerrainBrush: Created terrain brush with ID" << getID();
 }
 
 TerrainBrush::~TerrainBrush() {
@@ -25,6 +30,20 @@ Brush::Type TerrainBrush::type() const {
 
 bool TerrainBrush::isTerrain() const {
     return true;
+}
+
+// Type casting methods (Task 37 requirement)
+TerrainBrush* TerrainBrush::asTerrain() {
+    return this;
+}
+
+const TerrainBrush* TerrainBrush::asTerrain() const {
+    return this;
+}
+
+// Name management (Task 37 requirement)
+void TerrainBrush::setName(const QString& newName) {
+    setSpecificName(newName);
 }
 
 bool TerrainBrush::needBorders() const {
@@ -52,6 +71,15 @@ void TerrainBrush::setSpecificName(const QString& name) {
 
 void TerrainBrush::setLookID(quint16 id) {
     lookId_ = id;
+}
+
+// Z-order management (from wxwidgets)
+qint32 TerrainBrush::getZ() const {
+    return zOrder_;
+}
+
+void TerrainBrush::setZ(qint32 zOrder) {
+    zOrder_ = zOrder;
 }
 
 void TerrainBrush::addFriendBrushType(Brush::Type friendType) {
@@ -84,6 +112,53 @@ bool TerrainBrush::isFriendWith(Brush::Type otherType) const {
     // If hatesFriends_ is true, the list contains enemies. So, if found, it's NOT a friend.
     // If hatesFriends_ is false, the list contains friends. So, if found, it IS a friend.
     return hatesFriends_ ? !foundInList : foundInList;
+}
+
+// Direct brush comparison (from wxwidgets)
+bool TerrainBrush::friendOf(TerrainBrush* other) const {
+    if (!other) return false;
+
+    // Check if this brush is friendly with the other brush's type
+    bool thisToOther = isFriendWith(other->type());
+
+    // Check if the other brush is friendly with this brush's type
+    bool otherToThis = other->isFriendWith(this->type());
+
+    // Both must be friendly for a true friendship
+    return thisToOther && otherToThis;
+}
+
+// Drawing stubs for direct tile manipulation (Task 37 requirement)
+void TerrainBrush::draw(Map* map, Tile* tile, void* parameter) {
+    Q_UNUSED(map);
+    Q_UNUSED(tile);
+    Q_UNUSED(parameter);
+
+    qDebug() << "TerrainBrush::draw: Stub implementation called for" << specificName()
+             << "at tile position. Concrete terrain brushes should override this method.";
+
+    // This is a stub implementation. Concrete terrain brushes (GroundBrush, WallBrush, etc.)
+    // should override this method to provide actual terrain modification logic.
+}
+
+void TerrainBrush::undraw(Map* map, Tile* tile) {
+    Q_UNUSED(map);
+    Q_UNUSED(tile);
+
+    qDebug() << "TerrainBrush::undraw: Stub implementation called for" << specificName()
+             << "at tile position. Concrete terrain brushes should override this method.";
+
+    // This is a stub implementation. Concrete terrain brushes should override this method
+    // to provide actual terrain removal logic.
+}
+
+bool TerrainBrush::canDraw(Map* map, const QPoint& position) const {
+    Q_UNUSED(map);
+    Q_UNUSED(position);
+
+    // Default implementation: terrain brushes can generally draw anywhere
+    // Concrete terrain brushes can override this for specific restrictions
+    return true;
 }
 
 // Note: The pure virtual methods inherited from Brush.h, such as:

@@ -13,6 +13,8 @@
 #include <QUndoStack>   // Added
 #include <QUndoCommand> // Added
 #include <QtMath>       // For qSqrt
+#include <QScrollBar>   // For scroll bar access
+#include <QSize>        // For QSize
 
 MapViewInputHandler::MapViewInputHandler(MapView* mapView,
                                          BrushManager* brushManager,
@@ -66,81 +68,181 @@ void MapViewInputHandler::handleMousePressEvent(QMouseEvent* event, const QPoint
     pressedButton_ = event->button();
     dragStartMapPos_ = mapPosition; // Store for all press events
 
+    // Task 74: Check for waypoint interactions first
+    if (handleWaypointInteraction(event, mapPosition)) {
+        return; // Waypoint interaction handled
+    }
+
+    // Enhanced mouse button handling with wxWidgets compatibility
     if (pressedButton_ == Qt::LeftButton) {
-        Brush* currentBrush = brushManager_->getCurrentBrush();
-        if (currentBrush) { // Drawing mode
-            currentMode_ = InteractionMode::Drawing; // Default drawing mode
-            isDraggingDraw_ = currentBrush->canDrag() && shiftModifierActive_;
-            isReplaceDragging_ = currentBrush->isGround() && altModifierActive_; // Assuming isGround() exists
-
-            if (isDraggingDraw_) {
-                currentMode_ = InteractionMode::DraggingDraw;
-                qDebug() << "MapViewInputHandler: Starting DraggingDraw";
-            }
-            if (isReplaceDragging_) {
-                // Additional setup for replace dragging might be needed here,
-                // e.g., getting the tile/brush to replace from mapPosition.
-                // For now, just setting the flag. The brush will handle the logic.
-                qDebug() << "MapViewInputHandler: Starting ReplaceDragging";
-            }
-            startDrawing(mapPosition, event);
-
-        } else { // Selection mode (no active brush)
-            // TODO: Implement isPasting() check and finishPasting() call
-            // For now, directly to selection:
-            bool clearPreviousSelection = !ctrlModifierActive_; // Standard behavior: Ctrl to add to selection
-            if (shiftModifierActive_ || ctrlModifierActive_) { // Shift or Ctrl for box selection modifications
-                currentMode_ = InteractionMode::SelectingBox;
-                // Pass clearPreviousSelection to startSelectionBox if it needs to handle it
-                // map_->getSelection()->setClearPrevious(clearPreviousSelection); // Example
-                qDebug() << "MapViewInputHandler: Starting SelectingBox (Shift/Ctrl). Clear prev:" << clearPreviousSelection;
-                startSelectionBox(mapPosition, event);
-            } else { // No modifiers, standard selection
-                // TODO: Check if clicking on an existing selection to DraggingSelection
-                // For now, default to starting a new selection box or single click selection.
-                // map_->getSelection()->setClearPrevious(true); // Example
-                qDebug() << "MapViewInputHandler: Starting SelectingBox (no modifier).";
-                currentMode_ = InteractionMode::SelectingBox;
-                startSelectionBox(mapPosition, event);
-            }
+        if (mapView_->getSwitchMouseButtons()) {
+            handleMouseCameraClick(event, mapPosition);
+        } else {
+            handleMouseActionClick(event, mapPosition);
         }
     } else if (pressedButton_ == Qt::MiddleButton) {
-        currentMode_ = InteractionMode::PanningView;
-        startPanning(event);
+        handleMouseCameraClick(event, mapPosition);
     } else if (pressedButton_ == Qt::RightButton) {
-        // Placeholder for context menu or alternative brush action (e.g., erase if Ctrl is held)
-        if (ctrlModifierActive_) {
-            // Example: Could be an erase mode or secondary brush function
-            // For now, let's treat it like a potential pan or do nothing specific
-            // currentMode_ = InteractionMode::Erasing; // If such mode exists
-            // startErasing(mapPosition, event);
-             qDebug() << "Right mouse button + Ctrl pressed at" << mapPosition;
+        if (mapView_->getSwitchMouseButtons()) {
+            handleMousePropertiesClick(event, mapPosition);
         } else {
-             qDebug() << "Right mouse button pressed at" << mapPosition;
-            // Potentially open context menu here: mapView_->showContextMenu(event->globalPos(), mapPosition);
+            handleMousePropertiesClick(event, mapPosition);
         }
     }
-    mapView_->update(); // Request repaint for visual feedback (e.g. cursor change, start of drawing)
+    mapView_->update(); // Request repaint for visual feedback
+}
+
+void MapViewInputHandler::handleMouseActionClick(QMouseEvent* event, const QPointF& mapPosition) {
+    if (!mapView_ || !brushManager_) return;
+
+    Brush* currentBrush = brushManager_->getCurrentBrush();
+    if (currentBrush) { // Drawing mode
+        // Enhanced state machine logic from wxwidgets
+        isDragging_ = true;
+        isDrawing_ = true;
+        dragStartMapPos_ = mapPosition;
+        dragCurrentMapPos_ = mapPosition;
+
+        // Determine drawing mode based on modifiers and brush capabilities
+        if (shiftModifierActive_ && currentBrush->canDrag()) {
+            isDraggingDraw_ = true;
+            transitionToMode(InteractionMode::DraggingDraw);
+            updateBrushState(BrushState::StartDrag);
+            startDraggingDraw(mapPosition, event);
+        } else if (altModifierActive_ && currentBrush->isGround()) {
+            isReplaceDragging_ = true;
+            transitionToMode(InteractionMode::ReplaceDragging);
+            updateBrushState(BrushState::StartDraw);
+            startReplaceDragging(mapPosition, event);
+        } else if (ctrlModifierActive_) {
+            // Rectangle drawing mode
+            transitionToMode(InteractionMode::DrawingRect);
+            updateBrushState(BrushState::StartDraw);
+            startDrawingRect(mapPosition, event);
+        } else {
+            // Normal drawing mode
+            transitionToMode(InteractionMode::Drawing);
+            updateBrushState(BrushState::StartDraw);
+
+            // Check if brush supports continuous drawing or single-click only
+            if (currentBrush->getBrushSize() == 0 && !currentBrush->oneSizeFitsAll()) {
+                isDrawing_ = true;
+            } else {
+                isDrawing_ = currentBrush->canSmear();
+            }
+
+            startDrawing(mapPosition, event);
+        }
+
+        qDebug() << "MapViewInputHandler: Started drawing mode" << static_cast<int>(currentMode_)
+                 << "with brush" << currentBrush->name();
+
+    } else { // Selection mode (no active brush)
+        // Implement wxwidgets selection behavior (Task 61)
+        if (shiftModifierActive_) {
+            // Shift: Start box selection (clear existing unless Ctrl is also held)
+            transitionToMode(InteractionMode::SelectingBox);
+            isBoundBoxSelection_ = true;
+            qDebug() << "MapViewInputHandler: Starting box selection (Shift)";
+            startSelectionBox(mapPosition, event);
+        } else if (ctrlModifierActive_) {
+            // Ctrl: Toggle individual item/tile selection
+            handleSingleClickSelection(mapPosition, event, true); // toggle mode
+        } else {
+            // No modifiers: Check if clicking on existing selection for dragging
+            if (mapView_->isOnSelection(mapPosition)) {
+                // Clicking on existing selection - start dragging
+                transitionToMode(InteractionMode::DraggingSelection);
+                qDebug() << "MapViewInputHandler: Starting selection drag";
+            } else {
+                // Clicking on empty space or unselected tile - select it
+                handleSingleClickSelection(mapPosition, event, false); // replace mode
+            }
+        }
+    }
+}
+
+void MapViewInputHandler::handleMouseCameraClick(QMouseEvent* event, const QPointF& mapPosition) {
+    if (!mapView_) return;
+
+    currentMode_ = InteractionMode::PanningView;
+
+    // Store middle mouse button click position for camera controls
+    lastMouseScreenPos_ = event->pos();
+
+    if (ctrlModifierActive_) {
+        // Ctrl+Middle: Reset zoom to 1.0 and center on cursor (matching wxWidgets)
+        QSize viewSize = mapView_->viewport()->size();
+        QPoint cursorPos = event->pos();
+
+        // Calculate scroll adjustment to center on cursor
+        int scrollX = static_cast<int>(-viewSize.width() * (1.0 - mapView_->getZoomLevel()) *
+                                     (qMax(cursorPos.x(), 1) / double(viewSize.width())));
+        int scrollY = static_cast<int>(-viewSize.height() * (1.0 - mapView_->getZoomLevel()) *
+                                     (qMax(cursorPos.y(), 1) / double(viewSize.height())));
+
+        mapView_->pan(scrollX, scrollY);
+        mapView_->zoom(1.0 / mapView_->getZoomLevel(), event->position()); // Reset to zoom 1.0
+    } else {
+        // Normal middle mouse: Start screen dragging
+        startPanning(event);
+    }
+}
+
+void MapViewInputHandler::handleMousePropertiesClick(QMouseEvent* event, const QPointF& mapPosition) {
+    if (!mapView_) return;
+
+    // Right-click typically opens properties or context menu
+    qDebug() << "Properties click at map position:" << mapPosition;
+    // This could trigger a properties dialog or context menu
+    // mapView_->showPropertiesDialogFor(mapPosition);
 }
 
 void MapViewInputHandler::handleMouseMoveEvent(QMouseEvent* event, const QPointF& mapPosition) {
     if (!mapView_) return;
     updateModifierKeys(event);
 
+    // Update current drag position
+    dragCurrentMapPos_ = mapPosition;
+
     switch (currentMode_) {
         case InteractionMode::Drawing:
-        case InteractionMode::DraggingDraw: // DraggingDraw also calls continueDrawing
             continueDrawing(mapPosition, event);
             break;
+        case InteractionMode::DraggingDraw:
+            continueDraggingDraw(mapPosition, event);
+            break;
+        case InteractionMode::ReplaceDragging:
+            continueReplaceDragging(mapPosition, event);
+            break;
+        case InteractionMode::DrawingRect:
+            updateDrawingRect(mapPosition, event);
+            break;
+        case InteractionMode::DrawingLine:
+            updateDrawingLine(mapPosition, event);
+            break;
         case InteractionMode::PanningView:
+        case InteractionMode::ScreenDragging:
             continuePanning(event);
             break;
         case InteractionMode::SelectingBox:
+        case InteractionMode::BoundBoxSelection:
             updateSelectionBox(mapPosition, event);
             break;
+        case InteractionMode::DraggingSelection:
+            // Handle selection dragging
+            if (mapView_->isOnSelection(mapPosition)) {
+                mapView_->updateMoveSelectionFeedback(mapPosition - dragStartMapPos_);
+            }
+            break;
         case InteractionMode::Idle:
-            // mapView_->updateHoverInfo(mapPosition); // Example: update status bar, highlight tile under cursor
-            // This can also be handled by MapView itself via setMouseTracking(true)
+        case InteractionMode::BrushPreview:
+            // Update brush preview on hover
+            updateBrushPreview(mapPosition);
+            // mapView_->updateHoverInfo(mapPosition); // Update status bar, highlight tile under cursor
+            break;
+        case InteractionMode::ContextMenu:
+            // Context menu is active, no movement handling needed
             break;
         default:
             break;
@@ -155,33 +257,106 @@ void MapViewInputHandler::handleMouseReleaseEvent(QMouseEvent* event, const QPoi
     updateModifierKeys(event);
 
     if (event->button() == pressedButton_) { // Ensure we're releasing the button that initiated the action
-        InteractionMode modeEnded = currentMode_;
-
-        // Reset mode and flags before calling finish handlers,
-        // as finish handlers might set new states (e.g. after pasting).
-        currentMode_ = InteractionMode::Idle;
-        pressedButton_ = Qt::NoButton;
-        isDraggingDraw_ = false;
-        isReplaceDragging_ = false;
-        // currentDrawingCommand_ handling will be done by drawing helpers if used.
-
-        switch (modeEnded) {
-            case InteractionMode::Drawing:
-            case InteractionMode::DraggingDraw:
-                finishDrawing(mapPosition, event);
-                break;
-            case InteractionMode::PanningView:
-                finishPanning(event);
-                break;
-            case InteractionMode::SelectingBox:
-                finishSelectionBox(mapPosition, event);
-                break;
-            // TODO: Handle InteractionMode::Pasting, InteractionMode::DraggingSelection
-            default:
-                break;
+        // Enhanced mouse button release handling with wxWidgets compatibility
+        if (event->button() == Qt::LeftButton) {
+            if (mapView_->getSwitchMouseButtons()) {
+                handleMouseCameraRelease(event, mapPosition);
+            } else {
+                handleMouseActionRelease(event, mapPosition);
+            }
+        } else if (event->button() == Qt::MiddleButton) {
+            handleMouseCameraRelease(event, mapPosition);
+        } else if (event->button() == Qt::RightButton) {
+            if (mapView_->getSwitchMouseButtons()) {
+                handleMousePropertiesRelease(event, mapPosition);
+            } else {
+                handleMousePropertiesRelease(event, mapPosition);
+            }
         }
+
+        // Enhanced state reset after calling finish handlers
+        resetInteractionState();
+        pressedButton_ = Qt::NoButton;
+
         mapView_->update(); // General update after action is finished
     }
+}
+
+void MapViewInputHandler::handleMouseActionRelease(QMouseEvent* event, const QPointF& mapPosition) {
+    if (!mapView_) return;
+
+    InteractionMode modeEnded = currentMode_;
+
+    // Update final drag position
+    dragEndMapPos_ = mapPosition;
+
+    switch (modeEnded) {
+        case InteractionMode::Drawing:
+            finishDrawing(mapPosition, event);
+            break;
+        case InteractionMode::DraggingDraw:
+            finishDraggingDraw(mapPosition, event);
+            break;
+        case InteractionMode::ReplaceDragging:
+            finishReplaceDragging(mapPosition, event);
+            break;
+        case InteractionMode::DrawingRect:
+            finishDrawingRect(mapPosition, event);
+            break;
+        case InteractionMode::DrawingLine:
+            finishDrawingLine(mapPosition, event);
+            break;
+        case InteractionMode::SelectingBox:
+        case InteractionMode::BoundBoxSelection:
+            finishSelectionBox(mapPosition, event);
+            break;
+        case InteractionMode::DraggingSelection:
+            // Finalize selection move
+            if (mapView_->isOnSelection(mapPosition)) {
+                mapView_->finalizeMoveSelection(mapPosition - dragStartMapPos_);
+            }
+            break;
+        case InteractionMode::PastingSelection:
+            // Finalize paste operation
+            mapView_->pasteSelection(mapPosition);
+            break;
+        default:
+            break;
+    }
+}
+
+void MapViewInputHandler::handleMouseCameraRelease(QMouseEvent* event, const QPointF& mapPosition) {
+    if (!mapView_) return;
+
+    if (currentMode_ == InteractionMode::PanningView) {
+        finishPanning(event);
+
+        // Check for click-to-center behavior (matching wxWidgets)
+        QPoint releasePos = event->pos();
+        QPoint pressPos = lastMouseScreenPos_;
+
+        // If mouse didn't move much, treat as a click to center view
+        if (qAbs(releasePos.x() - pressPos.x()) <= 3 && qAbs(releasePos.y() - pressPos.y()) <= 3) {
+            if (!ctrlModifierActive_) { // Only if Ctrl wasn't held (Ctrl+click resets zoom)
+                QSize viewSize = mapView_->viewport()->size();
+                QPoint cursorPos = event->pos();
+
+                // Center view on cursor position
+                int scrollX = static_cast<int>(mapView_->getZoomLevel() * (2 * cursorPos.x() - viewSize.width()));
+                int scrollY = static_cast<int>(mapView_->getZoomLevel() * (2 * cursorPos.y() - viewSize.height()));
+
+                mapView_->pan(scrollX, scrollY);
+            }
+        }
+    }
+}
+
+void MapViewInputHandler::handleMousePropertiesRelease(QMouseEvent* event, const QPointF& mapPosition) {
+    if (!mapView_) return;
+
+    // Handle properties release - could show context menu or properties dialog
+    qDebug() << "Properties release at map position:" << mapPosition;
+    // mapView_->showContextMenuAt(event->globalPosition().toPoint());
 }
 
 void MapViewInputHandler::handleKeyPressEvent(QKeyEvent* event) {
@@ -217,15 +392,30 @@ void MapViewInputHandler::handleKeyPressEvent(QKeyEvent* event) {
         undoStack_->undo();
         mapView_->update();
         event->accept();
+        return;
     } else if (event->matches(QKeySequence::Redo)) {
         undoStack_->redo();
         mapView_->update();
         event->accept();
+        return;
     }
 
-    // Other shortcuts can be added here
-    // e.g., brush selection, tool activation
-    // if (event->key() == Qt::Key_B) { brushManager_->selectNextBrush(); }
+    // Handle floor navigation keys first (high priority)
+    handleFloorNavigationKeys(event);
+    if (event->isAccepted()) return;
+
+    // Handle hotkey system (F1-F12 and number keys)
+    handleHotkeyKeys(event);
+    if (event->isAccepted()) return;
+
+    // Enhanced key handling for mode-specific behaviors
+    handleModeSpecificKeys(event);
+
+    // Handle tool and brush shortcuts
+    handleToolShortcuts(event);
+
+    // Handle view shortcuts
+    handleViewShortcuts(event);
 
     if(!event->isAccepted()) {
         // Forward to current brush if it wants to handle key events
@@ -259,20 +449,415 @@ void MapViewInputHandler::handleKeyReleaseEvent(QKeyEvent* event) {
      }
 }
 
+// --- Enhanced Key Handling Methods ---
+
+void MapViewInputHandler::handleModeSpecificKeys(QKeyEvent* event) {
+    if (!mapView_ || event->isAccepted()) return;
+
+    switch (currentMode_) {
+        case InteractionMode::Drawing:
+        case InteractionMode::DraggingDraw:
+            handleDrawingModeKeys(event);
+            break;
+        case InteractionMode::SelectingBox:
+        case InteractionMode::DraggingSelection:
+            handleSelectionModeKeys(event);
+            break;
+        case InteractionMode::PanningView:
+            handlePanningModeKeys(event);
+            break;
+        case InteractionMode::Pasting:
+            handlePastingModeKeys(event);
+            break;
+        case InteractionMode::Idle:
+        default:
+            // No mode-specific keys in idle mode
+            break;
+    }
+}
+
+void MapViewInputHandler::handleToolShortcuts(QKeyEvent* event) {
+    if (!mapView_ || !brushManager_ || event->isAccepted()) return;
+
+    Qt::KeyboardModifiers modifiers = event->modifiers();
+
+    // Tool selection shortcuts (matching wxWidgets patterns)
+    switch (event->key()) {
+        case Qt::Key_B:
+            if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier))) {
+                // brushManager_->selectBrushTool();
+                qDebug() << "Brush tool shortcut (B) - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_E:
+            if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier))) {
+                // brushManager_->selectEraserTool();
+                qDebug() << "Eraser tool shortcut (E) - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_S:
+            if (!(modifiers & Qt::ControlModifier)) { // Avoid conflict with Ctrl+S (Save)
+                // brushManager_->selectSelectionTool();
+                qDebug() << "Selection tool shortcut (S) - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_F:
+            if (!(modifiers & Qt::ControlModifier)) { // Avoid conflict with Ctrl+F (Find)
+                // brushManager_->selectFillTool();
+                qDebug() << "Fill tool shortcut (F) - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_R:
+            if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier))) {
+                // brushManager_->rotateBrush();
+                qDebug() << "Rotate brush shortcut (R) - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_BracketLeft: // [
+            if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier))) {
+                // brushManager_->decreaseBrushSize();
+                qDebug() << "Decrease brush size shortcut ([) - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_BracketRight: // ]
+            if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier))) {
+                // brushManager_->increaseBrushSize();
+                qDebug() << "Increase brush size shortcut (]) - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_J:
+            if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier))) {
+                // Jump to brush (from wxWidgets)
+                qDebug() << "Jump to brush shortcut (J) - placeholder";
+                event->accept();
+            }
+            break;
+    }
+}
+
+void MapViewInputHandler::handleViewShortcuts(QKeyEvent* event) {
+    if (!mapView_ || event->isAccepted()) return;
+
+    Qt::KeyboardModifiers modifiers = event->modifiers();
+
+    // View-related shortcuts
+    switch (event->key()) {
+        case Qt::Key_Space:
+            if (modifiers & Qt::ControlModifier) {
+                // Ctrl+Space: Fill doodad preview buffer (from wxWidgets)
+                qDebug() << "Ctrl+Space - Fill doodad preview buffer - placeholder";
+                event->accept();
+            } else if (!(modifiers & Qt::AltModifier)) {
+                // Space: Switch mode (from wxWidgets)
+                qDebug() << "Space - Switch mode - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_Tab:
+            if (modifiers & Qt::ShiftModifier) {
+                // Shift+Tab: Cycle tab backwards
+                qDebug() << "Shift+Tab - Cycle tab backwards - placeholder";
+                event->accept();
+            } else if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier))) {
+                // Tab: Cycle tab forwards
+                qDebug() << "Tab - Cycle tab forwards - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_G:
+            if (modifiers & Qt::ControlModifier) {
+                // Go to coordinates dialog
+                qDebug() << "Ctrl+G - Go to coordinates - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_H:
+            if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier))) {
+                // Toggle grid display
+                qDebug() << "H - Toggle grid - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_P:
+            if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier))) {
+                // Go to previous position (from wxWidgets)
+                qDebug() << "P - Go to previous position - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_Q:
+            if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier))) {
+                // Show shade (from wxWidgets)
+                qDebug() << "Q - Show shade - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_W:
+            if (modifiers & Qt::ControlModifier) {
+                // Show all floors (from wxWidgets)
+                qDebug() << "Ctrl+W - Show all floors - placeholder";
+                event->accept();
+            }
+            break;
+    }
+}
+
+void MapViewInputHandler::handleDrawingModeKeys(QKeyEvent* event) {
+    if (!mapView_ || event->isAccepted()) return;
+
+    // Drawing mode specific keys
+    switch (event->key()) {
+        case Qt::Key_Enter:
+        case Qt::Key_Return:
+            // Confirm current drawing operation
+            qDebug() << "Enter - Confirm drawing operation - placeholder";
+            currentMode_ = InteractionMode::Idle;
+            event->accept();
+            break;
+        case Qt::Key_Shift:
+            // Shift modifier for constrained drawing (handled by modifier tracking)
+            break;
+        default:
+            break;
+    }
+}
+
+void MapViewInputHandler::handleSelectionModeKeys(QKeyEvent* event) {
+    if (!mapView_ || event->isAccepted()) return;
+
+    Qt::KeyboardModifiers modifiers = event->modifiers();
+
+    // Selection mode specific keys
+    switch (event->key()) {
+        case Qt::Key_Delete:
+        case Qt::Key_Backspace:
+            // Delete selected items
+            qDebug() << "Delete - Remove selected items - placeholder";
+            event->accept();
+            break;
+        case Qt::Key_C:
+            if (modifiers & Qt::ControlModifier) {
+                // Copy selection
+                qDebug() << "Ctrl+C - Copy selection - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_X:
+            if (modifiers & Qt::ControlModifier) {
+                // Cut selection
+                qDebug() << "Ctrl+X - Cut selection - placeholder";
+                event->accept();
+            }
+            break;
+        case Qt::Key_V:
+            if (modifiers & Qt::ControlModifier) {
+                // Paste selection
+                qDebug() << "Ctrl+V - Paste selection - placeholder";
+                currentMode_ = InteractionMode::Pasting;
+                event->accept();
+            }
+            break;
+        case Qt::Key_A:
+            if (modifiers & Qt::ControlModifier) {
+                // Select all
+                qDebug() << "Ctrl+A - Select all - placeholder";
+                event->accept();
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+void MapViewInputHandler::handlePanningModeKeys(QKeyEvent* event) {
+    if (!mapView_ || event->isAccepted()) return;
+
+    // Panning mode specific keys
+    switch (event->key()) {
+        case Qt::Key_Space:
+            // Space release will exit panning mode (handled in handleViewShortcuts)
+            break;
+        default:
+            break;
+    }
+}
+
+void MapViewInputHandler::handlePastingModeKeys(QKeyEvent* event) {
+    if (!mapView_ || event->isAccepted()) return;
+
+    // Pasting mode specific keys
+    switch (event->key()) {
+        case Qt::Key_Enter:
+        case Qt::Key_Return:
+            // Confirm paste operation
+            qDebug() << "Enter - Confirm paste operation - placeholder";
+            currentMode_ = InteractionMode::Idle;
+            event->accept();
+            break;
+        case Qt::Key_R:
+            // Rotate pasted content
+            qDebug() << "R - Rotate pasted content - placeholder";
+            event->accept();
+            break;
+        default:
+            break;
+    }
+}
+
+void MapViewInputHandler::handleFloorNavigationKeys(QKeyEvent* event) {
+    if (!mapView_ || event->isAccepted()) return;
+
+    Qt::KeyboardModifiers modifiers = event->modifiers();
+    int currentFloor = mapView_->getCurrentFloor();
+
+    // Floor navigation keys (matching wxWidgets OnKeyDown behavior)
+    switch (event->key()) {
+        case Qt::Key_PageUp:
+            // Page Up: Go up one floor
+            mapView_->changeFloor(currentFloor - 1);
+            qDebug() << "Page Up - Floor up to:" << (currentFloor - 1);
+            event->accept();
+            break;
+        case Qt::Key_PageDown:
+            // Page Down: Go down one floor
+            mapView_->changeFloor(currentFloor + 1);
+            qDebug() << "Page Down - Floor down to:" << (currentFloor + 1);
+            event->accept();
+            break;
+        default:
+            break;
+    }
+}
+
+void MapViewInputHandler::handleHotkeyKeys(QKeyEvent* event) {
+    if (!mapView_ || event->isAccepted()) return;
+
+    Qt::KeyboardModifiers modifiers = event->modifiers();
+
+    // Hotkey system (matching wxWidgets hotkey behavior)
+    int hotkeyIndex = -1;
+
+    // F1-F12 keys for hotkeys
+    if (event->key() >= Qt::Key_F1 && event->key() <= Qt::Key_F12) {
+        hotkeyIndex = event->key() - Qt::Key_F1; // F1=0, F2=1, etc.
+    }
+    // Number keys 0-9 for hotkeys (when not modified)
+    else if (event->key() >= Qt::Key_0 && event->key() <= Qt::Key_9 &&
+             !(modifiers & (Qt::ControlModifier | Qt::AltModifier))) {
+        hotkeyIndex = (event->key() - Qt::Key_0 + 9) % 10; // 1=0, 2=1, ..., 9=8, 0=9
+    }
+
+    if (hotkeyIndex >= 0) {
+        if (modifiers & Qt::ControlModifier) {
+            // Ctrl+Hotkey: Set hotkey to current position/brush
+            qDebug() << "Ctrl+Hotkey" << hotkeyIndex << "- Set hotkey - placeholder";
+            event->accept();
+        } else {
+            // Hotkey: Use hotkey (go to position or select brush)
+            qDebug() << "Hotkey" << hotkeyIndex << "- Use hotkey - placeholder";
+            event->accept();
+        }
+    }
+
+    // Additional navigation shortcuts from wxWidgets
+    switch (event->key()) {
+        case Qt::Key_Plus:
+        case Qt::Key_Equal:
+            if (modifiers & Qt::ControlModifier) {
+                // Ctrl+Plus: Zoom in (handled by menu action)
+                // Don't accept here to let menu action handle it
+            } else {
+                // Plus: Go up one floor (numpad + behavior)
+                int currentFloor = mapView_->getCurrentFloor();
+                mapView_->changeFloor(currentFloor - 1);
+                qDebug() << "Plus - Floor up to:" << (currentFloor - 1);
+                event->accept();
+            }
+            break;
+        case Qt::Key_Minus:
+            if (modifiers & Qt::ControlModifier) {
+                // Ctrl+Minus: Zoom out (handled by menu action)
+                // Don't accept here to let menu action handle it
+            } else {
+                // Minus: Go down one floor (numpad - behavior)
+                int currentFloor = mapView_->getCurrentFloor();
+                mapView_->changeFloor(currentFloor + 1);
+                qDebug() << "Minus - Floor down to:" << (currentFloor + 1);
+                event->accept();
+            }
+            break;
+    }
+}
+
 void MapViewInputHandler::handleWheelEvent(QWheelEvent* event, const QPointF& mapPosition) {
     if (!mapView_) return;
     updateModifierKeys(event);
 
     qreal delta = event->angleDelta().y();
-    qreal zoomFactorMultiplier = 1.1; // How much to zoom in/out per step
 
-    if (delta > 0) { // Zoom in
-        mapView_->zoom(zoomFactorMultiplier, event->position()); // event->position() is screen coords for zoom center
-    } else if (delta < 0) { // Zoom out
-        mapView_->zoom(1.0 / zoomFactorMultiplier, event->position());
+    // Enhanced wheel handling matching wxWidgets behavior
+    if (ctrlModifierActive_) {
+        // Ctrl+Wheel: Change floor (matching wxWidgets OnWheel behavior)
+        static double floorDiff = 0.0;
+        floorDiff += delta;
+        if (qAbs(floorDiff) >= 120.0) { // Standard wheel delta
+            if (floorDiff < 0.0) {
+                int newFloor = mapView_->getCurrentFloor() - 1;
+                mapView_->changeFloor(newFloor);
+            } else {
+                int newFloor = mapView_->getCurrentFloor() + 1;
+                mapView_->changeFloor(newFloor);
+            }
+            floorDiff = 0.0;
+        }
+        mapView_->updateAndRefreshMapCoordinates(event->position().toPoint());
+    } else if (altModifierActive_) {
+        // Alt+Wheel: Change brush size (matching wxWidgets OnWheel behavior)
+        static double brushDiff = 0.0;
+        brushDiff += delta;
+        if (qAbs(brushDiff) >= 120.0) { // Standard wheel delta
+            if (brushDiff < 0.0) {
+                mapView_->increaseBrushSize_placeholder();
+            } else {
+                mapView_->decreaseBrushSize_placeholder();
+            }
+            brushDiff = 0.0;
+        }
+    } else {
+        // Normal wheel: Zoom (enhanced to match wxWidgets zoom behavior)
+        static double zoomDiff = 0.0;
+        zoomDiff += delta;
+
+        // Use zoom speed configuration (matching wxWidgets)
+        double zoomSpeed = 0.1; // Default zoom speed, could be configurable
+        double zoomChange = -delta * zoomSpeed / 640.0; // Matching wxWidgets calculation
+
+        double currentZoom = mapView_->getZoomLevel();
+        double newZoom = currentZoom + zoomChange;
+
+        // Apply zoom limits
+        if (newZoom < MIN_ZOOM) {
+            zoomChange = MIN_ZOOM - currentZoom;
+            newZoom = MIN_ZOOM;
+        } else if (newZoom > MAX_ZOOM) {
+            zoomChange = MAX_ZOOM - currentZoom;
+            newZoom = MAX_ZOOM;
+        }
+
+        if (qAbs(zoomChange) > 0.001) { // Only zoom if change is significant
+            double zoomFactor = newZoom / currentZoom;
+            mapView_->zoom(zoomFactor, event->position());
+        }
     }
+
     event->accept(); // Indicate event was handled
-    // mapView_->update() should be called by mapView_->zoom()
 }
 
 void MapViewInputHandler::handleFocusOutEvent(QFocusEvent* event) {
@@ -464,7 +1049,13 @@ void MapViewInputHandler::finishPanning(QMouseEvent* event) {
 
 void MapViewInputHandler::startSelectionBox(const QPointF& mapPos, QMouseEvent* event) {
     if (!mapView_) return;
+
     dragStartMapPos_ = mapPos;
+
+    // Store modifier state for selection logic (Task 61)
+    shiftModifierActive_ = event->modifiers() & Qt::ShiftModifier;
+    ctrlModifierActive_ = event->modifiers() & Qt::ControlModifier;
+
     // Initialize selection area in MapView for visual feedback
     mapView_->setSelectionArea(QRectF(dragStartMapPos_, dragStartMapPos_));
     mapView_->update();
@@ -479,15 +1070,80 @@ void MapViewInputHandler::updateSelectionBox(const QPointF& mapPos, QMouseEvent*
 
 void MapViewInputHandler::finishSelectionBox(const QPointF& mapPos, QMouseEvent* event) {
     if (!mapView_ || !map_ || !undoStack_) return;
-    QRectF selectionRect = QRectF(dragStartMapPos_, mapPos).normalized();
 
-    mapView_->setSelectionArea(QRectF()); // Clear the temporary visual selection box from MapView
+    // Use the stored modifier state and current event modifiers (Task 61)
+    Qt::KeyboardModifiers modifiers = event->modifiers();
 
-    // The actual selection logic should be handled by the Map class or a selection manager.
-    // This might involve creating a QUndoCommand for the selection change.
-    if (map_) { // Ensure map_ is valid
-        map_->selectItemsInRect(selectionRect, shiftModifierActive_, ctrlModifierActive_, undoStack_);
-    }
+    // Call MapView's finalizeSelectionRect with proper modifier handling
+    mapView_->finalizeSelectionRect(dragStartMapPos_, mapPos, modifiers);
+
+    // Clear the temporary visual selection box from MapView
+    mapView_->setSelectionArea(QRectF());
+
+    // Reset modifier state
+    shiftModifierActive_ = false;
+    ctrlModifierActive_ = false;
 
     mapView_->update(); // Update MapView to reflect any changes in selection state
+}
+
+// Single-click selection handling (Task 61)
+void MapViewInputHandler::handleSingleClickSelection(const QPointF& mapPos, QMouseEvent* event, bool toggleMode) {
+    if (!mapView_ || !map_) return;
+
+    MapPos tilePos = MapPos(static_cast<int>(qFloor(mapPos.x())),
+                           static_cast<int>(qFloor(mapPos.y())),
+                           mapView_->getCurrentFloor());
+
+    Tile* tile = map_->getTile(tilePos.x, tilePos.y, tilePos.z);
+    Selection* selection = map_->getSelection();
+
+    if (!selection) return;
+
+    selection->start(Selection::NONE);
+
+    if (!tile) {
+        // Clicking on empty space - clear selection
+        if (!toggleMode) {
+            selection->clear();
+        }
+    } else {
+        if (toggleMode) {
+            // Ctrl+Click: Toggle selection of this tile/item
+            if (selection->isSelected(tilePos)) {
+                selection->removeTile(tilePos);
+            } else {
+                selection->addTile(tilePos);
+            }
+        } else {
+            // Normal click: Replace selection with this tile/item
+            selection->clear();
+            selection->add(tile);
+        }
+    }
+
+    selection->finish(Selection::NONE);
+
+    // Update visual representation
+    mapView_->updateSelectionVisuals();
+    mapView_->update();
+}
+
+// Task 74: Waypoint interaction handling
+bool MapViewInputHandler::handleWaypointInteraction(QMouseEvent* event, const QPointF& mapPosition) {
+    if (!mapView_ || !map_) return false;
+
+    // Check if waypoint tool is active
+    if (!mapView_->isWaypointToolActive()) {
+        return false; // Not handling waypoint interactions
+    }
+
+    if (event->button() == Qt::LeftButton) {
+        // Left-click with waypoint tool: Place waypoint
+        mapView_->placeWaypointAt(mapPosition);
+        event->accept();
+        return true;
+    }
+
+    return false; // Not handled
 }

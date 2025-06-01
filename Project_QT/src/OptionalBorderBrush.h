@@ -31,6 +31,11 @@ public:
     QUndoCommand* applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) override;
     QUndoCommand* removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) override;
 
+    // Direct migration from wxwidgets OptionalBorderBrush interface
+    bool canDraw(Map* map, const QPoint& position) const;
+    void draw(Map* map, Tile* tile, void* parameter = nullptr);
+    void undraw(Map* map, Tile* tile);
+
     // Mouse event methods (implementing Brush pure virtuals)
     QUndoCommand* mousePressEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView,
                                   Map* map, QUndoStack* undoStack,

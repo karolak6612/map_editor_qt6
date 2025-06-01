@@ -1,5 +1,6 @@
 #include "ItemManager.h"
 #include "Item.h" // Item class from Task 13
+#include "SpriteManager.h" // Task 64: For core properties access
 #include <QFile>
 #include <QDataStream>
 #include <QXmlStreamReader> // For optional XML parsing
@@ -109,8 +110,12 @@ ItemManager::~ItemManager() {
 
 void ItemManager::clearDefinitions() {
     itemPropertiesMap_.clear();
+    clientIdToServerIds_.clear();
     loaded_ = false;
     maxServerId_ = 0;
+    majorVersion_ = 0;
+    minorVersion_ = 0;
+    buildNumber_ = 0;
     emit definitionsCleared();
     qDebug() << "Item definitions cleared.";
 }
@@ -140,6 +145,13 @@ bool ItemManager::loadDefinitions(const QString& otbPath, const QString& xmlPath
             qWarning() << "Failed to parse or augment with XML file:" << xmlPath 
                        << ". Proceeding with OTB data only.";
             // Continue even if XML fails, OTB is primary
+        }
+    }
+
+    // Task 64: Load core properties from SpriteManager if available
+    if (spriteManager_) {
+        if (!loadCorePropertiesFromSprites()) {
+            qWarning() << "Failed to load core properties from SpriteManager, continuing with OTB/XML data only";
         }
     }
 
@@ -199,9 +211,14 @@ bool ItemManager::parseOtb(const QString& filePath) {
         quint32 otbVersion, clientVersion, buildNumber;
         in >> otbVersion >> clientVersion >> buildNumber;
         if(in.status() != QDataStream::Ok) { qWarning() << "Error reading version numbers."; return false; }
-        
-        qDebug() << "OTB Version:" << otbVersion 
-                 << "Client Version:" << clientVersion 
+
+        // Store version information
+        majorVersion_ = otbVersion;
+        minorVersion_ = clientVersion;
+        buildNumber_ = buildNumber;
+
+        qDebug() << "OTB Version:" << otbVersion
+                 << "Client Version:" << clientVersion
                  << "Build:" << buildNumber;
         
         // Skip any remaining CSD version string etc.
@@ -317,6 +334,12 @@ bool ItemManager::parseOtb(const QString& filePath) {
                 qWarning() << "Duplicate server ID in OTB:" << props.serverId << ". Overwriting.";
             }
             itemPropertiesMap_.insert(props.serverId, props);
+
+            // Build client ID to server ID mapping
+            if (props.clientId > 0) {
+                clientIdToServerIds_[props.clientId].append(props.serverId);
+            }
+
             if (props.serverId > maxServerId_) {
                 maxServerId_ = props.serverId;
             }
@@ -379,7 +402,21 @@ bool ItemManager::parseXml(const QString& filePath) {
                     }
                     // ClientID might also be in XML, overriding OTB or setting if new
                     if(xml.attributes().hasAttribute("clientid")) {
+                        quint16 oldClientId = props.clientId;
                         props.clientId = xml.attributes().value("clientid").toUShort();
+
+                        // Update client ID mapping if changed
+                        if (oldClientId != props.clientId) {
+                            if (oldClientId > 0) {
+                                clientIdToServerIds_[oldClientId].removeAll(idToProcess);
+                                if (clientIdToServerIds_[oldClientId].isEmpty()) {
+                                    clientIdToServerIds_.remove(oldClientId);
+                                }
+                            }
+                            if (props.clientId > 0) {
+                                clientIdToServerIds_[props.clientId].append(idToProcess);
+                            }
+                        }
                     }
 
 
@@ -439,6 +476,11 @@ bool ItemManager::parseXml(const QString& filePath) {
                                 props.lightLevel = valueStr.toUShort(&ok); if(!ok) props.lightLevel = 0;
                             } else if (key == "lightcolor") {
                                 props.lightColor = valueStr.toUShort(&ok); if(!ok) props.lightColor = 0;
+                            } else if (key == "groundequivalent") {
+                                props.groundEquivalent = valueStr.toUShort(&ok); if(!ok) props.groundEquivalent = 0;
+                                if (props.groundEquivalent > 0) props.hasEquivalent = true;
+                            } else if (key == "bordergroup") {
+                                props.borderGroup = valueStr.toUShort(&ok); if(!ok) props.borderGroup = 0;
                             }
                             // Boolean flags often set by presence of attribute or specific value "1"
                             // Example: <attribute key="blockprojectile" value="1"/>
@@ -463,6 +505,16 @@ bool ItemManager::parseXml(const QString& filePath) {
                             PARSE_XML_BOOL_FLAG("clientcharges", clientCharges) // This means client handles charges display
                             PARSE_XML_BOOL_FLAG("lookthrough", ignoreLook) // lookthrough means ignorelook
                             PARSE_XML_BOOL_FLAG("hasheight", hasElevation)
+                            PARSE_XML_BOOL_FLAG("wallhateme", wallHateMe)
+                            PARSE_XML_BOOL_FLAG("canwritetext", canWriteText)
+                            PARSE_XML_BOOL_FLAG("iswall", isWall)
+                            PARSE_XML_BOOL_FLAG("isborder", isBorder)
+                            PARSE_XML_BOOL_FLAG("istable", isTable)
+                            PARSE_XML_BOOL_FLAG("iscarpet", isCarpet)
+                            PARSE_XML_BOOL_FLAG("isoptionalborder", isOptionalBorder)
+                            PARSE_XML_BOOL_FLAG("isbrushDoor", isBrushDoor)
+                            PARSE_XML_BOOL_FLAG("isopen", isOpen)
+                            PARSE_XML_BOOL_FLAG("islocked", isLocked)
                             // Add more specific XML attribute parsings here
                         }
                     }
@@ -494,83 +546,208 @@ bool ItemManager::itemTypeExists(quint16 serverId) const {
     return itemPropertiesMap_.contains(serverId);
 }
 
-Item* ItemManager::createItem(quint16 serverId, QObject* parent) const {
-    if (!itemTypeExists(serverId)) {
-        qWarning() << "Attempted to create item with unknown server ID:" << serverId;
-        // Optionally, create a default "unknown" item:
-        // Item* unknownItem = new Item(0, parent); // Use ID 0 for unknown
-        // unknownItem->setName("Unknown Item");
-        // unknownItem->setClientId(defaultProperties_.clientId); // Some default sprite
-        // return unknownItem;
-        return nullptr;
+
+
+// --- Enhanced Lookup Methods ---
+
+quint16 ItemManager::getItemIdByClientID(quint16 clientId) const {
+    auto it = clientIdToServerIds_.constFind(clientId);
+    if (it != clientIdToServerIds_.constEnd() && !it.value().isEmpty()) {
+        return it.value().first(); // Return first server ID for this client ID
     }
-    const ItemProperties& props = getItemProperties(serverId);
+    return 0; // Not found
+}
 
-    Item* newItem = new Item(props.serverId, parent); 
-    
-    newItem->setClientId(props.clientId);
-    newItem->setName(props.name); 
-    // newItem->setTypeName(); // Item::setTypeName could be used if props had a typeName field.
-
-    // Set new dedicated members using their setters
-    newItem->setDescriptionText(props.description);
-    newItem->setEditorSuffix(props.editorSuffix);
-    newItem->setItemGroup(props.group);
-    newItem->setItemType(props.type); // This might override group-based type setting if XML is more specific
-    newItem->setWeight(props.weight);
-    newItem->setAttack(props.attack);
-    newItem->setDefense(props.defense);
-    newItem->setArmor(props.armor);
-    newItem->setCharges(props.charges); // Uses direct member now
-    newItem->setMaxTextLen(props.maxTextLen); // Uses direct member now
-    newItem->setRotateTo(props.rotateTo);     // Uses direct member now
-    newItem->setVolume(props.volume);
-    newItem->setSlotPosition(props.slotPosition);
-    newItem->setWeaponType(props.weaponType);
-    newItem->setLightLevel(props.lightLevel); // Uses direct member now
-    newItem->setLightColor(props.lightColor); // Uses direct member now
-    newItem->setClassification(props.classification);
-
-    // Set boolean flags from ItemProperties
-    newItem->setMoveable(props.isMoveable);
-    newItem->setBlocking(props.isBlocking);
-    newItem->setBlocksMissiles(props.blockMissiles);
-    newItem->setBlocksPathfind(props.blockPathfind);
-    newItem->setStackable(props.isStackable);
-    newItem->setGroundTile(props.isGroundTile);
-    newItem->setAlwaysOnTop(props.alwaysOnBottom); // Note: OTB ALWAYSONTOP means "draw first" (bottom layer of stack)
-                                                 // Item::isAlwaysOnTop should mean "draw last" (top layer of stack)
-                                                 // This needs careful mapping. If ItemProperties::alwaysOnBottom means draw first,
-                                                 // then Item::isAlwaysOnTop (if it means draw last) should be !props.alwaysOnBottom (potentially)
-                                                 // For now, direct mapping.
-    newItem->setTopOrder(props.topOrder);
-    newItem->setIsTeleport(props.type == ITEM_TYPE_TELEPORT); 
-    newItem->setIsContainer(props.type == ITEM_TYPE_CONTAINER); 
-    newItem->setReadable(props.isReadable);
-    newItem->setCanWriteText(props.canWriteText); // Assuming ItemProperties::canWriteText exists
-    newItem->setPickupable(props.isPickupable);
-    newItem->setRotatable(props.isRotatable);
-    newItem->setHangable(props.isHangable);
-    newItem->setHasHookSouth(props.hasHookSouth);
-    newItem->setHasHookEast(props.hasHookEast);
-    newItem->setHasHeight(props.hasElevation);
-    
-    // Set attributes that are commonly instance-specific but might have type defaults
-    if (props.isStackable) {
-        newItem->setCount(1); // Default count for a newly created stackable item
+QList<quint16> ItemManager::getItemsByClientID(quint16 clientId) const {
+    auto it = clientIdToServerIds_.constFind(clientId);
+    if (it != clientIdToServerIds_.constEnd()) {
+        return it.value();
     }
-    // Charges are now handled by newItem->setCharges(props.charges) above.
-    // maxTextLen is now handled by newItem->setMaxTextLen(props.maxTextLen) above.
-    // rotateTo is now handled by newItem->setRotateTo(props.rotateTo) above.
-    // lightLevel and lightColor are now handled by their dedicated setters above.
+    return QList<quint16>(); // Empty list if not found
+}
 
-    // Example of a property that might still use generic attributes if not dedicated:
-    // if (props.someCustomAttributeValue != 0) {
-    //     newItem->setAttribute(QStringLiteral("someCustomAttribute"), props.someCustomAttributeValue);
-    // }
-    
-    // ActionID and UniqueID are typically instance-specific and not set from ItemProperties directly,
-    // unless ItemProperties were to store default action/unique IDs for certain types.
+// --- Meta Item Support ---
 
-    return newItem;
+bool ItemManager::loadMetaItem(const QString& id, const QString& name) {
+    bool ok;
+    quint16 serverId = id.toUShort(&ok);
+    if (!ok || serverId == 0) {
+        qWarning() << "Invalid meta item ID:" << id;
+        return false;
+    }
+
+    if (itemPropertiesMap_.contains(serverId)) {
+        qWarning() << "Meta item ID already exists:" << serverId;
+        return false;
+    }
+
+    ItemProperties props;
+    props.serverId = serverId;
+    props.name = name.isEmpty() ? QString("Meta Item %1").arg(serverId) : name;
+    props.isMetaItem = true;
+
+    itemPropertiesMap_.insert(serverId, props);
+    if (serverId > maxServerId_) {
+        maxServerId_ = serverId;
+    }
+
+    qDebug() << "Loaded meta item:" << serverId << "name:" << props.name;
+    return true;
+}
+
+bool ItemManager::isMetaItem(quint16 serverId) const {
+    auto it = itemPropertiesMap_.constFind(serverId);
+    if (it != itemPropertiesMap_.constEnd()) {
+        return it.value().isMetaItem;
+    }
+    return false;
+}
+
+// Task 64: SpriteManager integration methods
+void ItemManager::setSpriteManager(SpriteManager* spriteManager) {
+    spriteManager_ = spriteManager;
+    qDebug() << "ItemManager: SpriteManager integration" << (spriteManager ? "enabled" : "disabled");
+}
+
+bool ItemManager::loadCorePropertiesFromSprites() {
+    if (!spriteManager_) {
+        qWarning() << "ItemManager::loadCorePropertiesFromSprites - No SpriteManager available";
+        return false;
+    }
+
+    int propertiesApplied = 0;
+    int itemsProcessed = 0;
+
+    // Iterate through all loaded items and apply core properties from sprites
+    for (auto it = itemPropertiesMap_.begin(); it != itemPropertiesMap_.end(); ++it) {
+        quint16 serverId = it.key();
+        ItemProperties& props = it.value();
+
+        if (props.clientId > 0) {
+            applyCorePropertiesToItem(serverId, props.clientId);
+            propertiesApplied++;
+        }
+        itemsProcessed++;
+    }
+
+    qDebug() << "ItemManager: Applied core properties from SpriteManager to"
+             << propertiesApplied << "items out of" << itemsProcessed << "total items";
+
+    return true;
+}
+
+void ItemManager::applyCorePropertiesToItem(quint16 serverId, quint16 clientId) {
+    if (!spriteManager_ || !spriteManager_->hasCoreItemProperties(clientId)) {
+        return;
+    }
+
+    const CoreItemProperties* coreProps = spriteManager_->getCoreItemProperties(clientId);
+    if (!coreProps) {
+        return;
+    }
+
+    auto it = itemPropertiesMap_.find(serverId);
+    if (it == itemPropertiesMap_.end()) {
+        return;
+    }
+
+    ItemProperties& props = it.value();
+
+    // Apply core properties from .dat file (only if not already set by OTB/XML)
+    // OTB/XML takes precedence over .dat file properties
+
+    // Walkability - use .dat if OTB didn't specify blocking
+    if (!props.isBlocking && coreProps->isNotWalkable) {
+        props.isBlocking = true;
+    }
+
+    // Stackability - use .dat if not set
+    if (!props.isStackable && coreProps->isStackable) {
+        props.isStackable = true;
+    }
+
+    // Moveability - use .dat if not set
+    if (props.isMoveable && coreProps->isNotMoveable) {
+        props.isMoveable = false;
+    }
+
+    // Pickupability - use .dat if not set
+    if (!props.isPickupable && coreProps->isPickupable) {
+        props.isPickupable = true;
+    }
+
+    // Ground items
+    if (!props.isGroundTile && coreProps->isGround) {
+        props.isGroundTile = true;
+        props.alwaysOnBottom = true; // Ground items are always on bottom
+    }
+
+    // Container items
+    if (props.type == ITEM_TYPE_NONE && coreProps->isContainer) {
+        props.type = ITEM_TYPE_CONTAINER;
+        props.group = ITEM_GROUP_CONTAINER;
+    }
+
+    // Top order from .dat
+    if (props.topOrder == 1 && coreProps->topOrder != 1) { // Only if not explicitly set
+        props.topOrder = coreProps->topOrder;
+    }
+
+    // Light properties from .dat
+    if (props.lightLevel == 0 && coreProps->lightLevel > 0) {
+        props.lightLevel = coreProps->lightLevel;
+        props.lightColor = coreProps->lightColor;
+    }
+
+    // Minimap color from .dat
+    if (props.minimapColor == 0xFF && coreProps->minimapColor > 0) {
+        props.minimapColor = static_cast<quint8>(coreProps->minimapColor);
+    }
+
+    // Projectile blocking
+    if (!props.blockMissiles && coreProps->isBlockProjectile) {
+        props.blockMissiles = true;
+    }
+
+    // Pathfinding blocking
+    if (!props.blockPathfind && coreProps->isNotPathable) {
+        props.blockPathfind = true;
+    }
+
+    // Elevation
+    if (!props.hasElevation && coreProps->hasElevation) {
+        props.hasElevation = true;
+    }
+
+    // Hangable and hooks
+    if (!props.isHangable && coreProps->isHangable) {
+        props.isHangable = true;
+    }
+    if (!props.hasHookEast && coreProps->hasHookEast) {
+        props.hasHookEast = true;
+    }
+    if (!props.hasHookSouth && coreProps->hasHookSouth) {
+        props.hasHookSouth = true;
+    }
+
+    // Rotatable
+    if (!props.isRotatable && coreProps->isRotateable) {
+        props.isRotatable = true;
+    }
+
+    // Readable/Writable
+    if (!props.isReadable && coreProps->isWritable) {
+        props.isReadable = true;
+        props.canWriteText = true;
+    }
+
+    // Fluid container
+    if (coreProps->isFluidContainer) {
+        props.group = ITEM_GROUP_FLUID;
+    }
+
+    // Splash
+    if (coreProps->isSplash) {
+        props.group = ITEM_GROUP_SPLASH;
+    }
 }

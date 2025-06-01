@@ -14,6 +14,10 @@ Creature::Creature(const QString& name, QObject *parent) : QObject(parent),
     lookFeet_(0),
     lookAddons_(0),
     lookMount_(0),
+    lookMountHead_(0),
+    lookMountBody_(0),
+    lookMountLegs_(0),
+    lookMountFeet_(0),
     speed_(220),      // Default speed
     health_(100),     // Default current health
     maxHealth_(100),  // Default max health
@@ -28,6 +32,7 @@ Creature::Creature(const QString& name, QObject *parent) : QObject(parent),
     spawnTime_(0),    // Default to 0, instance specific
     isNpc_(false),
     isSelected_(false),
+    saved_(false),
     brush_(nullptr)   // Not owned
     // currentSprite_ = nullptr; // Future use
 {
@@ -101,6 +106,38 @@ int Creature::lookMount() const { return lookMount_; }
 void Creature::setLookMount(int mountId) {
     if (lookMount_ != mountId) {
         lookMount_ = mountId;
+        emit creatureChanged();
+    }
+}
+
+int Creature::lookMountHead() const { return lookMountHead_; }
+void Creature::setLookMountHead(int head) {
+    if (lookMountHead_ != head) {
+        lookMountHead_ = head;
+        emit creatureChanged();
+    }
+}
+
+int Creature::lookMountBody() const { return lookMountBody_; }
+void Creature::setLookMountBody(int body) {
+    if (lookMountBody_ != body) {
+        lookMountBody_ = body;
+        emit creatureChanged();
+    }
+}
+
+int Creature::lookMountLegs() const { return lookMountLegs_; }
+void Creature::setLookMountLegs(int legs) {
+    if (lookMountLegs_ != legs) {
+        lookMountLegs_ = legs;
+        emit creatureChanged();
+    }
+}
+
+int Creature::lookMountFeet() const { return lookMountFeet_; }
+void Creature::setLookMountFeet(int feet) {
+    if (lookMountFeet_ != feet) {
+        lookMountFeet_ = feet;
         emit creatureChanged();
     }
 }
@@ -224,10 +261,145 @@ void Creature::setSelected(bool selected) {
 
 Brush* Creature::getBrush() const { return brush_; }
 void Creature::setBrush(Brush* brush) {
-    // Not emitting creatureChanged() here as brush is external metadata, 
+    // Not emitting creatureChanged() here as brush is external metadata,
     // not an intrinsic property of the creature type or instance data.
     // This is typically set by a CreatureManager when loading definitions.
-    brush_ = brush; 
+    brush_ = brush;
+}
+
+// --- Save/Reset Functionality ---
+
+bool Creature::isSaved() const {
+    return saved_;
+}
+
+void Creature::save() {
+    saved_ = true;
+}
+
+void Creature::reset() {
+    saved_ = false;
+}
+
+// --- Outfit Integration ---
+
+Outfit Creature::getOutfit() const {
+    Outfit outfit;
+    outfit.lookType = lookType_;
+    outfit.lookHead = lookHead_;
+    outfit.lookBody = lookBody_;
+    outfit.lookLegs = lookLegs_;
+    outfit.lookFeet = lookFeet_;
+    outfit.lookAddon = lookAddons_;
+    outfit.lookMount = lookMount_;
+    outfit.lookMountHead = lookMountHead_;
+    outfit.lookMountBody = lookMountBody_;
+    outfit.lookMountLegs = lookMountLegs_;
+    outfit.lookMountFeet = lookMountFeet_;
+    return outfit;
+}
+
+void Creature::setOutfit(const Outfit& outfit) {
+    bool changed = false;
+
+    if (lookType_ != outfit.lookType) {
+        lookType_ = outfit.lookType;
+        changed = true;
+    }
+    if (lookHead_ != outfit.lookHead) {
+        lookHead_ = outfit.lookHead;
+        changed = true;
+    }
+    if (lookBody_ != outfit.lookBody) {
+        lookBody_ = outfit.lookBody;
+        changed = true;
+    }
+    if (lookLegs_ != outfit.lookLegs) {
+        lookLegs_ = outfit.lookLegs;
+        changed = true;
+    }
+    if (lookFeet_ != outfit.lookFeet) {
+        lookFeet_ = outfit.lookFeet;
+        changed = true;
+    }
+    if (lookAddons_ != outfit.lookAddon) {
+        lookAddons_ = outfit.lookAddon;
+        changed = true;
+    }
+    if (lookMount_ != outfit.lookMount) {
+        lookMount_ = outfit.lookMount;
+        changed = true;
+    }
+    if (lookMountHead_ != outfit.lookMountHead) {
+        lookMountHead_ = outfit.lookMountHead;
+        changed = true;
+    }
+    if (lookMountBody_ != outfit.lookMountBody) {
+        lookMountBody_ = outfit.lookMountBody;
+        changed = true;
+    }
+    if (lookMountLegs_ != outfit.lookMountLegs) {
+        lookMountLegs_ = outfit.lookMountLegs;
+        changed = true;
+    }
+    if (lookMountFeet_ != outfit.lookMountFeet) {
+        lookMountFeet_ = outfit.lookMountFeet;
+        changed = true;
+    }
+
+    if (changed) {
+        emit creatureChanged();
+    }
+}
+
+// --- Static Direction Conversion Methods ---
+
+QString Creature::directionToString(Direction dir) {
+    switch (dir) {
+        case Direction::North:
+            return QStringLiteral("North");
+        case Direction::East:
+            return QStringLiteral("East");
+        case Direction::South:
+            return QStringLiteral("South");
+        case Direction::West:
+            return QStringLiteral("West");
+        default:
+            return QStringLiteral("Unknown");
+    }
+}
+
+Direction Creature::stringToDirection(const QString& dirStr) {
+    QString lowerStr = dirStr.toLower();
+    if (lowerStr == "north") {
+        return Direction::North;
+    } else if (lowerStr == "east") {
+        return Direction::East;
+    } else if (lowerStr == "south") {
+        return Direction::South;
+    } else if (lowerStr == "west") {
+        return Direction::West;
+    }
+    return Direction::South; // Default
+}
+
+quint16 Creature::directionToId(Direction dir) {
+    return static_cast<quint16>(dir);
+}
+
+Direction Creature::idToDirection(quint16 id) {
+    switch (id) {
+        case 0:
+            return Direction::North;
+        case 1:
+            return Direction::East;
+        case 2:
+            return Direction::South;
+        case 3:
+            return Direction::West;
+        default:
+            return Direction::South; // Default
+    }
 }
 
 Creature* Creature::deepCopy() const {
@@ -241,6 +413,10 @@ Creature* Creature::deepCopy() const {
     newCreature->lookFeet_ = this->lookFeet_;
     newCreature->lookAddons_ = this->lookAddons_;
     newCreature->lookMount_ = this->lookMount_;
+    newCreature->lookMountHead_ = this->lookMountHead_;
+    newCreature->lookMountBody_ = this->lookMountBody_;
+    newCreature->lookMountLegs_ = this->lookMountLegs_;
+    newCreature->lookMountFeet_ = this->lookMountFeet_;
     newCreature->speed_ = this->speed_;
     newCreature->health_ = this->health_; // Copy current health for an instance copy
     newCreature->maxHealth_ = this->maxHealth_;
@@ -255,6 +431,7 @@ Creature* Creature::deepCopy() const {
     newCreature->spawnTime_ = this->spawnTime_; // Copy instance-specific spawn time
     newCreature->isNpc_ = this->isNpc_;
     newCreature->isSelected_ = this->isSelected_; // Copy selection state
+    newCreature->saved_ = this->saved_; // Copy saved state
     newCreature->brush_ = this->brush_; // Copy brush pointer (not owned, just a reference)
     // newCreature->currentSprite_ = nullptr; // Sprites are not deeply copied here, handled by sprite manager
 
@@ -284,4 +461,13 @@ void Creature::draw(QPainter* painter, const QRectF& targetRect, const DrawingOp
     // }
     
     // qDebug() << "Creature::draw() called for:" << name_ << "at" << targetRect;
+}
+
+quint32 Creature::memsize() const {
+    quint32 size = sizeof(Creature);
+
+    // Add size of string member
+    size += name_.size() * sizeof(QChar);
+
+    return size;
 }

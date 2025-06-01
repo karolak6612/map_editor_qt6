@@ -453,14 +453,58 @@ quint16 CarpetBrush::getRandomCarpetIdByAlignment(quint8 alignment_idx) const {
     return 0;
 }
 
+// Direct migration from wxwidgets CarpetBrush::getRandomCarpet
+quint16 CarpetBrush::getRandomCarpet(BorderType alignment) {
+    auto findRandomCarpet = [](const QtCarpetNode& node) -> quint16 {
+        int chance = Randomizer::getRandom(1, node.total_chance);
+        for (const QtCarpetVariation& carpetType : node.items) {
+            if (chance <= carpetType.chance) {
+                return carpetType.item_id;
+            }
+            chance -= carpetType.chance;
+        }
+        return 0;
+    };
+
+    QtCarpetNode node = m_carpet_items[alignment];
+    if (node.total_chance > 0) {
+        return findRandomCarpet(node);
+    }
+
+    node = m_carpet_items[CARPET_CENTER_ALIGNMENT_INDEX];
+    if (alignment != CARPET_CENTER_ALIGNMENT_INDEX && node.total_chance > 0) {
+        quint16 id = findRandomCarpet(node);
+        if (id != 0) {
+            return id;
+        }
+    }
+
+    // Find an item to place on the tile, first center, then the rest.
+    for (int i = 0; i < 12; ++i) {
+        node = m_carpet_items[i];
+        if (node.total_chance > 0) {
+            quint16 id = findRandomCarpet(node);
+            if (id != 0) {
+                return id;
+            }
+        }
+    }
+    return 0;
+}
+
 void CarpetBrush::draw(Map* map, Tile* tile, void* parameter) {
+    // Direct migration from wxwidgets CarpetBrush::draw
+    Q_UNUSED(parameter);
+
     if (!map || !tile) return;
 
+    // Only remove old carpets if layering is disabled (migrated from wxwidgets)
     bool layerCarpets = GlobalSettings::getInstance()->getBool("LAYER_CARPETS", false);
     if (!layerCarpets) {
         undraw(map, tile);
     }
 
+    // Place carpet item using CARPET_CENTER (migrated from wxwidgets)
     quint16 itemIdToPlace = getRandomCarpetIdByAlignment(CARPET_CENTER_ALIGNMENT_INDEX);
 
     if (itemIdToPlace != 0) {
@@ -468,44 +512,30 @@ void CarpetBrush::draw(Map* map, Tile* tile, void* parameter) {
         if (newItem) {
             tile->addItem(newItem);
             map->markModified();
-            doCarpets(map, tile);
-            for (int dx = -1; dx <= 1; ++dx) {
-                for (int dy = -1; dy <= 1; ++dy) {
-                    if (dx == 0 && dy == 0) continue;
-                    Tile* neighbor = map->getTile(tile->x() + dx, tile->y() + dy, tile->z());
-                    if (neighbor) {
-                        doCarpets(map, neighbor);
-                    }
-                }
-            }
         }
     }
 }
 
 void CarpetBrush::undraw(Map* map, Tile* tile) {
+    // Direct migration from wxwidgets CarpetBrush::undraw
     if (!map || !tile) return;
-    QMutableVectorIterator<Item*> it(tile->items());
-    bool changed = false;
-    while (it.hasNext()) {
-        Item* item = it.next();
+
+    // Migrate wxwidgets iterator logic
+    auto items = tile->getItems(); // Get copy for safe iteration
+    for (auto it = items.begin(); it != items.end(); ) {
+        Item* item = *it;
         if (item && item->isCarpet()) {
-            Brush* itemBrush = item->getBrush();
-            if (itemBrush == this) {
-                it.remove();
+            CarpetBrush* carpetBrush = item->getCarpetBrush();
+            if (carpetBrush == this) {
+                tile->removeItem(item);
                 delete item;
-                changed = true;
+                it = items.erase(it);
+                map->markModified();
+            } else {
+                ++it;
             }
-        }
-    }
-    if (changed) {
-        map->markModified();
-        for (int dx = -1; dx <= 1; ++dx) {
-            for (int dy = -1; dy <= 1; ++dy) {
-                Tile* neighbor_or_self = map->getTile(tile->x() + dx, tile->y() + dy, tile->z());
-                if (neighbor_or_self) {
-                    doCarpets(map, neighbor_or_self);
-                }
-            }
+        } else {
+            ++it;
         }
     }
 }
@@ -533,87 +563,49 @@ static bool hasMatchingCarpetBrushAtTile(Map* map, CarpetBrush* carpet_brush, in
 }
 
 void CarpetBrush::doCarpets(Map* map, Tile* tile) {
+    // Direct migration from wxwidgets CarpetBrush::doCarpets
     if (!map || !tile) return;
 
-    bool tileHasAnyCarpetOfThisBrush = false;
-    for(Item* itemOnTile : tile->items()){
-        if(itemOnTile && itemOnTile->isCarpet() && itemOnTile->getBrush() == this){
-            tileHasAnyCarpetOfThisBrush = true;
-            break;
-        }
-    }
-     // If the tile doesn't have a carpet flag and no items from this specific brush,
-     // we might still need to process it if a neighbor *was* removed, to update this tile to center.
-     // However, the main loop is over items of *this* brush.
-    if (!tileHasAnyCarpetOfThisBrush && !tile->hasCarpet()) { // Check generic hasCarpet flag too
-         // If no carpet of THIS brush, AND no generic carpet flag, then nothing for this brush to do.
-         // If there was a carpet from ANOTHER brush, this one shouldn't interfere.
-         // If the generic flag was true but no items of THIS brush, it might be a neighbor update case.
-         // The logic of calling doCarpets on neighbors from draw/undraw handles this better.
-         // For now, if no carpet of this brush type on tile, return.
-        bool processAnyway = false; // Check if any neighbor has this carpet brush
-        if (!tileHasAnyCarpetOfThisBrush) {
-            for (int dx = -1; dx <= 1; ++dx) {
-                for (int dy = -1; dy <= 1; ++dy) {
-                    if (dx == 0 && dy == 0) continue;
-                    if (hasMatchingCarpetBrushAtTile(map, this, tile->x() + dx, tile->y() + dy, tile->z())) {
-                        processAnyway = true; break;
-                    }
-                }
-                if (processAnyway) break;
-            }
-        }
-        if (!tileHasAnyCarpetOfThisBrush && !processAnyway){
-            return;
-        }
+    if (!tile->hasCarpet()) {
+        return;
     }
 
 
-    const QPoint pos = tile->mapPos().toPoint();
-    int x = pos.x();
-    int y = pos.y();
-    int z = tile->z();
+    const Position& position = tile->getPosition();
+    quint32 x = position.x;
+    quint32 y = position.y;
+    quint32 z = position.z;
 
-    for (Item* item : tile->items()) {
+    for (Item* item : tile->getItems()) {
         if (!item || !item->isCarpet()) continue;
 
-        CarpetBrush* itemCarpetBrush = dynamic_cast<CarpetBrush*>(item->getBrush());
-        if (!itemCarpetBrush || itemCarpetBrush != this) continue;
+        CarpetBrush* carpetBrush = item->getCarpetBrush();
+        if (!carpetBrush) continue;
 
-        quint8 neighborConfig = 0;
-        if (hasMatchingCarpetBrushAtTile(map, this, x - 1, y - 1, z)) neighborConfig |= QT_TILE_NORTHWEST_CB;
-        if (hasMatchingCarpetBrushAtTile(map, this, x,     y - 1, z)) neighborConfig |= QT_TILE_NORTH_CB;
-        if (hasMatchingCarpetBrushAtTile(map, this, x + 1, y - 1, z)) neighborConfig |= QT_TILE_NORTHEAST_CB;
-        if (hasMatchingCarpetBrushAtTile(map, this, x - 1, y,     z)) neighborConfig |= QT_TILE_WEST_CB;
-        if (hasMatchingCarpetBrushAtTile(map, this, x + 1, y,     z)) neighborConfig |= QT_TILE_EAST_CB;
-        if (hasMatchingCarpetBrushAtTile(map, this, x - 1, y + 1, z)) neighborConfig |= QT_TILE_SOUTHWEST_CB;
-        if (hasMatchingCarpetBrushAtTile(map, this, x,     y + 1, z)) neighborConfig |= QT_TILE_SOUTH_CB;
-        if (hasMatchingCarpetBrushAtTile(map, this, x + 1, y + 1, z)) neighborConfig |= QT_TILE_SOUTHEAST_CB;
+        // Check 8 neighbors for matching carpet brush (migrated from wxwidgets)
+        bool neighbours[8];
+        neighbours[0] = hasMatchingCarpetBrushAtTile(map, carpetBrush, x - 1, y - 1, z);
+        neighbours[1] = hasMatchingCarpetBrushAtTile(map, carpetBrush, x, y - 1, z);
+        neighbours[2] = hasMatchingCarpetBrushAtTile(map, carpetBrush, x + 1, y - 1, z);
+        neighbours[3] = hasMatchingCarpetBrushAtTile(map, carpetBrush, x - 1, y, z);
+        neighbours[4] = hasMatchingCarpetBrushAtTile(map, carpetBrush, x + 1, y, z);
+        neighbours[5] = hasMatchingCarpetBrushAtTile(map, carpetBrush, x - 1, y + 1, z);
+        neighbours[6] = hasMatchingCarpetBrushAtTile(map, carpetBrush, x, y + 1, z);
+        neighbours[7] = hasMatchingCarpetBrushAtTile(map, carpetBrush, x + 1, y + 1, z);
 
-        quint8 targetAlignmentIndex = s_carpet_types_lookup.value(neighborConfig, CARPET_CENTER_ALIGNMENT_INDEX);
-
-        quint16 newItemId = getRandomCarpetIdByAlignment(targetAlignmentIndex);
-
-        if (newItemId == 0 && targetAlignmentIndex != CARPET_CENTER_ALIGNMENT_INDEX) { // If a border piece is missing, try to place a center
-             newItemId = getRandomCarpetIdByAlignment(CARPET_CENTER_ALIGNMENT_INDEX);
+        quint32 tileData = 0;
+        for (quint32 i = 0; i < 8; ++i) {
+            if (neighbours[i]) {
+                // Same carpet as this one, calculate what border
+                tileData |= static_cast<quint32>(1) << i;
+            }
         }
 
-        if (newItemId == 0) { // No suitable carpet piece found, remove existing
-            QMutableVectorIterator<Item*> it_remove(tile->items());
-            while(it_remove.hasNext()){
-                if(it_remove.next() == item){
-                    it_remove.remove();
-                    delete item;
-                    map->markModified();
-                    break;
-                }
-            }
-        } else if (item->getServerId() != newItemId) {
-            item->setServerId(newItemId);
-            const ItemProperties& newProps = ItemManager::instance()->getItemProperties(newItemId);
-            if(newProps.serverId != 0) item->setClientId(newProps.clientId);
-            map->markModified();
+        // Get border type from lookup table (migrated from wxwidgets)
+        BorderType bt = static_cast<BorderType>(carpet_types[tileData]);
+        quint16 id = carpetBrush->getRandomCarpet(bt);
+        if (id != 0) {
+            item->setID(id);
         }
     }
-    // tile->update(); // Tile::update() should correctly set HasCarpet flag.
 }

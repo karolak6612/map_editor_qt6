@@ -11,6 +11,26 @@ struct CreatureProperties {
     Outfit outfit;
     bool missing = false;
     bool standard = true;
+    bool inOtherTileset = false;
+
+    // Default constructor
+    CreatureProperties() = default;
+
+    // Copy constructor
+    CreatureProperties(const CreatureProperties& other) = default;
+
+    // Assignment operator
+    CreatureProperties& operator=(const CreatureProperties& other) = default;
+
+    // Equality operator
+    bool operator==(const CreatureProperties& other) const {
+        return id == other.id &&
+               name == other.name &&
+               isNpc == other.isNpc &&
+               missing == other.missing &&
+               standard == other.standard &&
+               inOtherTileset == other.inOtherTileset;
+    }
 };
 
 #endif // CREATUREPROPERTIES_H

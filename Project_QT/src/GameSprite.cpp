@@ -1,6 +1,8 @@
 #include "GameSprite.h"
+#include "Outfit.h" // For Outfit struct
 #include <QPainter>
 #include <QDebug> // For warnings
+#include <QDateTime> // For timestamp management
 
 // Basic constructor
 GameSprite::GameSprite(QObject *parent)
@@ -19,6 +21,7 @@ GameSprite::~GameSprite() {
 // --- Configuration Methods ---
 void GameSprite::setSpriteSheet(const QPixmap& sheet) {
     m_spriteSheet = sheet;
+    m_spriteImage = sheet.toImage(); // Keep QImage version for manipulation
     // Potentially reset animator or update based on new sheet, if layout changes
 }
 
@@ -26,10 +29,18 @@ void GameSprite::setSpriteSheet(const QString& path) {
     if (!path.isEmpty()) {
         if (!m_spriteSheet.load(path)) {
             qWarning() << "GameSprite: Failed to load sprite sheet from" << path;
+        } else {
+            m_spriteImage = m_spriteSheet.toImage(); // Keep QImage version
         }
     } else {
         m_spriteSheet = QPixmap(); // Clear if path is empty
+        m_spriteImage = QImage(); // Clear QImage too
     }
+}
+
+void GameSprite::setImage(const QImage& image) {
+    m_spriteImage = image;
+    m_spriteSheet = QPixmap::fromImage(image);
 }
 
 void GameSprite::setFrameDimensions(int width, int height) {
@@ -134,6 +145,10 @@ void GameSprite::drawAnimated(QPainter* painter, const QPoint& targetPos,
 
 void GameSprite::unload() {
     m_spriteSheet = QPixmap(); // Release pixmap data
+    m_spriteImage = QImage(); // Release image data
+    sprite_parts.clear(); // Clear compatibility sprite parts
+    m_outfitCache.clear(); // Clear outfit cache
+    m_animator.reset(); // Reset animator state
 }
 
 int GameSprite::width() const {
@@ -142,6 +157,56 @@ int GameSprite::width() const {
 
 int GameSprite::height() const {
     return m_frameHeight;
+}
+
+int GameSprite::width(SpriteSize size) const {
+    // For GameSprite, size scaling is handled during drawing
+    // Return the base frame width regardless of size
+    return m_frameWidth;
+}
+
+int GameSprite::height(SpriteSize size) const {
+    // For GameSprite, size scaling is handled during drawing
+    // Return the base frame height regardless of size
+    return m_frameHeight;
+}
+
+bool GameSprite::isLoaded() const {
+    return !m_spriteSheet.isNull() && m_frameWidth > 0 && m_frameHeight > 0;
+}
+
+int GameSprite::getFrameCount() const {
+    return m_framesPerPattern;
+}
+
+int GameSprite::getCurrentFrame() const {
+    return m_animator.getCurrentFrame();
+}
+
+void GameSprite::setCurrentFrame(int frame) {
+    m_animator.setCurrentFrame(frame);
+}
+
+void GameSprite::drawTo(QPainter* painter, const QPoint& targetPos, SpriteSize size) {
+    if (!validateDrawingParameters(painter, targetPos) || !isLoaded()) {
+        return;
+    }
+
+    // Get current frame from animator
+    int currentFrame = getCurrentFrame();
+
+    // Use default pattern values for this simple draw method
+    QRect frameRect = calculateFrameRect(currentFrame, 0, 0, 0, 0);
+    if (!frameRect.isValid()) {
+        return;
+    }
+
+    // Calculate target size based on SpriteSize
+    int targetSize = Sprite::getSizeInPixels(size);
+    QRect targetRect(targetPos, QSize(targetSize, targetSize));
+
+    // Draw with scaling if necessary
+    painter->drawPixmap(targetRect, m_spriteSheet, frameRect);
 }
 
 // Protected helper method
@@ -219,3 +284,199 @@ QRect GameSprite::calculateFrameRect(int frameIndex, int patternX, int patternY,
 
     return QRect(frameX, frameY, m_frameWidth, m_frameHeight);
 }
+
+// --- QImage-related methods for compatibility ---
+
+QImage GameSprite::getImage() const {
+    return m_spriteImage;
+}
+
+QImage GameSprite::getSpritePart(int frameIndex, int patternX, int patternY, int patternZ, int layer, int width, int height) const {
+    Q_UNUSED(width);
+    Q_UNUSED(height);
+
+    if (m_spriteImage.isNull()) {
+        return QImage();
+    }
+
+    QRect frameRect = calculateFrameRect(frameIndex, patternX, patternY, patternZ, layer);
+    if (!frameRect.isValid()) {
+        return QImage();
+    }
+
+    return m_spriteImage.copy(frameRect);
+}
+
+QImage GameSprite::colorizeSpritePart(const QImage& sourceImage, const Outfit& outfit) const {
+    if (sourceImage.isNull()) {
+        return QImage();
+    }
+
+    // Create a copy of the source image for colorization
+    QImage colorizedImage = sourceImage.copy();
+
+    // Simple colorization based on outfit colors
+    // This is a basic implementation - more sophisticated colorization may be needed
+    if (outfit.lookHead > 0 || outfit.lookBody > 0 || outfit.lookLegs > 0 || outfit.lookFeet > 0) {
+        // Apply color transformations based on outfit
+        // For now, just apply a simple color overlay
+        for (int y = 0; y < colorizedImage.height(); ++y) {
+            for (int x = 0; x < colorizedImage.width(); ++x) {
+                QColor pixel = colorizedImage.pixelColor(x, y);
+                if (pixel.alpha() > 0) { // Only colorize non-transparent pixels
+                    // Simple colorization - this would need to be more sophisticated
+                    // based on the actual outfit colorization algorithm from wxwidgets
+                    if (outfit.lookHead > 0) {
+                        pixel.setRed(qMin(255, pixel.red() + outfit.lookHead));
+                    }
+                    if (outfit.lookBody > 0) {
+                        pixel.setGreen(qMin(255, pixel.green() + outfit.lookBody));
+                    }
+                    if (outfit.lookLegs > 0) {
+                        pixel.setBlue(qMin(255, pixel.blue() + outfit.lookLegs));
+                    }
+                    colorizedImage.setPixelColor(x, y, pixel);
+                }
+            }
+        }
+    }
+
+    return colorizedImage;
+}
+
+// --- New Methods for Enhanced GameSprite Functionality ---
+
+void GameSprite::drawOutfit(QPainter* painter, const QPoint& targetPos, const Outfit& outfit,
+                           int patternX, int patternY, int patternZ, int layer) {
+    if (!validateDrawingParameters(painter, targetPos) || !isLoaded()) {
+        return;
+    }
+
+    // Update last access time for cleanup
+    m_lastAccessTime = QDateTime::currentMSecsSinceEpoch();
+
+    // Generate cache key for this outfit combination
+    QString cacheKey = generateOutfitCacheKey(outfit, patternX, patternY, patternZ, layer);
+
+    // Check if we have a cached version
+    QPixmap outfitPixmap;
+    if (m_outfitCache.contains(cacheKey)) {
+        outfitPixmap = m_outfitCache.value(cacheKey);
+    } else {
+        // Create new outfit sprite and cache it
+        outfitPixmap = createOutfitSprite(outfit, patternX, patternY, patternZ, layer);
+        if (!outfitPixmap.isNull()) {
+            m_outfitCache.insert(cacheKey, outfitPixmap);
+        }
+    }
+
+    if (!outfitPixmap.isNull()) {
+        QPoint finalTargetPos = targetPos + QPoint(m_drawOffsetX, m_drawOffsetY);
+        painter->drawPixmap(finalTargetPos, outfitPixmap);
+    }
+}
+
+void GameSprite::drawOutfit(QPainter* painter, const QPoint& targetPos, SpriteSize size, const Outfit& outfit) {
+    if (!validateDrawingParameters(painter, targetPos) || !isLoaded()) {
+        return;
+    }
+
+    // Use current frame and default patterns for this simple method
+    int currentFrame = getCurrentFrame();
+
+    // Generate cache key
+    QString cacheKey = generateOutfitCacheKey(outfit, 0, 0, 0, 0) + QString("_size%1_frame%2").arg(static_cast<int>(size)).arg(currentFrame);
+
+    QPixmap outfitPixmap;
+    if (m_outfitCache.contains(cacheKey)) {
+        outfitPixmap = m_outfitCache.value(cacheKey);
+    } else {
+        // Create outfit sprite
+        outfitPixmap = createOutfitSprite(outfit, 0, 0, 0, 0);
+        if (!outfitPixmap.isNull()) {
+            // Scale to requested size
+            int targetSize = Sprite::getSizeInPixels(size);
+            outfitPixmap = outfitPixmap.scaled(targetSize, targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            m_outfitCache.insert(cacheKey, outfitPixmap);
+        }
+    }
+
+    if (!outfitPixmap.isNull()) {
+        painter->drawPixmap(targetPos, outfitPixmap);
+    }
+}
+
+int GameSprite::getIndex(int width, int height, int layer, int patternX, int patternY, int patternZ, int frame) const {
+    // Calculate sprite index based on layout (matching wxWidgets algorithm)
+    // This assumes sprites are laid out in a specific order in the sprite sheet
+
+    // Validate parameters
+    if (width <= 0 || height <= 0 || layer < 0 || patternX < 0 || patternY < 0 || patternZ < 0 || frame < 0) {
+        return -1;
+    }
+
+    // Calculate index based on sprite sheet layout
+    // Formula matches the original wxWidgets implementation
+    int index = 0;
+    index += frame;
+    index += patternZ * m_framesPerPattern;
+    index += patternY * m_patternZ * m_framesPerPattern;
+    index += patternX * m_patternY * m_patternZ * m_framesPerPattern;
+    index += layer * m_patternX * m_patternY * m_patternZ * m_framesPerPattern;
+    index += height * m_layers * m_patternX * m_patternY * m_patternZ * m_framesPerPattern;
+    index += width * m_frameHeight * m_layers * m_patternX * m_patternY * m_patternZ * m_framesPerPattern;
+
+    return index;
+}
+
+void GameSprite::clean(qint64 currentTime) {
+    // Clean old cached outfit sprites (similar to wxWidgets clean method)
+    const qint64 maxAge = 30000; // 30 seconds
+
+    QMutableMapIterator<QString, QPixmap> it(m_outfitCache);
+    while (it.hasNext()) {
+        it.next();
+        // For simplicity, remove all entries older than maxAge from last access
+        if (currentTime - m_lastAccessTime > maxAge) {
+            it.remove();
+        }
+    }
+}
+
+void GameSprite::clearOutfitCache() {
+    m_outfitCache.clear();
+}
+
+QString GameSprite::generateOutfitCacheKey(const Outfit& outfit, int patternX, int patternY, int patternZ, int layer) const {
+    return QString("outfit_%1_%2_%3_%4_%5_%6_%7_%8_%9_%10_%11_%12")
+        .arg(outfit.lookType)
+        .arg(outfit.lookHead)
+        .arg(outfit.lookBody)
+        .arg(outfit.lookLegs)
+        .arg(outfit.lookFeet)
+        .arg(outfit.lookAddon)
+        .arg(patternX)
+        .arg(patternY)
+        .arg(patternZ)
+        .arg(layer)
+        .arg(getCurrentFrame())
+        .arg(m_animator.getCurrentFrameIndex());
+}
+
+QPixmap GameSprite::createOutfitSprite(const Outfit& outfit, int patternX, int patternY, int patternZ, int layer) const {
+    // Get the base sprite part
+    QImage baseSpriteImage = getSpritePart(getCurrentFrame(), patternX, patternY, patternZ, layer);
+    if (baseSpriteImage.isNull()) {
+        return QPixmap();
+    }
+
+    // Apply outfit colorization
+    QImage colorizedImage = colorizeSpritePart(baseSpriteImage, outfit);
+    if (colorizedImage.isNull()) {
+        return QPixmap::fromImage(baseSpriteImage); // Fallback to uncolorized
+    }
+
+    return QPixmap::fromImage(colorizedImage);
+}
+
+#include "GameSprite.moc"

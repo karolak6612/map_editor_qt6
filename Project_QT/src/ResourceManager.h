@@ -1,40 +1,113 @@
 #ifndef QT_RESOURCEMANAGER_H
 #define QT_RESOURCEMANAGER_H
 
-#include <QObject> // QObject for potential signals/slots if ever needed, or just make it non-QObject
+#include <QObject>
 #include <QPixmap>
 #include <QIcon>
 #include <QString>
+#include <QStringList>
 #include <QMap>
-#include <QMutex> // For thread-safe access if needed in the future
+#include <QHash>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QSize>
+#include <QTimer>
 
-// Forward declaration
+// Forward declarations
 class QRect;
+class QDir;
 
-class ResourceManager {
+// Resource categories for organization and management
+enum class ResourceCategory {
+    ICONS,           // UI icons and toolbar buttons
+    TEXTURES,        // Background textures and patterns
+    UI_ELEMENTS,     // UI component graphics
+    BRUSHES,         // Brush and tool icons
+    ITEMS,           // Item representation icons
+    BORDERS,         // Border and frame graphics
+    GROUND,          // Ground tile representations
+    EFFECTS,         // Visual effect graphics
+    CURSORS,         // Mouse cursor graphics
+    MISC,            // Miscellaneous resources
+    FALLBACK         // Fallback/placeholder resources
+};
+
+// Resource metadata for enhanced management
+struct ResourceInfo {
+    QString path;
+    ResourceCategory category;
+    QSize originalSize;
+    qint64 loadTime;
+    qint64 lastAccessed;
+    int accessCount;
+    bool isFromQtResource;
+
+    ResourceInfo() : category(ResourceCategory::MISC), loadTime(0), lastAccessed(0),
+                    accessCount(0), isFromQtResource(false) {}
+};
+
+class ResourceManager : public QObject {
+    Q_OBJECT
+
 public:
     // Singleton access method
     static ResourceManager& instance();
 
-    // Get a pixmap from a path (can be Qt resource path e.g. ":/path/to/image.png" or filesystem path)
-    QPixmap getPixmap(const QString& path);
+    // Core resource loading methods
+    QPixmap getPixmap(const QString& path, ResourceCategory category = ResourceCategory::MISC);
+    QIcon getIcon(const QString& path, ResourceCategory category = ResourceCategory::ICONS);
 
-    // Get an icon (can also be from resource path or filesystem path)
-    QIcon getIcon(const QString& path);
+    // Enhanced sprite sheet functionality
+    QPixmap getPixmapFromSheet(const QString& sheetPath, const QRect& rect,
+                              ResourceCategory category = ResourceCategory::MISC);
+    QPixmap getPixmapFromSheet(const QString& sheetPath, int x, int y, int width, int height,
+                              ResourceCategory category = ResourceCategory::MISC);
 
-    // Get a specific part of a larger pixmap (sprite sheet functionality)
-    // The sheet itself is loaded and cached via getPixmap(sheetPath).
-    QPixmap getPixmapFromSheet(const QString& sheetPath, const QRect& rect);
+    // Categorized resource access
+    QPixmap getIconPixmap(const QString& name);           // Icons category
+    QPixmap getTexturePixmap(const QString& name);        // Textures category
+    QPixmap getBrushPixmap(const QString& name);          // Brushes category
+    QPixmap getItemPixmap(const QString& name);           // Items category
+    QPixmap getBorderPixmap(const QString& name);         // Borders category
+    QPixmap getGroundPixmap(const QString& name);         // Ground category
+    QPixmap getEffectPixmap(const QString& name);         // Effects category
+    QPixmap getCursorPixmap(const QString& name);         // Cursors category
 
-    // Preload a single resource or a list of resources
-    void preloadPixmap(const QString& path);
-    void preloadPixmaps(const QStringList& paths);
+    // Fallback and placeholder resources
+    QPixmap getFallbackPixmap(const QSize& size = QSize(16, 16));
+    QPixmap getPlaceholderPixmap(ResourceCategory category, const QSize& size = QSize(16, 16));
 
-    // Cache management
+    // Batch loading and preloading
+    void preloadPixmap(const QString& path, ResourceCategory category = ResourceCategory::MISC);
+    void preloadPixmaps(const QStringList& paths, ResourceCategory category = ResourceCategory::MISC);
+    void preloadCategory(ResourceCategory category);
+    void preloadFromDirectory(const QString& dirPath, ResourceCategory category);
+
+    // Resource discovery and validation
+    QStringList discoverResources(const QString& basePath, const QStringList& patterns = QStringList());
+    QStringList getResourcesInCategory(ResourceCategory category) const;
+    bool validateResource(const QString& path) const;
+    QStringList getSupportedFormats() const;
+
+    // Cache management and statistics
     void clearCache();
     void clearPixmapFromCache(const QString& path);
+    void clearCategory(ResourceCategory category);
     bool isPixmapCached(const QString& path) const;
     int cacheSize() const;
+    int getCacheSize(ResourceCategory category) const;
+    qint64 getCacheMemoryUsage() const;
+
+    // Cache optimization and cleanup
+    void optimizeCache();
+    void cleanupUnusedResources(int maxUnusedTime = 300000); // 5 minutes default
+    void setMaxCacheSize(int maxSizeMB);
+    void setMaxCacheItems(int maxItems);
+
+    // Resource information and statistics
+    ResourceInfo getResourceInfo(const QString& path) const;
+    QStringList getCachedResources() const;
+    void printCacheStatistics() const;
 
 private:
     // Private constructor and destructor for singleton pattern
@@ -47,13 +120,38 @@ private:
     ResourceManager(ResourceManager&&) = delete;
     ResourceManager& operator=(ResourceManager&&) = delete;
 
-    // Internal cache
-    // Using QHash for potentially better performance with string keys if a very large number of resources.
-    // QMap is fine for moderate numbers. Let's stick with QMap for ordered iteration if ever needed for debugging.
-    QMap<QString, QPixmap> m_pixmapCache;
+    // Core caching system
+    mutable QMutex cacheMutex_;                           // Thread safety
+    QHash<QString, QPixmap> pixmapCache_;                 // Main pixmap cache
+    QHash<QString, ResourceInfo> resourceInfo_;          // Resource metadata
+    QHash<ResourceCategory, QStringList> categoryIndex_; // Category organization
 
-    // Mutex for thread-safe cache access (optional for now, can be enabled if multi-threading becomes a concern)
-    // mutable QMutex m_cacheMutex;
+    // Cache management
+    int maxCacheItems_;
+    int maxCacheSizeMB_;
+    QTimer* cleanupTimer_;
+
+    // Fallback resources
+    QHash<ResourceCategory, QString> fallbackPaths_;
+    QPixmap defaultFallbackPixmap_;
+
+    // Resource path mapping for categorized access
+    QHash<ResourceCategory, QString> categoryBasePaths_;
+    QStringList supportedFormats_;
+
+    // Internal helper methods
+    QPixmap loadPixmapInternal(const QString& path, ResourceCategory category);
+    QString resolveCategorizedPath(const QString& name, ResourceCategory category) const;
+    void updateResourceInfo(const QString& path, const QPixmap& pixmap, ResourceCategory category);
+    void initializeFallbackResources();
+    void initializeCategoryPaths();
+    void initializeSupportedFormats();
+    bool isQtResourcePath(const QString& path) const;
+    QPixmap createFallbackPixmap(const QSize& size, ResourceCategory category) const;
+    void enforceMemoryLimits();
+
+private slots:
+    void performCleanup();
 };
 
 #endif // QT_RESOURCEMANAGER_H

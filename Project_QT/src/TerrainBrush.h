@@ -16,10 +16,13 @@ public:
     // --- Overrides from Brush ---
     // Name will be generic like "Terrain Brush", specificName() gives "Grass", "Dirt" etc.
     QString name() const override;
+    void setName(const QString& newName) override;
     Type type() const override;    // Returns Brush::Type::Terrain
 
-    // Convenience method, already in Brush but good to show intent for this class type
+    // Type identification and casting (Task 37 requirement)
     bool isTerrain() const override;
+    TerrainBrush* asTerrain() override;
+    const TerrainBrush* asTerrain() const override;
 
     // Core action methods (will be pure virtual or have basic stubs in .cpp,
     // forcing concrete terrain brushes to implement actual logic)
@@ -36,21 +39,36 @@ public:
     // mousePressEvent, etc. are inherited. Concrete terrain brushes will implement them using applyBrush/removeBrush.
     // cancel() is inherited. Concrete terrain brushes can override if they have specific cancel state.
 
-    // --- TerrainBrush specific methods ---
+    // --- TerrainBrush specific methods (Task 37 requirement) ---
     QString specificName() const;
     void setSpecificName(const QString& name);
 
     void setLookID(quint16 id); // For the item ID this terrain brush might represent or place
 
+    // Z-order and layer management (from wxwidgets)
+    virtual qint32 getZ() const;
+    virtual void setZ(qint32 zOrder);
+
+    // Friend/enemy system for auto-bordering (from wxwidgets)
     void addFriendBrushType(Brush::Type friendType);
-    void removeFriendBrushType(Brush::Type friendType); // Might not be needed if list is fixed at creation
+    void removeFriendBrushType(Brush::Type friendType);
     void setHatesFriends(bool hatesFriends);
-    bool hatesFriends() const; // Getter for hatesFriends_
-    bool isFriendWith(Brush::Type otherType) const; // Checks against other Brush::Type
+    bool hatesFriends() const;
+    bool isFriendWith(Brush::Type otherType) const;
+    bool friendOf(TerrainBrush* other) const; // Direct brush comparison
+
+    // Drawing stubs for direct tile manipulation (Task 37 requirement)
+    void draw(Map* map, class Tile* tile, void* parameter = nullptr) override;
+    void undraw(Map* map, class Tile* tile) override;
+    bool canDraw(Map* map, const QPoint& position) const override;
 
 protected:
+    // Core terrain brush properties (Task 37 requirement)
     QString specificBrushName_ = "Unnamed Terrain"; // Concrete name like "Grass", set by subclass constructor
     quint16 lookId_ = 0;        // Item ID this terrain brush might represent or place
+    qint32 zOrder_ = 0;         // Z-order for drawing layer management
+
+    // Friend/enemy system for auto-bordering (from wxwidgets)
     QVector<Brush::Type> friendBrushTypes_; // Stores Brush::Type enum values
     bool hatesFriends_ = false; // If true, friend list becomes an enemy list (for auto-bordering)
 };

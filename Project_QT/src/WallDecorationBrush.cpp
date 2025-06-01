@@ -12,8 +12,8 @@ WallDecorationBrush::WallDecorationBrush(QObject* parent)
     : WallBrush(parent),
       currentDecorationItemId_(0) {
     setSpecificName(tr("Wall Decoration Brush"));
-    // Optionally set a default lookId if wall decorations have a generic icon
-    // setLookID(SOME_DEFAULT_DECORATION_ICON_ID);
+    // WallDecorationBrush uses the same XML loading and wall_items structure as WallBrush
+    // The only difference is in the draw() method behavior
 }
 
 WallDecorationBrush::~WallDecorationBrush() {
@@ -71,49 +71,66 @@ bool WallDecorationBrush::canDraw(Map* map, const QPointF& tilePos, QObject* dra
 
 QUndoCommand* WallDecorationBrush::applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
     Q_UNUSED(drawingContext);
-    // canDraw checks map and currentDecorationItemId_ indirectly.
-    // Re-check currentDecorationItemId_ explicitly before creating command.
-    if (!map || currentDecorationItemId_ == 0) {
-         qWarning() << "WallDecorationBrush::applyBrush: Map null or no currentDecorationItemId_ set.";
-         return nullptr;
-    }
-    // The canDraw method should ideally be called by the input handler *before* calling applyBrush.
-    // If canDraw is false, applyBrush shouldn't be called.
-    // However, having a check here too is safer.
-    if (!this->canDraw(map, tilePos, drawingContext)) { // Use this-> to call own canDraw
-         qWarning() << "WallDecorationBrush::applyBrush: canDraw returned false for" << tilePos;
+
+    if (!map) {
+        qWarning() << "WallDecorationBrush::applyBrush: Map pointer is null.";
         return nullptr;
     }
 
-    qDebug() << "WallDecorationBrush: Applying decoration ID" << currentDecorationItemId_ << "at" << tilePos;
-    return new PlaceDecorationCommand(map, tilePos, currentDecorationItemId_, parentCommand);
+    // WallDecorationBrush uses the same logic as WallBrush but places decorations
+    // The decoration item ID is determined by the wall alignment, just like in wxwidgets
+
+    Tile* tile = map->getTile(tilePos);
+    if (!tile) {
+        qWarning() << "WallDecorationBrush::applyBrush: No tile at" << tilePos;
+        return nullptr;
+    }
+
+    // Find existing wall to determine alignment (migrated from wxwidgets)
+    WallBrush::WallAlignment wallAlignment = WallBrush::WallAlignment::Undefined;
+    bool wallFound = false;
+
+    for (Item* item : tile->items()) {
+        if (item && item->isWall()) {
+            // Get wall alignment from the existing wall item
+            // This mimics the wxwidgets behavior of finding wall alignment
+            wallAlignment = calculateWallAlignment(map, tilePos);
+            wallFound = true;
+            break;
+        }
+    }
+
+    if (!wallFound) {
+        qWarning() << "WallDecorationBrush::applyBrush: No wall found at" << tilePos << "to place decoration.";
+        return nullptr;
+    }
+
+    // Get decoration item ID based on wall alignment (migrated from wxwidgets wall_items structure)
+    quint16 decorationItemId = getWallItemForAlignment(wallAlignment);
+    if (decorationItemId == 0) {
+        decorationItemId = getCurrentWallItemId(); // Fallback to default
+    }
+
+    if (decorationItemId == 0) {
+        qWarning() << "WallDecorationBrush::applyBrush: No decoration item configured for alignment" << static_cast<int>(wallAlignment);
+        return nullptr;
+    }
+
+    qDebug() << "WallDecorationBrush: Applying decoration ID" << decorationItemId << "at" << tilePos << "with wall alignment" << static_cast<int>(wallAlignment);
+    return new PlaceDecorationCommand(map, tilePos, decorationItemId, parentCommand);
 }
 
 QUndoCommand* WallDecorationBrush::removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
-    Q_UNUSED(drawingContext); Q_UNUSED(parentCommand); // parentCommand might be used with a future RemoveDecorationCommand
+    Q_UNUSED(drawingContext);
+
     if (!map) {
         qWarning() << "WallDecorationBrush::removeBrush: Map pointer is null.";
         return nullptr;
     }
 
-    if (currentDecorationItemId_ == 0) {
-        qWarning() << "WallDecorationBrush::removeBrush: No specific decoration item ID set to target for removal. Implement generic decoration removal or configure brush.";
-        // Placeholder: Could try to find *any* decoration item on the tile if currentDecorationItemId_ is 0.
-        // This would require Tile to have a way to identify decoration items.
-        // For now, if no specific ID is set, do nothing.
-        return nullptr;
-    }
-
-    qDebug() << "WallDecorationBrush: Attempting to remove decoration ID" << currentDecorationItemId_ << "at" << tilePos;
-    // This requires a command that can remove a *specific item instance* or *an item of a specific ID*.
-    // PlaceDecorationCommand is for ADDING. Its undo() removes the item IT added.
-    // To remove an existing item, we need a different command or an enhanced PlaceDecorationCommand.
-    // For example, a conceptual RemoveItemCommand(map, tile, item_id_to_remove, parent).
-    // For now, returning nullptr as a proper remove command for decorations isn't defined yet based on current item ID.
-    // A simple PlaceDecorationCommand(map, tilePos, 0, parent) would clear ALL decorations if modified to do so,
-    // or do nothing if it only places. This is not what we want for targeted removal.
-    qWarning() << "WallDecorationBrush::removeBrush: Specific decoration removal command not yet implemented. Returning nullptr.";
-    return nullptr;
+    // Migrated from wxwidgets: cleanWalls(this) removes decorations from this specific brush
+    qDebug() << "WallDecorationBrush: Removing decorations from brush" << this->name() << "at" << tilePos;
+    return new PlaceDecorationCommand(map, tilePos, 0, parentCommand); // 0 signifies decoration removal
 }
 
 // Inherit getBrushSize and getBrushShape from WallBrush (typically 0 and Square)

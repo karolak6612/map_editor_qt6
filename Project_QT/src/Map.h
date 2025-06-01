@@ -26,6 +26,12 @@
 // For a typical Qt Widgets application, QVector3D from QtGui could be an option.
 // Given the context, I will use a simple struct for now.
 #include <QDataStream> // For loadFromOTBM
+#include <QReadWriteLock> // For thread safety
+#include <QRect> // For region operations
+
+// Forward declare MapIterator classes to avoid circular includes
+class MapIterator;
+class ConstMapIterator;
 
 struct MapPos {
     int x = 0;
@@ -37,6 +43,9 @@ struct MapPos {
         return x == other.x && y == other.y && z == other.z;
     }
 };
+
+// Task 52: QPoint3D typedef for BorderSystem compatibility
+using QPoint3D = MapPos;
 
 #include <QtGlobal> // For qHash
 
@@ -56,7 +65,9 @@ class Spawn;
 class House;
 class Town; // Forward-declare Town
 class Waypoint;
+class Waypoints;
 class Selection; // Forward-declare Selection
+class MapIterator; // Forward-declare MapIterator
 // Add any other classes that Map might store by pointer and need forward declaration
 
 class Map : public QObject {
@@ -102,21 +113,55 @@ public:
     void removeSpawn(Spawn* spawn); // Removes from list, does not delete the object
     const QList<Spawn*>& getSpawns() const;
 
+    // Task 66: Enhanced house management
     void addHouse(House* house);
     void removeHouse(House* house); // Removes from list, does not delete the object
+    void removeHouse(quint32 houseId);
+    House* getHouse(quint32 houseId) const;
     const QList<House*>& getHouses() const;
+    void clearHouses();
+    quint32 getNextHouseId() const;
     
+    // Task 71: Enhanced waypoint management (using Waypoints collection)
+    Waypoints& waypoints() { return *waypoints_; }
+    const Waypoints& waypoints() const { return *waypoints_; }
+
+    // Legacy waypoint methods for compatibility
     void addWaypoint(Waypoint* waypoint);
-    // void removeWaypoint(Waypoint* waypoint); // Old one, effectively removed by new m_waypoints
-    // const QList<Waypoint*>& getWaypoints() const; // Old one, replaced by new m_waypoints getter
+    void removeWaypoint(Waypoint* waypoint);
+    void removeWaypoint(const QString& name);
+    Waypoint* getWaypoint(const QString& name) const;
+    const QList<Waypoint*> getWaypoints() const; // Returns all waypoints as list
 
+    // Task 71: Additional waypoint methods for full functionality
+    Waypoint* findWaypoint(const QString& name) const;
+    Waypoint* findWaypointAt(const MapPos& position) const;
+    Waypoint* findWaypointAt(int x, int y, int z) const;
+    QList<Waypoint*> findWaypointsInArea(const QRect& area, int z = 0) const;
+    bool hasWaypoint(const QString& name) const;
+    bool hasWaypointAt(const MapPos& position) const;
+    int getWaypointCount() const;
+    void clearWaypoints();
+
+    // Task 71: Waypoint validation and utilities
+    bool isValidWaypointName(const QString& name) const;
+    QString generateUniqueWaypointName(const QString& baseName = "Waypoint") const;
+    QStringList getWaypointNames() const;
+
+    // Task 71: Waypoint navigation and interaction
+    bool centerOnWaypoint(const QString& name);
+    bool centerOnWaypoint(Waypoint* waypoint);
+    QList<Waypoint*> getWaypointsInRadius(const MapPos& center, int radius) const;
+
+    // Task 66: Enhanced town management
+    void addTown(Town* town);
+    void removeTown(Town* town);
+    void removeTown(quint32 townId);
+    Town* getTown(quint32 townId) const;
+    Town* getTown(const QString& townName) const;
     const QList<Town*>& getTowns() const { return m_towns; }
-    // void addTown(Town* town); // To be implemented with load logic
-    // void removeTown(Town* town); // To be implemented with load logic
-
-    const QList<Waypoint*>& getWaypoints() const { return m_waypoints; } // New getter for m_waypoints
-    // void addWaypoint(Waypoint* waypoint); // To be implemented with load logic
-    // void removeWaypoint(Waypoint* waypoint); // To be implemented with load logic
+    void clearTowns();
+    quint32 getNextTownId() const;
 
     QString getExternalSpawnFile() const { return m_externalSpawnFile; }
     void setExternalSpawnFile(const QString& fileName) {
@@ -142,6 +187,23 @@ public:
     Selection* getSelection() const;
     void updateSelection(const QSet<MapPos>& newSelection); // Example: takes a set of positions
 
+    // Iterator methods for high-performance tile traversal
+    MapIterator begin();
+    MapIterator end();
+    ConstMapIterator begin() const;
+    ConstMapIterator end() const;
+
+    // Performance utilities
+    quint64 getTileCount() const; // Count of non-null tiles
+    Tile* swapTile(int x, int y, int z, Tile* newTile); // Swap and return old tile
+    Tile* swapTile(const MapPos& pos, Tile* newTile);
+
+    // Advanced tile operations
+    void clearTile(int x, int y, int z); // Clear tile without deleting
+    void clearTile(const MapPos& pos);
+    bool hasTile(int x, int y, int z) const; // Check if tile exists
+    bool hasTile(const MapPos& pos) const;
+
     // New methods for commands and brushes
     Tile* getOrCreateTile(const QPointF& pos);
     Tile* getOrCreateTile(int x, int y, int z); // Overload
@@ -152,20 +214,82 @@ public:
     void setGround(const QPointF& pos, quint16 groundItemId);
     void removeGround(const QPointF& pos);
 
-    // Border/Wall update requests
+    // Task 52: Enhanced border/wall update requests with Qt integration
     void requestBorderUpdate(const QPointF& tilePos);
+    void requestBorderUpdate(const QList<QPointF>& tilePositions);
+    void requestBorderUpdate(const QRect& area);
     void requestWallUpdate(const QPointF& tilePos);
 
-    // Stubs for loading/saving
+    // Map cleanup and optimization utilities
+    quint32 cleanDuplicateItems(const QVector<QPair<quint16, quint16>>& ranges = QVector<QPair<quint16, quint16>>());
+    void optimizeMemory(); // Compact tile storage and free unused memory
+    void rebuildTileIndex(); // Rebuild internal tile indexing if needed
+
+    // Thread safety utilities
+    void lockForReading() const;
+    void lockForWriting();
+    void unlock() const;
+    void unlockWrite();
+
+    // QGraphicsView integration helpers
+    QVector<Tile*> getTilesInRegion(const QRect& region, int floor) const;
+    QVector<Tile*> getTilesInRadius(const MapPos& center, int radius) const;
+    void invalidateRegion(const QRect& region, int floor); // Mark region for redraw
+
+    // Task 51: Enhanced serialization methods
     bool load(const QString& path);
     bool save(const QString& path) const;
-    bool loadFromOTBM(QDataStream& stream); // Added
-    bool saveToOTBM(QDataStream& stream) const; // Added
+
+    // OTBM format support (primary)
+    bool loadFromOTBM(QDataStream& stream);
+    bool saveToOTBM(QDataStream& stream) const;
+
+    // XML format support (for components and full map)
+    bool loadFromXML(const QString& path);
+    bool saveToXML(const QString& path) const;
+    bool loadSpawnsFromXML(const QString& path);
+    bool saveSpawnsToXML(const QString& path) const;
+    bool loadHousesFromXML(const QString& path);
+    bool saveHousesToXML(const QString& path) const;
+    bool loadWaypointsFromXML(const QString& path);
+    bool saveWaypointsToXML(const QString& path) const;
+
+    // JSON format support (for modern serialization)
+    bool loadFromJSON(const QString& path);
+    bool saveToJSON(const QString& path) const;
+
+    // Format detection and routing
+    QString detectFileFormat(const QString& path) const;
+    bool loadByFormat(const QString& path, const QString& format);
+    bool saveByFormat(const QString& path, const QString& format) const;
 
 signals:
     void mapChanged(); // Example signal
     void dimensionsChanged(int newWidth, int newHeight, int newFloors);
     void tileChanged(int x, int y, int z); // Example for more granular updates
+
+    // Task 66: House and town change signals
+    void houseAdded(House* house);
+    void houseRemoved(quint32 houseId);
+    void houseDataChanged(House* house);
+    void townAdded(Town* town);
+    void townRemoved(quint32 townId);
+    void townDataChanged(Town* town);
+
+    // Task 71: Waypoint change signals
+    void waypointAdded(Waypoint* waypoint);
+    void waypointRemoved(const QString& name);
+    void waypointRemoved(Waypoint* waypoint);
+    void waypointModified(Waypoint* waypoint);
+    void waypointMoved(Waypoint* waypoint, const MapPos& oldPosition, const MapPos& newPosition);
+    void waypointsCleared();
+    void waypointsChanged();
+    void waypointCenterRequested(Waypoint* waypoint);
+
+    // Task 52: Enhanced signals for Qt rendering integration
+    void tilesChanged(const QList<QPoint3D>& updatedTileCoords);
+    void borderUpdateRequested(const QList<QPoint3D>& affectedTiles);
+    void visualUpdateNeeded(const QRect& area);
 
 private:
     int getTileIndex(int x, int y, int z) const;
@@ -182,12 +306,13 @@ private:
     // If they are added from outside (e.g. map.addHouse(existingHouse)), ownership depends on design.
     // For now, assuming Map takes ownership if it creates them, or shared ownership if added.
     // The remove methods only remove from list, not delete.
-    QList<Spawn*> spawns_;     
-    QList<House*> houses_;     
+    QList<Spawn*> spawns_;
+    QList<House*> houses_;
     Selection* selection_ = nullptr;
+    Waypoints* waypoints_ = nullptr; // Waypoints collection
 
     QList<Town*> m_towns;
-    QList<Waypoint*> m_waypoints; // Re-declaring here to ensure it's part of the new block
+    QList<Waypoint*> m_waypoints; // Legacy waypoint list for OTBM compatibility
     QString m_externalSpawnFile;
     QString m_externalHouseFile;
 
@@ -201,6 +326,13 @@ private:
     quint32 m_otbmBuildVersion = 0; // Using quint32 for build, can be string too
     QString m_otbmVersionDescription;
     mutable bool m_modified = false; // Add modified flag, default to false
+
+    // Performance tracking
+    mutable quint64 tileCount_ = 0; // Cache of non-null tile count
+    mutable bool tileCountDirty_ = true; // Whether tileCount_ needs recalculation
+
+    // Thread safety (using mutable for const methods that need locking)
+    mutable QReadWriteLock mapLock_; // For thread-safe access to map data
 };
 
 #endif // MAP_H

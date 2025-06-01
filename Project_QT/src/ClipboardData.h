@@ -73,12 +73,28 @@ public:
     int getSelectionDepth() const { return selectionDepth_; } // If handling multiple Z levels
     const QList<ClipboardTileData>& getTilesData() const { return copiedTiles_; }
     bool isEmpty() const { return copiedTiles_.isEmpty(); }
+    bool isCutOperation() const { return isCutOperation_; }
+
+    // Enhanced operations
+    void populateFromSelectionCopy(const QSet<MapPos>& selection, const Map& map);
+    void populateFromSelectionCut(const QSet<MapPos>& selection, const Map& map);
+
+    // System clipboard integration
+    void copyToSystemClipboard() const;
+    bool pasteFromSystemClipboard();
+
+    // Utility methods
+    void clear();
+    ClipboardData* deepCopy() const;
+    int getTileCount() const;
+    int getItemCount() const;
 
 private:
     QList<ClipboardTileData> copiedTiles_;
     int selectionWidth_ = 0;
     int selectionHeight_ = 0;
     int selectionDepth_ = 0; // For Z-axis extent if selection can span multiple floors
+    bool isCutOperation_ = false; // Track whether this was a cut or copy operation
 
     // Helper method to convert Project_QT Tile to ClipboardTileData
     ClipboardTileData tileToClipboardTileData(const Tile* tile, const MapPos& selectionOrigin);

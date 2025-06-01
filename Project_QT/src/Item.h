@@ -7,10 +7,33 @@
 #include <QVariant>
 #include <QtGlobal> // For quint16
 #include <QDataStream> // For unserializeOtbmAttributes
+#include <utility> // For std::pair
 
 #include <QRectF> // For draw method targetRect
+#include <QPainter> // For drawing methods
+#include <QSharedPointer> // For sprite data
+#include <QImage> // For sprite images
+#include <QDateTime> // For animation timing
 #include "DrawingOptions.h" // For draw method options
 #include "ItemManager.h" // For ItemGroup_t, ItemTypes_t
+
+// Forward declarations
+struct GameSpriteData;
+class SpriteManager;
+
+// ITEMPROPERTY enum for wxWidgets compatibility
+enum ITEMPROPERTY {
+    BLOCKSOLID,
+    HASHEIGHT,
+    BLOCKPROJECTILE,
+    BLOCKPATHFIND,
+    PROTECTIONZONE,
+    HOOK_SOUTH,
+    HOOK_EAST,
+    MOVEABLE,
+    BLOCKINGANDNOTMOVEABLE,
+    HASLIGHT
+};
 
 // Forward declarations
 class QPainter;
@@ -62,7 +85,81 @@ public:
 
     int getUniqueId() const;
     void setUniqueId(int id);
-    
+
+    // Task 55: Advanced property accessors
+    // Door properties
+    quint8 getDoorId() const;
+    void setDoorId(quint8 doorId);
+    bool isDoorOpen() const;
+    void setDoorOpen(bool open);
+    bool isDoorLocked() const;
+    void setDoorLocked(bool locked);
+
+    // Container properties
+    int getContainerCapacity() const;
+    void setContainerCapacity(int capacity);
+    QVariantList getContainerContents() const;
+    void setContainerContents(const QVariantList& contents);
+    QStringList getContainerRestrictions() const;
+    void setContainerRestrictions(const QStringList& restrictions);
+
+    // Teleport properties (already partially implemented)
+    QPoint getTeleportDestination() const;
+    void setTeleportDestination(const QPoint& destination);
+    void setTeleportDestination(int x, int y, int z);
+
+    // Bed properties
+    quint32 getBedSleeperId() const;
+    void setBedSleeperId(quint32 sleeperId);
+    quint32 getBedSleepStart() const;
+    void setBedSleepStart(quint32 sleepStart);
+    int getBedRegenerationRate() const;
+    void setBedRegenerationRate(int rate);
+
+    // Podium properties
+    int getPodiumDirection() const;
+    void setPodiumDirection(int direction);
+    bool getPodiumShowOutfit() const;
+    void setPodiumShowOutfit(bool show);
+    bool getPodiumShowMount() const;
+    void setPodiumShowMount(bool show);
+    bool getPodiumShowPlatform() const;
+    void setPodiumShowPlatform(bool show);
+
+    // Podium outfit properties
+    quint16 getPodiumOutfitLookType() const;
+    void setPodiumOutfitLookType(quint16 lookType);
+    quint8 getPodiumOutfitHead() const;
+    void setPodiumOutfitHead(quint8 head);
+    quint8 getPodiumOutfitBody() const;
+    void setPodiumOutfitBody(quint8 body);
+    quint8 getPodiumOutfitLegs() const;
+    void setPodiumOutfitLegs(quint8 legs);
+    quint8 getPodiumOutfitFeet() const;
+    void setPodiumOutfitFeet(quint8 feet);
+    quint8 getPodiumOutfitAddon() const;
+    void setPodiumOutfitAddon(quint8 addon);
+
+    // Item durability and timing properties
+    int getBreakChance() const;
+    void setBreakChance(int chance);
+    quint32 getDuration() const;
+    void setDuration(quint32 duration);
+    quint32 getMaxDuration() const;
+    void setMaxDuration(quint32 maxDuration);
+
+    // Creature/Spawn properties
+    QString getCreatureType() const;
+    void setCreatureType(const QString& type);
+    QString getCreatureName() const;
+    void setCreatureName(const QString& name);
+    int getSpawnRadius() const;
+    void setSpawnRadius(int radius);
+    quint32 getSpawnInterval() const;
+    void setSpawnInterval(quint32 interval);
+    int getSpawnMaxCreatures() const;
+    void setSpawnMaxCreatures(int maxCreatures);
+
     // Add more specific attribute getters/setters as identified from wxItem
     // e.g., charges, duration, fluidType etc.
 
@@ -91,7 +188,19 @@ public:
     // Brush-related properties
     bool isTable() const;
     bool isCarpet() const; // <-- ADDED THIS LINE
+    bool isWall() const;
+    bool isBorder() const;
     // Add isCarpet(), isWall() etc. here if they follow the same pattern of querying ItemTypeData
+
+    // Selection methods
+    bool isSelected() const;
+    void select();
+    void deselect();
+
+    // Memory and utility methods
+    quint32 memsize() const;
+    bool hasProperty(int property) const;
+    quint8 getMiniMapColor() const;
 
     // Setters for these flags (mainly for ItemManager/subclass setup)
     void setMoveable(bool on);
@@ -118,7 +227,48 @@ public:
     virtual QString getDescription() const; // Now a dedicated member, getter remains.
     virtual void drawText(QPainter* painter, const QRectF& targetRect, const QMap<QString, QVariant>& options); // Changed QVariantMap to QMap
     virtual void draw(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
-    virtual Item* deepCopy() const; 
+    virtual Item* deepCopy() const;
+
+    // Enhanced placeholder rendering methods
+    void drawPlaceholder(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
+    void drawDebugInfo(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
+    void drawBoundingBox(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
+
+    // Task 54: Full sprite integration methods
+    void drawWithSprites(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
+    void drawSpriteLayer(QPainter* painter, const QRectF& targetRect,
+                        QSharedPointer<const GameSpriteData> spriteData,
+                        int frame, int patternX, int patternY, int patternZ,
+                        int layer, const DrawingOptions& options) const;
+    void drawMultiTileSprite(QPainter* painter, const QRectF& baseRect,
+                            const QImage& frameImage,
+                            QSharedPointer<const GameSpriteData> spriteData,
+                            const DrawingOptions& options) const;
+
+    // Task 54: Animation and pattern calculation
+    int calculateCurrentFrame(const DrawingOptions& options) const;
+    void calculatePatternCoordinates(int& patternX, int& patternY, int& patternZ,
+                                   const DrawingOptions& options) const;
+
+    // Task 76: Special item flag rendering
+    void drawSpecialFlags(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
+    void drawSelectionHighlight(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
+    void drawLockedDoorHighlight(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
+    void drawWallHookIndicator(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
+    void drawBlockingIndicator(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
+    bool isAnimated() const;
+
+    // Helper methods for placeholder rendering
+    QColor getPlaceholderColor() const;
+    void drawItemIdText(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
+    void drawTypeIndicator(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
+
+    // Task 76: Helper methods for special flag detection
+    bool isSelected() const { return hasAttribute("selected"); }
+    void setSelected(bool selected) { setAttribute("selected", selected); }
+    bool isDoor() const { return hasAttribute(AttrDoorId) || hasAttribute(AttrDoorType); }
+    bool isLocked() const { return isDoorLocked(); }
+    bool isWallHook() const { return hasHookSouth() || hasHookEast(); }
 
     // New dedicated property getters
     QString descriptionText() const; // Renamed to avoid conflict with virtual getDescription
@@ -159,11 +309,26 @@ public:
     void setLightLevel(quint16 level);
     void setLightColor(quint16 color);
     void setClassification(quint16 classification);
+    void setHeight(int height);
+    void setDrawOffset(int x, int y);
 
     // Helper methods
     bool isFluidContainer() const;
     bool isSplash() const;
     bool isCharged() const;
+    bool isClientCharged() const;
+    bool isExtraCharged() const;
+    bool canHoldText() const;
+    bool canHoldDescription() const;
+    bool hasLight() const;
+    bool isAlwaysOnBottom() const;
+
+    // Drawing and height methods
+    int getHeight() const;
+    std::pair<int, int> getDrawOffset() const;
+
+    // Enhanced weight calculation
+    double getWeight() const; // Dynamic weight calculation for stackable items
 
     // Returns true if successful, false on error (e.g., stream error)
     // Stream should be positioned at the start of the item's attribute block.
@@ -176,6 +341,10 @@ public:
     // TODO (Task51): Consider if client version affects how attributes are written.
     bool serializeOtbmAttributes(QDataStream& stream, quint32 mapOtbmFormatVersion, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const; // UPDATED
     bool serializeOtbmNode(QDataStream& stream, quint32 mapOtbmFormatVersion, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const; // UPDATED
+
+    // Task 48: Complex data handling
+    bool unserializeCustomAttributeMap(const QByteArray& data);
+    QByteArray serializeCustomAttributeMap() const;
 
 public:
     // Attribute Keys
@@ -193,6 +362,55 @@ public:
     static const QString AttrTeleDestY;
     static const QString AttrTeleDestZ;
     static const QString AttrDepotID;
+    static const QString AttrFluidType;
+    static const QString AttrDecayTo;
+    static const QString AttrDecayTime;
+    static const QString AttrSplashType;
+    static const QString AttrRuneSpellName;
+    static const QString AttrRuneLevel;
+    static const QString AttrRuneMagicLevel;
+
+    // Task 48: Additional OTBM attribute constants
+    static const QString AttrRuneCharges;
+    static const QString AttrWrittenDate;
+    static const QString AttrSleeperGuid;
+    static const QString AttrSleepStart;
+    static const QString AttrDecayingState;
+    static const QString AttrHouseDoorId;
+    static const QString AttrPodiumOutfit;
+    static const QString AttrOwner;
+    static const QString AttrSpecialDescription;
+    static const QString AttrCustomAttributes;
+
+    // Task 55: Advanced property attribute constants
+    static const QString AttrDoorId;
+    static const QString AttrDoorType;
+    static const QString AttrDoorOpen;
+    static const QString AttrDoorLocked;
+    static const QString AttrContainerCapacity;
+    static const QString AttrContainerContents;
+    static const QString AttrContainerRestrictions;
+    static const QString AttrBedSleeperId;
+    static const QString AttrBedSleepStart;
+    static const QString AttrBedRegenerationRate;
+    static const QString AttrPodiumDirection;
+    static const QString AttrPodiumShowOutfit;
+    static const QString AttrPodiumShowMount;
+    static const QString AttrPodiumShowPlatform;
+    static const QString AttrPodiumOutfitLookType;
+    static const QString AttrPodiumOutfitHead;
+    static const QString AttrPodiumOutfitBody;
+    static const QString AttrPodiumOutfitLegs;
+    static const QString AttrPodiumOutfitFeet;
+    static const QString AttrPodiumOutfitAddon;
+    static const QString AttrBreakChance;
+    static const QString AttrDuration;
+    static const QString AttrMaxDuration;
+    static const QString AttrCreatureType;
+    static const QString AttrCreatureName;
+    static const QString AttrSpawnRadius;
+    static const QString AttrSpawnInterval;
+    static const QString AttrSpawnMaxCreatures;
 
 signals:
     void attributeChanged(const QString& key, const QVariant& newValue);
@@ -225,6 +443,7 @@ private:
     bool hasHookSouth_ = false;
     bool hasHookEast_ = false;
     bool hasHeight_ = false;
+    bool isSelected_ = false; // Selection state
 
     // New dedicated members
     QString description_; // For the item's look description
@@ -245,6 +464,11 @@ private:
     quint16 lightLevel_ = 0;
     quint16 lightColor_ = 0;
     quint16 classification_ = 0;
+
+    // Additional properties for enhanced functionality
+    int height_ = 0;
+    int drawOffsetX_ = 0;
+    int drawOffsetY_ = 0;
 
     mutable bool m_modified = false;
 };

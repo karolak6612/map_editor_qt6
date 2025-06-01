@@ -18,23 +18,13 @@ enum class Direction : quint8 {
     // NorthEast, SouthEast, SouthWest, NorthWest can be added if needed for diagonal
 };
 // Q_ENUM(Direction) // If you want to make it known to Qt's meta-object system (requires QObject context or global registration)
+
 #include <QRectF> // For draw method targetRect
 #include "DrawingOptions.h" // For draw method options
+#include "Outfit.h" // For Outfit struct integration
 
 // Forward declarations
 class QPainter;
-// QRectF is included above
-
-// Direction enum (can be moved to a common types file later if widely used)
-enum class Direction : quint8 {
-    North = 0,
-    East  = 1,
-    South = 2,
-    West  = 3
-    // NorthEast, SouthEast, SouthWest, NorthWest can be added if needed for diagonal
-};
-// Q_ENUM(Direction) // If you want to make it known to Qt's meta-object system (requires QObject context or global registration)
-// For now, just a C++ enum class is fine.
 
 class Creature : public QObject {
     Q_OBJECT
@@ -68,6 +58,18 @@ public:
     
     int lookMount() const; // Mount outfit/sprite ID
     void setLookMount(int mountId);
+
+    int lookMountHead() const;
+    void setLookMountHead(int head);
+
+    int lookMountBody() const;
+    void setLookMountBody(int body);
+
+    int lookMountLegs() const;
+    void setLookMountLegs(int legs);
+
+    int lookMountFeet() const;
+    void setLookMountFeet(int feet);
 
     // Properties
     int speed() const;
@@ -115,8 +117,24 @@ public:
     Brush* getBrush() const;      // Associated brush for placing this creature
     void setBrush(Brush* brush); // Not owned by Creature instance, set by CreatureManager
 
+    // Save/reset functionality for editor state management
+    bool isSaved() const;
+    void save();
+    void reset();
+
+    // Outfit integration
+    Outfit getOutfit() const;
+    void setOutfit(const Outfit& outfit);
+
+    // Static direction conversion methods (wxWidgets compatibility)
+    static QString directionToString(Direction dir);
+    static Direction stringToDirection(const QString& dirStr);
+    static quint16 directionToId(Direction dir);
+    static Direction idToDirection(quint16 id);
+
     virtual void draw(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
     Creature* deepCopy() const;
+    quint32 memsize() const; // Memory footprint calculation
 
 signals:
     void creatureChanged(); // Emitted when any property changes that might require UI/data update
@@ -132,6 +150,10 @@ private:
     int lookFeet_ = 0;
     int lookAddons_ = 0;
     int lookMount_ = 0;
+    int lookMountHead_ = 0;
+    int lookMountBody_ = 0;
+    int lookMountLegs_ = 0;
+    int lookMountFeet_ = 0;
 
     // Stats & Other Properties
     int speed_ = 220; // Default from plan (typical player speed)
@@ -152,6 +174,7 @@ private:
     // Type/State flags
     bool isNpc_ = false;
     bool isSelected_ = false; // Editor specific selection state
+    bool saved_ = false; // Editor save state
 
     Brush* brush_ = nullptr; // Associated brush, not owned by creature instance. Set by CreatureManager.
     // GameSprite* currentSprite_ = nullptr; // For future sprite integration (Task 27)

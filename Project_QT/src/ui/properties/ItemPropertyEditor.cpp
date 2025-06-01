@@ -23,19 +23,24 @@ ItemPropertyEditor::~ItemPropertyEditor() {
 
 void ItemPropertyEditor::setEditingObject(QObject* object) {
     // Store the generic QObject pointer in the base class member
-    m_editingObject = object;
+    if (m_editingObject != object) {
+        m_editingObject = object;
+        emit editingObjectChanged(object);
 
-    Item* item = qobject_cast<Item*>(object);
+        Item* item = qobject_cast<Item*>(object);
 
-    if (item) {
-        qDebug() << "ItemPropertyEditor: Editing item with ID:" << item->getServerId() << "Name:" << item->name();
-    } else if (object) {
-        qDebug() << "ItemPropertyEditor: Received a QObject that is not an Item. ClassName:" << object->metaObject()->className();
-    } else {
-        qDebug() << "ItemPropertyEditor: Editing object set to nullptr.";
+        if (item) {
+            qDebug() << "ItemPropertyEditor: Editing item with ID:" << item->getServerId() << "Name:" << item->name();
+        } else if (object) {
+            qDebug() << "ItemPropertyEditor: Received a QObject that is not an Item. ClassName:" << object->metaObject()->className();
+        } else {
+            qDebug() << "ItemPropertyEditor: Editing object set to nullptr.";
+        }
+
+        // Call loadPropertiesFromObject to refresh UI based on new object (or clear it if object is null)
+        loadPropertiesFromObject();
+        markAsModified(false); // Reset modification state for new object
     }
-    // Call loadPropertiesFromObject to refresh UI based on new object (or clear it if object is null)
-    loadPropertiesFromObject();
 }
 
 void ItemPropertyEditor::loadPropertiesFromObject() {

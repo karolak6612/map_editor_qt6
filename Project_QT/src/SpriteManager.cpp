@@ -1,12 +1,17 @@
 #include "SpriteManager.h"
+#include "ImageSpace.h"
 #include <QFile>
 #include <QDataStream>
 #include <QDebug>
+
+// Task 54: Singleton instance for Item rendering
+static SpriteManager* g_spriteManagerInstance = nullptr;
 
 // Constructor
 SpriteManager::SpriteManager(QObject* parent)
     : QObject(parent),
       assetsLoaded_(false),
+      imageSpace_(new ImageSpace(this)),
       sprSignature_(0),
       sprSpriteCount_(0),
       datSignature_(0),
@@ -14,11 +19,24 @@ SpriteManager::SpriteManager(QObject* parent)
       datOutfitCount_(0),
       datEffectCount_(0),
       datMissileCount_(0) {
+    qDebug() << "SpriteManager: Initialized with ImageSpace.";
 }
 
 // Destructor
 SpriteManager::~SpriteManager() {
     unloadAssets();
+    if (g_spriteManagerInstance == this) {
+        g_spriteManagerInstance = nullptr;
+    }
+}
+
+// Task 54: Singleton implementation
+SpriteManager* SpriteManager::getInstance() {
+    return g_spriteManagerInstance;
+}
+
+void SpriteManager::setInstance(SpriteManager* instance) {
+    g_spriteManagerInstance = instance;
 }
 
 // Unload Assets
@@ -26,6 +44,17 @@ void SpriteManager::unloadAssets() {
     gameSpriteMetadataCache_.clear();
     sprSheetRleDataCache_.clear();
     sprSheetAddresses_.clear();
+
+    // Clear ImageSpace (Task 35 requirement)
+    if (imageSpace_) {
+        imageSpace_->clearCache();
+    }
+
+    // Task 64: Clear core item properties
+    coreItemPropertiesMap_.clear();
+    spriteIdToClientId_.clear();
+    clientIdToSpriteIds_.clear();
+
     assetsLoaded_ = false;
 
     sprSignature_ = 0;
@@ -87,6 +116,10 @@ bool SpriteManager::loadAssets(const ClientVersionData& clientVersion, QString& 
     }
     sprFile.close();
     qDebug() << "SpriteManager: SPR file parsed successfully.";
+
+    // Task 64: Build client ID mappings after loading sprite data
+    buildClientIdMappings();
+    qDebug() << "SpriteManager: Client ID mappings built successfully.";
 
     assetsLoaded_ = true;
     qInfo() << "SpriteManager: Assets loaded successfully for client version" << versionData_.clientVersionNumber;
@@ -238,7 +271,7 @@ bool SpriteManager::parseDatHeader(QDataStream& stream, QString& error) {
     return true;
 }
 
-// Parse SPR File (Header)
+// Parse SPR File (Header and Addresses)
 bool SpriteManager::parseSprFile(QFile& file, QString& error) {
     QDataStream stream(&file);
     stream.setByteOrder(QDataStream::LittleEndian);
@@ -246,6 +279,12 @@ bool SpriteManager::parseSprFile(QFile& file, QString& error) {
     if (!parseSprHeader(stream, error)) {
         return false;
     }
+
+    // Load sprite addresses after header (Task 35 requirement)
+    if (!loadSpriteAddresses(stream, error)) {
+        return false;
+    }
+
     return true;
 }
 
@@ -312,30 +351,7 @@ quint16 SpriteManager::getEffectCount() const { return datEffectCount_; }
 quint16 SpriteManager::getMissileCount() const { return datMissileCount_; }
 const ClientVersionData* SpriteManager::getCurrentVersionData() const { return &versionData_; }
 
-// Stubs for methods to be implemented in later parts
-QSharedPointer<const GameSpriteData> SpriteManager::getGameSpriteData(quint32 gameSpriteId) const {
-    Q_UNUSED(gameSpriteId);
-    // To be implemented in Part 2 (DAT content parsing)
-    // return gameSpriteMetadataCache_.value(gameSpriteId, nullptr);
-    return nullptr;
-}
-
-QImage SpriteManager::getSpriteImage(quint32 actualSprId) {
-    Q_UNUSED(actualSprId);
-    // To be implemented in Part 3 (SPR reading and RLE decoding)
-    return QImage();
-}
-
-QImage SpriteManager::getFrameImage(quint32 gameSpriteId, int frame, int patternX, int patternY, int patternZ, int layer) {
-    Q_UNUSED(gameSpriteId);
-    Q_UNUSED(frame);
-    Q_UNUSED(patternX);
-    Q_UNUSED(patternY);
-    Q_UNUSED(patternZ);
-    Q_UNUSED(layer);
-    // To be implemented in Part 3 or 4 (Frame composition)
-    return QImage();
-}
+// These methods are now fully implemented below
 
 // Placeholder for readDatEntry, will be implemented in Part 2 (actually, implementing now)
 bool SpriteManager::readDatEntry(QDataStream& stream, quint32 gameSpriteId, QString& error, QStringList& warnings) {
@@ -532,6 +548,14 @@ bool SpriteManager::readDatEntry(QDataStream& stream, quint32 gameSpriteId, QStr
     }
 
     gameSpriteMetadataCache_.insert(gameSpriteId, spriteData);
+
+    // Task 64: Extract and store core item properties
+    if (gameSpriteId <= datItemCount_) { // Only for items, not outfits/effects/missiles
+        CoreItemProperties coreProps = extractCorePropertiesFromGameSprite(*spriteData);
+        coreProps.clientId = static_cast<quint16>(gameSpriteId);
+        coreItemPropertiesMap_[static_cast<quint16>(gameSpriteId)] = coreProps;
+    }
+
     return true;
 }
 
@@ -780,4 +804,170 @@ QImage SpriteManager::getFrameImage(quint32 gameSpriteId, int frame, int pattern
     }
 
     return getSpriteImage(actualSprId);
+}
+
+// Task 64: Core item properties access methods
+const CoreItemProperties* SpriteManager::getCoreItemProperties(quint16 clientId) const {
+    auto it = coreItemPropertiesMap_.find(clientId);
+    if (it != coreItemPropertiesMap_.end()) {
+        return &it.value();
+    }
+    return nullptr;
+}
+
+bool SpriteManager::hasCoreItemProperties(quint16 clientId) const {
+    return coreItemPropertiesMap_.contains(clientId);
+}
+
+QList<quint16> SpriteManager::getAllClientIds() const {
+    return coreItemPropertiesMap_.keys();
+}
+
+// Task 64: Client ID to Sprite ID mapping
+quint16 SpriteManager::getClientIdForSprite(quint32 spriteId) const {
+    return spriteIdToClientId_.value(spriteId, 0);
+}
+
+QList<quint32> SpriteManager::getSpriteIdsForClient(quint16 clientId) const {
+    return clientIdToSpriteIds_.value(clientId, QList<quint32>());
+}
+
+// Task 64: Core property queries (for ItemManager integration)
+bool SpriteManager::isClientIdWalkable(quint16 clientId) const {
+    const CoreItemProperties* props = getCoreItemProperties(clientId);
+    return props ? !props->isNotWalkable : true; // Default to walkable if no properties
+}
+
+bool SpriteManager::isClientIdStackable(quint16 clientId) const {
+    const CoreItemProperties* props = getCoreItemProperties(clientId);
+    return props ? props->isStackable : false;
+}
+
+bool SpriteManager::isClientIdMoveable(quint16 clientId) const {
+    const CoreItemProperties* props = getCoreItemProperties(clientId);
+    return props ? !props->isNotMoveable : true; // Default to moveable if no properties
+}
+
+bool SpriteManager::isClientIdPickupable(quint16 clientId) const {
+    const CoreItemProperties* props = getCoreItemProperties(clientId);
+    return props ? props->isPickupable : false;
+}
+
+bool SpriteManager::isClientIdGround(quint16 clientId) const {
+    const CoreItemProperties* props = getCoreItemProperties(clientId);
+    return props ? props->isGround : false;
+}
+
+bool SpriteManager::isClientIdContainer(quint16 clientId) const {
+    const CoreItemProperties* props = getCoreItemProperties(clientId);
+    return props ? props->isContainer : false;
+}
+
+quint8 SpriteManager::getClientIdTopOrder(quint16 clientId) const {
+    const CoreItemProperties* props = getCoreItemProperties(clientId);
+    return props ? props->topOrder : 1; // Default to normal item order
+}
+
+quint16 SpriteManager::getClientIdLightLevel(quint16 clientId) const {
+    const CoreItemProperties* props = getCoreItemProperties(clientId);
+    return props ? props->lightLevel : 0;
+}
+
+quint16 SpriteManager::getClientIdMinimapColor(quint16 clientId) const {
+    const CoreItemProperties* props = getCoreItemProperties(clientId);
+    return props ? props->minimapColor : 0;
+}
+
+// Task 64: Helper methods implementation
+void SpriteManager::buildClientIdMappings() {
+    spriteIdToClientId_.clear();
+    clientIdToSpriteIds_.clear();
+
+    // Build mappings from the loaded sprite data
+    for (auto it = gameSpriteMetadataCache_.begin(); it != gameSpriteMetadataCache_.end(); ++it) {
+        quint32 gameSpriteId = it.key();
+        QSharedPointer<GameSpriteData> spriteData = it.value();
+
+        if (!spriteData) continue;
+
+        // Only process items (not outfits, effects, missiles)
+        if (gameSpriteId <= datItemCount_) {
+            quint16 clientId = static_cast<quint16>(gameSpriteId);
+
+            // Map each sprite sheet ID to this client ID
+            for (quint32 spriteId : spriteData->sprSheetIDs) {
+                if (spriteId > 0) { // Skip empty sprites
+                    spriteIdToClientId_[spriteId] = clientId;
+                    clientIdToSpriteIds_[clientId].append(spriteId);
+                }
+            }
+        }
+    }
+
+    qDebug() << "SpriteManager: Built mappings for" << clientIdToSpriteIds_.size() << "client IDs";
+}
+
+CoreItemProperties SpriteManager::extractCorePropertiesFromGameSprite(const GameSpriteData& spriteData) const {
+    CoreItemProperties props;
+
+    // Extract flags from sprite data
+    props.flags = spriteData.flags;
+
+    // Convert flags to individual boolean properties
+    props.isGround = (spriteData.flags & SpriteDatFlags::Ground) != SpriteDatFlags::None;
+    props.isGroundBorder = (spriteData.flags & SpriteDatFlags::GroundBorder) != SpriteDatFlags::None;
+    props.isOnBottom = (spriteData.flags & SpriteDatFlags::OnBottom) != SpriteDatFlags::None;
+    props.isOnTop = (spriteData.flags & SpriteDatFlags::OnTop) != SpriteDatFlags::None;
+    props.isContainer = (spriteData.flags & SpriteDatFlags::Container) != SpriteDatFlags::None;
+    props.isStackable = (spriteData.flags & SpriteDatFlags::Stackable) != SpriteDatFlags::None;
+    props.isForceUse = (spriteData.flags & SpriteDatFlags::ForceUse) != SpriteDatFlags::None;
+    props.isMultiUse = (spriteData.flags & SpriteDatFlags::MultiUse) != SpriteDatFlags::None;
+    props.isWritable = (spriteData.flags & SpriteDatFlags::Writable) != SpriteDatFlags::None;
+    props.isWritableOnce = (spriteData.flags & SpriteDatFlags::WritableOnce) != SpriteDatFlags::None;
+    props.isFluidContainer = (spriteData.flags & SpriteDatFlags::FluidContainer) != SpriteDatFlags::None;
+    props.isSplash = (spriteData.flags & SpriteDatFlags::Splash) != SpriteDatFlags::None;
+    props.isNotWalkable = (spriteData.flags & SpriteDatFlags::NotWalkable) != SpriteDatFlags::None;
+    props.isNotMoveable = (spriteData.flags & SpriteDatFlags::NotMoveable) != SpriteDatFlags::None;
+    props.isBlockProjectile = (spriteData.flags & SpriteDatFlags::BlockProjectile) != SpriteDatFlags::None;
+    props.isNotPathable = (spriteData.flags & SpriteDatFlags::NotPathable) != SpriteDatFlags::None;
+    props.isPickupable = (spriteData.flags & SpriteDatFlags::Pickupable) != SpriteDatFlags::None;
+    props.isHangable = (spriteData.flags & SpriteDatFlags::Hangable) != SpriteDatFlags::None;
+    props.hasHookSouth = (spriteData.flags & SpriteDatFlags::HookSouth) != SpriteDatFlags::None;
+    props.hasHookEast = (spriteData.flags & SpriteDatFlags::HookEast) != SpriteDatFlags::None;
+    props.isRotateable = (spriteData.flags & SpriteDatFlags::Rotateable) != SpriteDatFlags::None;
+    props.hasLight = (spriteData.flags & SpriteDatFlags::Light) != SpriteDatFlags::None;
+    props.isDontHide = (spriteData.flags & SpriteDatFlags::DontHide) != SpriteDatFlags::None;
+    props.isTranslucent = (spriteData.flags & SpriteDatFlags::Translucent) != SpriteDatFlags::None;
+    props.hasDisplacement = (spriteData.flags & SpriteDatFlags::Displacement) != SpriteDatFlags::None;
+    props.hasElevation = (spriteData.flags & SpriteDatFlags::Elevation) != SpriteDatFlags::None;
+    props.isLyingCorpse = (spriteData.flags & SpriteDatFlags::LyingCorpse) != SpriteDatFlags::None;
+    props.isAnimateAlways = (spriteData.flags & SpriteDatFlags::AnimateAlways) != SpriteDatFlags::None;
+    props.hasMinimapColor = (spriteData.flags & SpriteDatFlags::MinimapColor) != SpriteDatFlags::None;
+    props.hasLensHelp = (spriteData.flags & SpriteDatFlags::LensHelp) != SpriteDatFlags::None;
+    props.isFullGround = (spriteData.flags & SpriteDatFlags::FullGround) != SpriteDatFlags::None;
+    props.hasLook = (spriteData.flags & SpriteDatFlags::Look) != SpriteDatFlags::None;
+
+    // Extract additional properties
+    props.lightLevel = spriteData.light.intensity;
+    props.lightColor = spriteData.light.color;
+    props.minimapColor = spriteData.minimapColor;
+    props.displacement = spriteData.drawOffset;
+    props.elevation = spriteData.drawHeight;
+
+    // Set top order based on flags
+    if (props.isOnTop) {
+        props.topOrder = 3; // Always on top
+    } else if (props.isOnBottom || props.isGround) {
+        props.topOrder = 0; // Ground level
+    } else {
+        props.topOrder = 1; // Normal items
+    }
+
+    // Animation properties
+    props.isAnimated = spriteData.isAnimated;
+    props.animationLoopCount = spriteData.animationLoopCount;
+    props.animationStartFrame = spriteData.animationStartFrame;
+    props.frameDurations = spriteData.frameDurations;
+
+    return props;
 }

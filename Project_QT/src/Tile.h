@@ -44,7 +44,8 @@ public:
         OptionalBorder      = 0x0008, // TILESTATE_OP_BORDER
         HasTable            = 0x0010, // TILESTATE_HAS_TABLE (RME specific, for rendering)
         HasCarpet           = 0x0020, // TILESTATE_HAS_CARPET (RME specific, for rendering)
-        Modified            = 0x0040  // TILESTATE_MODIFIED
+        Modified            = 0x0040, // TILESTATE_MODIFIED
+        Locked              = 0x0080  // Task 85: Tile locking mechanism
     };
     Q_DECLARE_FLAGS(TileStateFlags, TileStateFlag)
 
@@ -72,6 +73,17 @@ public:
     Creature* creature() const;
     void setCreature(Creature* creature);
 
+    // Task 55: Enhanced creature management with mapping
+    void addCreature(Creature* creature);
+    void removeCreature(Creature* creature);
+    void addCreature(quint32 creatureId, Creature* creature);
+    void removeCreature(quint32 creatureId);
+    Creature* getCreature(quint32 creatureId) const;
+    const QList<Creature*>& getCreatures() const;
+    const QMap<quint32, Creature*>& getCreatureMap() const;
+    bool hasCreatures() const;
+    void clearCreatures();
+
     Spawn* spawn() const;
     void setSpawn(Spawn* spawn);
 
@@ -79,9 +91,14 @@ public:
     int creatureCount() const;
     bool isEmpty() const;
 
-    Item* getTopLookItem() const; 
-    Item* getTopUseItem() const;  
-    Item* getTopSelectableItem() const; 
+    // Advanced item access methods
+    Item* getTopItem() const; // Returns the topmost item (wxWidgets compatible)
+    Item* getItemAt(int index) const; // Get item at specific index
+    int getIndexOf(Item* item) const; // Get index of specific item
+
+    Item* getTopLookItem() const;
+    Item* getTopUseItem() const;
+    Item* getTopSelectableItem() const;
 
     // Flag/Property Management
     void setMapFlag(TileMapFlag flag, bool on = true);
@@ -101,6 +118,21 @@ public:
     bool isModified() const; void setModified(bool on = true);
     bool isSelected() const; void setSelected(bool on = true);
 
+    // Task 85: Tile locking mechanism
+    bool isLocked() const; void setLocked(bool on = true);
+    void lock(); void unlock();
+
+    // Advanced selection methods (wxWidgets compatible)
+    void select(); void deselect();
+    void selectGround(); void deselectGround();
+    QVector<Item*> popSelectedItems(bool ignoreTileSelected = false);
+    QVector<Item*> getSelectedItems(bool unzoomed = false) const;
+    Item* getTopSelectedItem() const;
+    bool hasUniqueItem() const;
+
+    // Property system
+    bool hasProperty(int property) const; // ITEMPROPERTY enum compatibility
+
     // Table specific methods
     bool hasTable() const;
     Item* getTable() const;
@@ -113,6 +145,12 @@ public:
     void cleanCarpets(Map* map, bool dontDelete = false);
     void carpetize(Map* map);
 
+    // Border management methods
+    bool hasBorders() const;
+    void cleanBorders(bool dontDelete = false);
+    void addBorderItem(Item* item);
+    void borderize(Map* map);
+
     // Optional Border specific methods
     void setOptionalBorder(bool on);
     bool hasSetOptionalBorder() const;
@@ -122,6 +160,10 @@ public:
     void setHouseId(quint32 id);
     bool isHouseTile() const;
 
+    // Task 66: House door ID support
+    quint8 getHouseDoorId() const;
+    void setHouseDoorId(quint8 doorId);
+
     // Zone IDs
     void addZoneId(quint16 zoneId);
     bool removeZoneId(quint16 zoneId); 
@@ -129,7 +171,17 @@ public:
     const QVector<quint16>& getZoneIds() const;
     bool hasZoneId(quint16 zoneId) const;
     
-    void update(); 
+    // Memory and utility methods
+    quint32 memsize() const; // Get memory footprint size
+    Tile* deepCopy(Map* map) const; // Create deep copy of tile
+    void merge(Tile* other); // Merge another tile into this one
+    int size() const; // Get total number of items (including ground)
+
+    // Minimap support
+    quint8 getMiniMapColor() const;
+    void setMiniMapColor(quint8 color);
+
+    void update();
 
     void draw(QPainter* painter, const QRectF& targetScreenRect, const DrawingOptions& options) const;
 
@@ -150,12 +202,18 @@ private:
     QVector<Item*> items_;
     Creature* creature_ = nullptr;
     Spawn* spawn_ = nullptr;
+
+    // Task 55: Enhanced creature management
+    QMap<quint32, Creature*> creatureMap_;
+    QList<Creature*> creatures_;
     quint32 houseId_ = 0;
+    quint8 houseDoorId_ = 0; // Task 66: House door ID
 
     TileMapFlags mapFlags_ = TileMapFlag::NoFlag;
     TileStateFlags stateFlags_ = TileStateFlag::NoState;
     QVector<quint16> zoneIds_;
-    
+    quint8 minimapColor_ = 0xFF; // INVALID_MINIMAP_COLOR equivalent
+
     Map* getMap() const;
 };
 

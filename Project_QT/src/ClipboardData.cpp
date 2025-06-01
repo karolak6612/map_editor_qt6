@@ -10,6 +10,9 @@
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QDebug>
+#include <QApplication>
+#include <QClipboard>
+#include <QMimeData>
 #include <algorithm> // For std::min/max
 
 // --- Constructor & Destructor ---
@@ -331,4 +334,107 @@ bool ClipboardData::deserializeFromJson(const QByteArray& jsonData) {
         }
     }
     return true;
+}
+
+// --- Enhanced Operations ---
+
+void ClipboardData::populateFromSelectionCopy(const QSet<MapPos>& selection, const Map& map) {
+    isCutOperation_ = false;
+    populateFromSelection(selection, map);
+}
+
+void ClipboardData::populateFromSelectionCut(const QSet<MapPos>& selection, const Map& map) {
+    isCutOperation_ = true;
+    populateFromSelection(selection, map);
+}
+
+// --- System Clipboard Integration ---
+
+void ClipboardData::copyToSystemClipboard() const {
+    QClipboard* clipboard = QApplication::clipboard();
+    if (!clipboard) {
+        qWarning() << "ClipboardData::copyToSystemClipboard - No system clipboard available";
+        return;
+    }
+
+    QByteArray jsonData = serializeToJson();
+
+    // Create MIME data with custom format for our clipboard data
+    QMimeData* mimeData = new QMimeData();
+    mimeData->setData("application/x-rme-clipboard", jsonData);
+    mimeData->setText(QString::fromUtf8(jsonData)); // Also set as text for debugging
+
+    clipboard->setMimeData(mimeData);
+    qDebug() << "ClipboardData copied to system clipboard:" << jsonData.size() << "bytes";
+}
+
+bool ClipboardData::pasteFromSystemClipboard() {
+    QClipboard* clipboard = QApplication::clipboard();
+    if (!clipboard) {
+        qWarning() << "ClipboardData::pasteFromSystemClipboard - No system clipboard available";
+        return false;
+    }
+
+    const QMimeData* mimeData = clipboard->mimeData();
+    if (!mimeData) {
+        qWarning() << "ClipboardData::pasteFromSystemClipboard - No MIME data on clipboard";
+        return false;
+    }
+
+    QByteArray jsonData;
+
+    // Try our custom format first
+    if (mimeData->hasFormat("application/x-rme-clipboard")) {
+        jsonData = mimeData->data("application/x-rme-clipboard");
+    } else if (mimeData->hasText()) {
+        // Fallback to text format
+        jsonData = mimeData->text().toUtf8();
+    } else {
+        qWarning() << "ClipboardData::pasteFromSystemClipboard - No compatible data on clipboard";
+        return false;
+    }
+
+    bool success = deserializeFromJson(jsonData);
+    if (success) {
+        qDebug() << "ClipboardData pasted from system clipboard:" << jsonData.size() << "bytes";
+    } else {
+        qWarning() << "ClipboardData::pasteFromSystemClipboard - Failed to deserialize clipboard data";
+    }
+
+    return success;
+}
+
+// --- Utility Methods ---
+
+void ClipboardData::clear() {
+    copiedTiles_.clear();
+    selectionWidth_ = 0;
+    selectionHeight_ = 0;
+    selectionDepth_ = 0;
+    isCutOperation_ = false;
+}
+
+ClipboardData* ClipboardData::deepCopy() const {
+    ClipboardData* copy = new ClipboardData();
+    copy->copiedTiles_ = copiedTiles_; // QList copy constructor does deep copy of structs
+    copy->selectionWidth_ = selectionWidth_;
+    copy->selectionHeight_ = selectionHeight_;
+    copy->selectionDepth_ = selectionDepth_;
+    copy->isCutOperation_ = isCutOperation_;
+    return copy;
+}
+
+int ClipboardData::getTileCount() const {
+    return copiedTiles_.size();
+}
+
+int ClipboardData::getItemCount() const {
+    int itemCount = 0;
+    for (const ClipboardTileData& tileData : copiedTiles_) {
+        if (tileData.hasGround) {
+            itemCount++;
+        }
+        itemCount += tileData.items.size();
+    }
+    return itemCount;
 }

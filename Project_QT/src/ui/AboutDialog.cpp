@@ -1,81 +1,97 @@
 #include "AboutDialog.h"
-#include <QLabel>
-#include <QPushButton>
-#include <QVBoxLayout>
-#include <QHBoxLayout> // For button layout
-#include <QScreen> 
-#include <QApplication> 
-#include <QSysInfo> // For QSysInfo::prettyProductName()
+#include <QApplication>
+#include <QClipboard>
+#include <QMessageBox>
+#include <QSysInfo>
+#include <QThread>
+#include <QDebug>
 
-// Placeholder version info - actual values might come from a config file or build system
-const QString RME_VERSION_PLACEHOLDER = "Dev Version"; 
-// const QString COMPILED_DATE_PLACEHOLDER = __DATE__; // This macro might not be ideal for Qt builds
-// const QString COMPILED_TIME_PLACEHOLDER = __TIME__; // This macro might not be ideal for Qt builds
+AboutDialog::AboutDialog(QWidget *parent)
+    : QDialog(parent)
+    , tabWidget_(nullptr)
+    , mainLayout_(nullptr)
+    , buttonLayout_(nullptr)
+    , websiteButton_(nullptr)
+    , bugReportButton_(nullptr)
+    , updateButton_(nullptr)
+    , copyInfoButton_(nullptr)
+    , closeButton_(nullptr)
+    , logoLabel_(nullptr)
+    , titleLabel_(nullptr)
+    , versionLabel_(nullptr)
+    , descriptionLabel_(nullptr)
+    , copyrightLabel_(nullptr)
+    , infoTextEdit_(nullptr)
+    , creditsTextEdit_(nullptr)
+    , licenseTextEdit_(nullptr)
+    , systemInfoTextEdit_(nullptr)
+{
+    setWindowTitle(tr("About %1").arg(QApplication::applicationName()));
+    setWindowIcon(QIcon(":/icons/about.png"));
+    resize(600, 500);
+    setModal(true);
 
-AboutDialog::AboutDialog(QWidget *parent) : QDialog(parent) {
-    setWindowTitle(tr("About Idler Map Editor")); // Original was "About"
-
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
-
-    infoLabel_ = new QLabel(this);
-    infoLabel_->setWordWrap(true);
-    infoLabel_->setTextFormat(Qt::PlainText); // Original used wxStaticText which is plain
-    infoLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse); // Allow text selection
-
-    // Construct the about text, similar to the wxwidgets version
-    QString aboutText;
-    aboutText += "Idler Map Editor\n"; // Use \n for newlines in QLabel with PlainText
-    aboutText += "(based on OTA Remere's Map Editor)\n\n";
-    aboutText += "This program is a map editor for game servers\n";
-    aboutText += "that derivied from OpenTibia project.\n\n";
-    aboutText += "Brought to you by Idler enhanced using Cursor.com\n\n"; // As per original
-
-    // Qt version instead of wxWidgets version
-    // Use QApplication::applicationVersion() if set, otherwise placeholder.
-    QString appVersion = QApplication::applicationVersion();
-    if (appVersion.isEmpty()) {
-        appVersion = RME_VERSION_PLACEHOLDER;
-    }
-    aboutText += QString("Version %1 for %2\n\n")
-                     .arg(appVersion) 
-                     .arg(QSysInfo::prettyProductName());
-
-    aboutText += QString("Using Qt version %1\n").arg(QT_VERSION_STR);
-    // OpenGL version would require an active GL context to query, omit for this simple dialog for now.
-    // aboutText += "OpenGL version ...\n\n"; 
-
-    aboutText += "This program comes with ABSOLUTELY NO WARRANTY;\n";
-    aboutText += "for details see the LICENSE file (not shown in this basic dialog).\n";
-    aboutText += "This is free software, and you are welcome to redistribute it\n";
-    aboutText += "under certain conditions.\n";
-    aboutText += "Just make sure that you include the invite link to discord.\n\n"; // As per original
-
-    // Compilation date/time and compiler are harder to get generically in Qt
-    // without build system integration. Use placeholders or omit.
-    // aboutText += QString("Compiled on: %1 : %2\n").arg(COMPILED_DATE_PLACEHOLDER).arg(COMPILED_TIME_PLACEHOLDER);
-    // aboutText += QString("Compiled with: %1\n").arg("Compiler Info Placeholder");
-
-    infoLabel_->setText(aboutText);
-    mainLayout->addWidget(infoLabel_);
-
-    // OK Button
-    okButton_ = new QPushButton(tr("OK"), this);
-    connect(okButton_, &QPushButton::clicked, this, &QDialog::accept); // Closes dialog with QDialog::Accepted result
-
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-    buttonLayout->addStretch();
-    buttonLayout->addWidget(okButton_);
-    buttonLayout->addStretch();
-    mainLayout->addLayout(buttonLayout);
-
-    setLayout(mainLayout);
-
-    // Adjust initial size - original was wxSize(300, 320)
-    // Let's use a slightly wider size for better text flow.
-    resize(450, 380); 
+    setupUI();
+    connectSignals();
 }
 
-AboutDialog::~AboutDialog() {
-    // Qt's parent-child ownership will handle deleting widgets (infoLabel_, okButton_)
-    // and layouts.
+AboutDialog::~AboutDialog() = default;
+
+void AboutDialog::setupUI() {
+    mainLayout_ = new QVBoxLayout(this);
+    mainLayout_->setContentsMargins(15, 15, 15, 15);
+    mainLayout_->setSpacing(15);
+
+    setupTabWidget();
+    setupButtonBox();
+
+    mainLayout_->addWidget(tabWidget_);
+    mainLayout_->addLayout(buttonLayout_);
+}
+
+void AboutDialog::setupTabWidget() {
+    tabWidget_ = new QTabWidget(this);
+    tabWidget_->setTabPosition(QTabWidget::North);
+    tabWidget_->setMovable(false);
+    tabWidget_->setTabsClosable(false);
+
+    // Add all tabs
+    tabWidget_->addTab(createAboutTab(), tr("About"));
+    tabWidget_->addTab(createCreditsTab(), tr("Credits"));
+    tabWidget_->addTab(createLicenseTab(), tr("License"));
+    tabWidget_->addTab(createSystemInfoTab(), tr("System Info"));
+}
+
+void AboutDialog::setupButtonBox() {
+    buttonLayout_ = new QHBoxLayout();
+    buttonLayout_->setSpacing(10);
+
+    websiteButton_ = new QPushButton(tr("&Website"), this);
+    websiteButton_->setToolTip(tr("Visit the project website"));
+    websiteButton_->setIcon(QIcon(":/icons/web.png"));
+
+    bugReportButton_ = new QPushButton(tr("&Report Bug"), this);
+    bugReportButton_->setToolTip(tr("Report a bug or issue"));
+    bugReportButton_->setIcon(QIcon(":/icons/bug.png"));
+
+    updateButton_ = new QPushButton(tr("Check &Updates"), this);
+    updateButton_->setToolTip(tr("Check for application updates"));
+    updateButton_->setIcon(QIcon(":/icons/update.png"));
+
+    copyInfoButton_ = new QPushButton(tr("&Copy Info"), this);
+    copyInfoButton_->setToolTip(tr("Copy system information to clipboard"));
+    copyInfoButton_->setIcon(QIcon(":/icons/copy.png"));
+
+    buttonLayout_->addWidget(websiteButton_);
+    buttonLayout_->addWidget(bugReportButton_);
+    buttonLayout_->addWidget(updateButton_);
+    buttonLayout_->addWidget(copyInfoButton_);
+    buttonLayout_->addStretch();
+
+    closeButton_ = new QPushButton(tr("&Close"), this);
+    closeButton_->setToolTip(tr("Close this dialog"));
+    closeButton_->setDefault(true);
+    closeButton_->setIcon(QIcon(":/icons/close.png"));
+
+    buttonLayout_->addWidget(closeButton_);
 }

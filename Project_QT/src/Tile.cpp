@@ -1,4 +1,5 @@
 #include "Tile.h"
+#include "TileRenderer.h"
 #include "Item.h"
 #include "Creature.h"
 #include "Spawn.h"
@@ -171,8 +172,122 @@ Spawn* Tile::spawn() const {
 void Tile::setSpawn(Spawn* newSpawn) {
     if (spawn_ == newSpawn) return;
     spawn_ = newSpawn;
-    emit tileChanged(x_, y_, z_); 
+    emit tileChanged(x_, y_, z_);
     emit visualChanged(x_, y_, z_); // Spawn visibility might change
+}
+
+// Task 55: Enhanced creature management implementations
+void Tile::addCreature(Creature* creature) {
+    if (!creature) return;
+
+    // Add to list if not already present
+    if (!creatures_.contains(creature)) {
+        creatures_.append(creature);
+        creature->setParent(this);
+        setModified(true);
+        emit tileChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_);
+    }
+}
+
+void Tile::removeCreature(Creature* creature) {
+    if (!creature) return;
+
+    if (creatures_.removeOne(creature)) {
+        creature->setParent(nullptr);
+
+        // Also remove from map if present
+        auto it = creatureMap_.begin();
+        while (it != creatureMap_.end()) {
+            if (it.value() == creature) {
+                it = creatureMap_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        setModified(true);
+        emit tileChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_);
+    }
+}
+
+void Tile::addCreature(quint32 creatureId, Creature* creature) {
+    if (!creature) return;
+
+    // Add to map
+    creatureMap_[creatureId] = creature;
+
+    // Also add to list if not already present
+    if (!creatures_.contains(creature)) {
+        creatures_.append(creature);
+        creature->setParent(this);
+    }
+
+    setModified(true);
+    emit tileChanged(x_, y_, z_);
+    emit visualChanged(x_, y_, z_);
+}
+
+void Tile::removeCreature(quint32 creatureId) {
+    auto it = creatureMap_.find(creatureId);
+    if (it != creatureMap_.end()) {
+        Creature* creature = it.value();
+        creatureMap_.erase(it);
+
+        // Remove from list as well
+        if (creatures_.removeOne(creature)) {
+            creature->setParent(nullptr);
+        }
+
+        setModified(true);
+        emit tileChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_);
+    }
+}
+
+Creature* Tile::getCreature(quint32 creatureId) const {
+    return creatureMap_.value(creatureId, nullptr);
+}
+
+const QList<Creature*>& Tile::getCreatures() const {
+    return creatures_;
+}
+
+const QMap<quint32, Creature*>& Tile::getCreatureMap() const {
+    return creatureMap_;
+}
+
+bool Tile::hasCreatures() const {
+    return !creatures_.isEmpty() || creature_ != nullptr;
+}
+
+void Tile::clearCreatures() {
+    // Clear map
+    for (auto it = creatureMap_.begin(); it != creatureMap_.end(); ++it) {
+        if (it.value()) {
+            it.value()->setParent(nullptr);
+        }
+    }
+    creatureMap_.clear();
+
+    // Clear list
+    for (Creature* creature : creatures_) {
+        if (creature) {
+            creature->setParent(nullptr);
+        }
+    }
+    creatures_.clear();
+
+    // Clear single creature
+    if (creature_) {
+        creature_->setParent(nullptr);
+        creature_ = nullptr;
+    }
+
+    setModified(true);
+    emit tileChanged(x_, y_, z_);
+    emit visualChanged(x_, y_, z_);
 }
 
 QList<Item*> Tile::getWallItems() const {
@@ -246,12 +361,49 @@ void Tile::setGroundById(quint16 groundItemId) {
     }
 }
 
+// --- Advanced Item Access Methods ---
+
+Item* Tile::getTopItem() const {
+    // Return the topmost item (last in items vector, or ground if no items)
+    if (!items_.isEmpty()) {
+        return items_.last();
+    }
+    return ground_;
+}
+
+Item* Tile::getItemAt(int index) const {
+    // Index 0 is ground, index 1+ are items in the vector
+    if (index == 0) {
+        return ground_;
+    }
+    int itemIndex = index - 1;
+    if (itemIndex >= 0 && itemIndex < items_.size()) {
+        return items_[itemIndex];
+    }
+    return nullptr;
+}
+
+int Tile::getIndexOf(Item* item) const {
+    if (!item) return -1;
+
+    if (ground_ == item) {
+        return 0; // Ground is always index 0
+    }
+
+    int itemIndex = items_.indexOf(item);
+    if (itemIndex != -1) {
+        return itemIndex + 1; // Items start at index 1
+    }
+
+    return -1; // Item not found
+}
+
 int Tile::itemCount() const {
     return (ground_ ? 1 : 0) + items_.size();
 }
 
 int Tile::creatureCount() const {
-    return (creature_ ? 1 : 0);
+    return (creature_ ? 1 : 0) + creatures_.size();
 }
 
 bool Tile::isEmpty() const {
@@ -364,6 +516,135 @@ void Tile::setModified(bool on) { setStateFlag(TileStateFlag::Modified, on); }
 bool Tile::isSelected() const { return hasStateFlag(TileStateFlag::Selected); }
 void Tile::setSelected(bool on) { setStateFlag(TileStateFlag::Selected, on); }
 
+// Task 85: Tile locking mechanism
+bool Tile::isLocked() const { return hasStateFlag(TileStateFlag::Locked); }
+void Tile::setLocked(bool on) {
+    setStateFlag(TileStateFlag::Locked, on);
+    emit tileChanged(x_, y_, z_);
+}
+
+void Tile::lock() { setLocked(true); }
+void Tile::unlock() { setLocked(false); }
+
+// --- Advanced Selection Methods ---
+
+void Tile::select() {
+    setSelected(true);
+}
+
+void Tile::deselect() {
+    setSelected(false);
+    // Also deselect all items on the tile
+    if (ground_) {
+        ground_->deselect();
+    }
+    for (Item* item : items_) {
+        if (item) {
+            item->deselect();
+        }
+    }
+}
+
+void Tile::selectGround() {
+    if (ground_) {
+        ground_->select();
+    }
+}
+
+void Tile::deselectGround() {
+    if (ground_) {
+        ground_->deselect();
+    }
+}
+
+QVector<Item*> Tile::popSelectedItems(bool ignoreTileSelected) {
+    QVector<Item*> selectedItems;
+
+    // If tile is selected and we're not ignoring it, return all items
+    if (isSelected() && !ignoreTileSelected) {
+        if (ground_) {
+            selectedItems.append(ground_);
+        }
+        selectedItems.append(items_);
+
+        // Clear the tile
+        ground_ = nullptr;
+        items_.clear();
+        setModified(true);
+        emit tileChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_);
+        return selectedItems;
+    }
+
+    // Otherwise, only pop individually selected items
+    if (ground_ && ground_->isSelected()) {
+        selectedItems.append(ground_);
+        ground_ = nullptr;
+    }
+
+    for (int i = items_.size() - 1; i >= 0; --i) {
+        if (items_[i] && items_[i]->isSelected()) {
+            selectedItems.append(items_.takeAt(i));
+        }
+    }
+
+    if (!selectedItems.isEmpty()) {
+        setModified(true);
+        emit tileChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_);
+    }
+
+    return selectedItems;
+}
+
+QVector<Item*> Tile::getSelectedItems(bool unzoomed) const {
+    Q_UNUSED(unzoomed) // For future use with zoom functionality
+
+    QVector<Item*> selectedItems;
+
+    // If tile is selected, return all items
+    if (isSelected()) {
+        if (ground_) {
+            selectedItems.append(ground_);
+        }
+        selectedItems.append(items_);
+        return selectedItems;
+    }
+
+    // Otherwise, only return individually selected items
+    if (ground_ && ground_->isSelected()) {
+        selectedItems.append(ground_);
+    }
+
+    for (Item* item : items_) {
+        if (item && item->isSelected()) {
+            selectedItems.append(item);
+        }
+    }
+
+    return selectedItems;
+}
+
+Item* Tile::getTopSelectedItem() const {
+    // Check items from top to bottom (reverse order)
+    for (int i = items_.size() - 1; i >= 0; --i) {
+        if (items_[i] && items_[i]->isSelected()) {
+            return items_[i];
+        }
+    }
+
+    // Check ground last
+    if (ground_ && ground_->isSelected()) {
+        return ground_;
+    }
+
+    return nullptr;
+}
+
+bool Tile::hasUniqueItem() const {
+    return hasStateFlag(TileStateFlag::Unique);
+}
+
 quint32 Tile::getHouseId() const {
     return houseId_;
 }
@@ -377,6 +658,20 @@ void Tile::setHouseId(quint32 id) {
 }
 bool Tile::isHouseTile() const {
     return houseId_ != 0;
+}
+
+// Task 66: House door ID implementation
+quint8 Tile::getHouseDoorId() const {
+    return houseDoorId_;
+}
+
+void Tile::setHouseDoorId(quint8 doorId) {
+    if (houseDoorId_ != doorId) {
+        houseDoorId_ = doorId;
+        setModified(true);
+        emit tileChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_);
+    }
 }
 
 void Tile::addZoneId(quint16 zoneId) {
@@ -566,74 +861,270 @@ void Tile::setOptionalBorder(bool on) {
     // }
 }
 
+// --- Border Management Methods ---
+
+bool Tile::hasBorders() const {
+    // Check if the first items are borders (borders are typically placed at the beginning)
+    return !items_.isEmpty() && items_[0]->isBorder();
+}
+
+void Tile::cleanBorders(bool dontDelete) {
+    bool changed = false;
+
+    // Remove all border items
+    for (int i = items_.size() - 1; i >= 0; --i) {
+        if (items_[i] && items_[i]->isBorder()) {
+            Item* borderItem = items_.takeAt(i);
+            if (!dontDelete) {
+                delete borderItem;
+            }
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        setModified(true);
+        emit tileChanged(x_, y_, z_);
+        emit visualChanged(x_, y_, z_);
+    }
+}
+
+void Tile::addBorderItem(Item* item) {
+    if (!item || !item->isBorder()) {
+        qWarning() << "Tile::addBorderItem: Item is not a border item";
+        return;
+    }
+
+    // Add border items at the beginning of the items vector (bottom of stack)
+    items_.prepend(item);
+    if (item->parent() != this) {
+        item->setParent(this);
+    }
+
+    setModified(true);
+    emit tileChanged(x_, y_, z_);
+    emit visualChanged(x_, y_, z_);
+}
+
+void Tile::borderize(Map* map) {
+    if (!map) {
+        qWarning() << "Tile::borderize: Map parameter is null";
+        return;
+    }
+
+    // This would typically call a GroundBrush::doBorders equivalent
+    // For now, we'll implement a placeholder that can be extended
+    qDebug() << "Tile::borderize called for" << mapPos() << "- implement GroundBrush integration";
+
+    // TODO: Implement actual border logic when GroundBrush is available
+    // GroundBrush::doBorders(map, this);
+}
+
 Map* Tile::getMap() const {
     // Placeholder: returning nullptr. Proper implementation depends on project structure.
     // qWarning() << "Tile::getMap() placeholder called. Actual implementation needed if Map context is required directly by Tile methods like setOptionalBorder for borderize calls.";
     return qobject_cast<Map*>(parent()); // A common approach if Map is the parent
 }
 
-void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const DrawingOptions& options) const {
-    if (!painter) return;
-    if (options.highlightSelectedTile && isSelected()) {
-        painter->save();
-        QColor selectionColor = Qt::yellow;
-        selectionColor.setAlpha(80);
-        painter->fillRect(targetScreenRect, selectionColor);
-        QPen pen(Qt::yellow, 1);
-        pen.setStyle(Qt::DotLine);
-        painter->setPen(pen);
-        painter->drawRect(targetScreenRect);
-        painter->restore();
+// --- Memory and Utility Methods ---
+
+quint32 Tile::memsize() const {
+    quint32 size = sizeof(Tile);
+
+    // Add size of ground item
+    if (ground_) {
+        size += ground_->memsize();
     }
-    if (options.showGround && ground_) {
-        DrawingOptions groundOptions = options;
-        ground_->draw(painter, targetScreenRect, groundOptions);
-    } else if (options.showGround) {
-        painter->save();
-        painter->fillRect(targetScreenRect, QColor(50, 50, 50, 100));
-        painter->restore();
+
+    // Add size of all items
+    for (const Item* item : items_) {
+        if (item) {
+            size += item->memsize();
+        }
     }
-    if (options.showItems) {
-        for (Item* item : items_) {
-            if (item) {
-                DrawingOptions itemOptions = options;
-                item->draw(painter, targetScreenRect, itemOptions);
+
+    // Add size of creature
+    if (creature_) {
+        size += creature_->memsize();
+    }
+
+    // Add size of spawn
+    if (spawn_) {
+        size += spawn_->memsize();
+    }
+
+    // Add size of zone IDs vector
+    size += zoneIds_.size() * sizeof(quint16);
+
+    return size;
+}
+
+Tile* Tile::deepCopy(Map* map) const {
+    if (!map) {
+        qWarning() << "Tile::deepCopy: Map parameter is null";
+        return nullptr;
+    }
+
+    // Create new tile with same coordinates
+    Tile* newTile = new Tile(x_, y_, z_, map);
+
+    // Copy ground item
+    if (ground_) {
+        newTile->ground_ = ground_->deepCopy();
+        if (newTile->ground_) {
+            newTile->ground_->setParent(newTile);
+        }
+    }
+
+    // Copy all items
+    for (const Item* item : items_) {
+        if (item) {
+            Item* newItem = item->deepCopy();
+            if (newItem) {
+                newItem->setParent(newTile);
+                newTile->items_.append(newItem);
             }
         }
     }
-    if (options.showCreatures && creature_) {
-        creature_->draw(painter, targetScreenRect, options);
-    }
-    if (options.showSpawns && spawn_) {
-        painter->save();
-        painter->setBrush(QColor(128, 0, 128, 100));
-        painter->setPen(Qt::NoPen);
-        painter->drawEllipse(targetScreenRect.topLeft() + QPointF(2,2), 4, 4); 
-        painter->restore();
-    }
-    if (options.showTileFlags) {
-        QString flagsText;
-        if (hasMapFlag(TileMapFlag::ProtectionZone)) flagsText += "PZ ";
-        if (hasMapFlag(TileMapFlag::NoPVP)) flagsText += "NoPvP ";
-        if (hasMapFlag(TileMapFlag::PVPZone)) flagsText += "PvP ";
-        if (!flagsText.isEmpty()) {
-            painter->save();
-            painter->setPen(Qt::white);
-            QFont font = painter->font();
-            font.setPointSize(font.pointSize() - 2 > 0 ? font.pointSize() - 2 : 6);
-            painter->setFont(font);
-            painter->drawText(targetScreenRect, Qt::AlignBottom | Qt::AlignHCenter, flagsText.trimmed());
-            painter->restore();
+
+    // Copy creature
+    if (creature_) {
+        newTile->creature_ = creature_->deepCopy();
+        if (newTile->creature_) {
+            newTile->creature_->setParent(newTile);
         }
     }
-    if (options.drawDebugInfo) {
-        painter->save();
-        QFont font = painter->font();
-        font.setPointSize(7);
-        painter->setFont(font);
-        painter->setPen(Qt::cyan);
-        QString coordText = QString("%1,%2,%3").arg(x_).arg(y_).arg(z_);
-        painter->drawText(targetScreenRect.adjusted(2,2,0,0), Qt::AlignTop | Qt::AlignLeft | Qt::TextDontClip, coordText);
-        painter->restore();
+
+    // Copy spawn (spawns are typically not deep copied, just referenced)
+    newTile->spawn_ = spawn_;
+
+    // Copy all properties
+    newTile->houseId_ = houseId_;
+    newTile->houseDoorId_ = houseDoorId_; // Task 66: Copy house door ID
+    newTile->mapFlags_ = mapFlags_;
+    newTile->stateFlags_ = stateFlags_;
+    newTile->zoneIds_ = zoneIds_;
+    newTile->minimapColor_ = minimapColor_;
+
+    return newTile;
+}
+
+void Tile::merge(Tile* other) {
+    if (!other) {
+        return;
+    }
+
+    // Merge ground (other's ground takes precedence if it exists)
+    if (other->ground_) {
+        delete ground_;
+        ground_ = other->ground_;
+        other->ground_ = nullptr;
+        if (ground_) {
+            ground_->setParent(this);
+        }
+    }
+
+    // Merge items
+    for (Item* item : other->items_) {
+        if (item) {
+            item->setParent(this);
+            items_.append(item);
+        }
+    }
+    other->items_.clear();
+
+    // Merge creature (other's creature takes precedence)
+    if (other->creature_) {
+        delete creature_;
+        creature_ = other->creature_;
+        other->creature_ = nullptr;
+        if (creature_) {
+            creature_->setParent(this);
+        }
+    }
+
+    // Merge spawn (other's spawn takes precedence)
+    if (other->spawn_) {
+        spawn_ = other->spawn_;
+        other->spawn_ = nullptr;
+    }
+
+    // Merge flags (OR operation)
+    mapFlags_ |= other->mapFlags_;
+    stateFlags_ |= other->stateFlags_;
+
+    // Merge house ID (other takes precedence if non-zero)
+    if (other->houseId_ != 0) {
+        houseId_ = other->houseId_;
+    }
+
+    // Task 66: Merge house door ID (other takes precedence if non-zero)
+    if (other->houseDoorId_ != 0) {
+        houseDoorId_ = other->houseDoorId_;
+    }
+
+    // Merge zone IDs
+    for (quint16 zoneId : other->zoneIds_) {
+        if (!zoneIds_.contains(zoneId)) {
+            zoneIds_.append(zoneId);
+        }
+    }
+    std::sort(zoneIds_.begin(), zoneIds_.end());
+
+    setModified(true);
+    emit tileChanged(x_, y_, z_);
+    emit visualChanged(x_, y_, z_);
+}
+
+int Tile::size() const {
+    return (ground_ ? 1 : 0) + items_.size();
+}
+
+// --- Property System ---
+
+bool Tile::hasProperty(int property) const {
+    // Check ground item properties
+    if (ground_ && ground_->hasProperty(property)) {
+        return true;
+    }
+
+    // Check all item properties
+    for (const Item* item : items_) {
+        if (item && item->hasProperty(property)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// --- Minimap Support ---
+
+quint8 Tile::getMiniMapColor() const {
+    if (minimapColor_ != 0xFF) {
+        return minimapColor_; // Return cached color if set
+    }
+
+    // Calculate minimap color based on ground item
+    if (ground_) {
+        return ground_->getMiniMapColor();
+    }
+
+    return 0xFF; // Invalid/default color
+}
+
+void Tile::setMiniMapColor(quint8 color) {
+    if (minimapColor_ != color) {
+        minimapColor_ = color;
+        setModified(true);
+        // Minimap color change doesn't require visual update
+        emit tileChanged(x_, y_, z_);
     }
 }
+
+void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const DrawingOptions& options) const {
+    // Delegate to TileRenderer for all drawing operations
+    TileRenderer::draw(this, painter, targetScreenRect, options);
+}
+
+

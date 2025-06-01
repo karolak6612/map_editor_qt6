@@ -1,98 +1,286 @@
 #include "SpriteButton.h"
+#include "Sprite.h"
 #include <QStylePainter>
 #include <QStyleOptionButton>
 #include <QPaintEvent>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QDebug>
 
 SpriteButton::SpriteButton(QWidget *parent)
-    : QPushButton(parent) {
+    : QPushButton(parent),
+      buttonType_(SPRITE_BTN_NORMAL),
+      renderSize_(SPRITE_SIZE_16x16),
+      toggleState_(false),
+      sprite_(nullptr),
+      overlay_(nullptr),
+      spriteId_(0) {
     init();
 }
 
+SpriteButton::SpriteButton(QWidget* parent, SpriteButtonType type, SpriteRenderSize size, int spriteId)
+    : QPushButton(parent),
+      buttonType_(type),
+      renderSize_(size),
+      toggleState_(false),
+      sprite_(nullptr),
+      overlay_(nullptr),
+      spriteId_(spriteId) {
+    init();
+    if (spriteId != 0) {
+        setSprite(spriteId);
+    }
+}
+
 SpriteButton::SpriteButton(const QPixmap& pixmap, QWidget *parent)
-    : QPushButton(parent), m_currentPixmap(pixmap) {
+    : QPushButton(parent),
+      buttonType_(SPRITE_BTN_NORMAL),
+      renderSize_(SPRITE_SIZE_16x16),
+      toggleState_(false),
+      sprite_(nullptr),
+      overlay_(nullptr),
+      currentPixmap_(pixmap),
+      spriteId_(0) {
     init();
 }
 
 SpriteButton::SpriteButton(const QIcon& icon, const QString& text, QWidget *parent)
-    : QPushButton(icon, text, parent) { // Call base constructor for icon and text
+    : QPushButton(icon, text, parent),
+      buttonType_(SPRITE_BTN_NORMAL),
+      renderSize_(SPRITE_SIZE_16x16),
+      toggleState_(false),
+      sprite_(nullptr),
+      overlay_(nullptr),
+      spriteId_(0) {
     init();
-    // If an icon is set via this constructor, QPushButton usually handles its drawing.
-    // If m_currentPixmap should also be used, or if this constructor implies
-    // that the icon itself provides the primary visual, this needs clarification.
-    // For now, if an icon is set via this constructor, the base QPushButton drawing is mostly sufficient
-    // and m_currentPixmap is not set from it unless explicitly desired.
 }
 
 SpriteButton::~SpriteButton() {
+    // Note: We don't delete sprite_ or overlay_ as they are managed elsewhere
 }
 
 void SpriteButton::init() {
-    // Set any common properties for SpriteButton instances here
-    // For example, if they should have a specific focus policy:
-    // setFocusPolicy(Qt::StrongFocus); // Or Qt::TabFocus, etc.
-    // By default, QPushButton is already focusable.
+    setupSize();
+    connectSignals();
+
+    // Set focus policy to match original DCButton behavior
+    setFocusPolicy(Qt::StrongFocus);
+
+    // Disable auto-repeat for consistent behavior
+    setAutoRepeat(false);
 }
 
+// Sprite management methods
+void SpriteButton::setSprite(int spriteId) {
+    spriteId_ = spriteId;
+    // TODO: Load sprite from SpriteManager when available
+    // For now, clear the current sprite
+    sprite_ = nullptr;
+    update();
+}
+
+void SpriteButton::setSprite(Sprite* sprite) {
+    sprite_ = sprite;
+    spriteId_ = 0; // Clear sprite ID when setting sprite directly
+    update();
+}
+
+void SpriteButton::setOverlay(Sprite* overlay) {
+    overlay_ = overlay;
+    update();
+}
+
+// Pixmap management methods
 void SpriteButton::setPixmap(const QPixmap& pixmap) {
-    m_currentPixmap = pixmap;
-    update(); // Request a repaint
-    updateGeometry(); // Inform layout system that size hint might have changed
+    currentPixmap_ = pixmap;
+    sprite_ = nullptr; // Clear sprite when setting pixmap
+    spriteId_ = 0;
+    update();
+    updateGeometry();
 }
 
 QPixmap SpriteButton::pixmap() const {
-    return m_currentPixmap;
+    return currentPixmap_;
 }
 
+// Toggle functionality
+void SpriteButton::setValue(bool value) {
+    if (buttonType_ != SPRITE_BTN_TOGGLE) {
+        qWarning() << "SpriteButton::setValue called on non-toggle button";
+        return;
+    }
+
+    bool oldValue = toggleState_;
+    toggleState_ = value;
+
+    if (toggleState_ != oldValue) {
+        // TODO: Set selection overlay when settings are available
+        // For now, just update the visual state
+        update();
+
+        // Emit toggled signal to match QPushButton behavior
+        setChecked(value);
+    }
+}
+
+bool SpriteButton::getValue() const {
+    if (buttonType_ != SPRITE_BTN_TOGGLE) {
+        qWarning() << "SpriteButton::getValue called on non-toggle button";
+        return false;
+    }
+    return toggleState_;
+}
+
+// Size management
 QSize SpriteButton::sizeHint() const {
-    if (!m_currentPixmap.isNull()) {
-        // Add some padding around the pixmap
-        return m_currentPixmap.size() + QSize(10, 6); // e.g., 5px padding horizontal, 3px vertical on each side
-    }
-    return QPushButton::sizeHint(); // Fallback to base class size hint
+    return getSizeForRenderSize(renderSize_);
 }
 
+QSize SpriteButton::minimumSizeHint() const {
+    return sizeHint(); // For sprite buttons, minimum size equals preferred size
+}
+
+// Helper methods
+void SpriteButton::setupSize() {
+    QSize size = getSizeForRenderSize(renderSize_);
+    setFixedSize(size);
+}
+
+void SpriteButton::connectSignals() {
+    if (buttonType_ == SPRITE_BTN_TOGGLE) {
+        // For toggle buttons, connect to our toggle handler
+        connect(this, &QPushButton::clicked, this, &SpriteButton::handleToggle);
+    }
+    // For normal buttons, the standard clicked signal is sufficient
+}
+
+QSize SpriteButton::getSizeForRenderSize(SpriteRenderSize size) const {
+    // Sizes matching original DCButton with 2px padding on each side
+    switch (size) {
+        case SPRITE_SIZE_16x16:
+            return QSize(20, 20);
+        case SPRITE_SIZE_32x32:
+            return QSize(36, 36);
+        case SPRITE_SIZE_64x64:
+            return QSize(68, 68);
+        default:
+            return QSize(20, 20);
+    }
+}
+
+// Event handlers
+void SpriteButton::handleToggle() {
+    if (buttonType_ == SPRITE_BTN_TOGGLE) {
+        setValue(!getValue());
+    }
+}
+
+void SpriteButton::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton) {
+        // Set focus when clicked (matching original DCButton behavior)
+        setFocus();
+    }
+
+    // Call base implementation to handle the click
+    QPushButton::mousePressEvent(event);
+}
+
+// Custom paint event matching original DCButton appearance
 void SpriteButton::paintEvent(QPaintEvent *event) {
-    Q_UNUSED(event); // event might not be used if we repaint the whole button
+    Q_UNUSED(event);
 
-    QStylePainter painter(this);
-    QStyleOptionButton option;
-    initStyleOption(&option); // Initialize option with current button's state (text, icon, features, state, etc.)
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, false); // Pixel-perfect drawing like original
 
-    // If we have a custom pixmap, we might not want the text or icon from the style option
-    // to be drawn by the primitive, or we draw them ourselves.
-    // For a pure sprite button, clear text and icon from option so base drawing doesn't draw them.
-    // However, if text is also desired alongside the pixmap, this needs adjustment.
-    // For now, assume m_currentPixmap is the primary content if present.
-    // If m_currentPixmap is present, we could clear option.text and option.icon.
-    // This task focuses on drawing the sprite; text alongside sprite is a further enhancement.
+    QRect rect = this->rect();
 
-    // Draw the basic button frame/background using the current style
-    painter.drawControl(QStyle::CE_PushButtonBevel, option);
+    // Draw the 3D button frame (matching original DCButton style)
+    bool pressed = (buttonType_ == SPRITE_BTN_TOGGLE && toggleState_) || isDown();
+    drawButtonFrame(painter, rect, pressed);
 
-    if (!m_currentPixmap.isNull()) {
-        QRect pixmapRect = m_currentPixmap.rect();
-        QRect contentRect = style()->subElementRect(QStyle::SE_PushButtonContents, &option, this);
+    // Draw the sprite or pixmap content
+    drawSprite(painter, rect);
 
-        // Adjust for button being down (pressed)
-        if (isDown()) { // or option.state & QStyle::State_Sunken
-            contentRect.translate(style()->pixelMetric(QStyle::PM_ButtonShiftHorizontal, &option, this),
-                                  style()->pixelMetric(QStyle::PM_ButtonShiftVertical, &option, this));
-        }
+    // Draw overlay if present (for toggle buttons)
+    if (overlay_ && buttonType_ == SPRITE_BTN_TOGGLE && toggleState_) {
+        drawOverlay(painter, rect);
+    }
+}
 
+// Drawing helper methods
+void SpriteButton::drawButtonFrame(QPainter& painter, const QRect& rect, bool pressed) {
+    // Colors matching original DCButton
+    QColor highlight(255, 255, 255);      // White highlight
+    QColor darkHighlight(212, 208, 200);  // Light gray
+    QColor lightShadow(128, 128, 128);    // Medium gray
+    QColor shadow(64, 64, 64);            // Dark gray
+
+    // Fill background with black (matching original)
+    painter.fillRect(rect, Qt::black);
+
+    if (pressed) {
+        // Pressed/toggle state - inset appearance
+        painter.setPen(shadow);
+        painter.drawLine(rect.left(), rect.top(), rect.right() - 1, rect.top());
+        painter.drawLine(rect.left(), rect.top() + 1, rect.left(), rect.bottom() - 1);
+
+        painter.setPen(lightShadow);
+        painter.drawLine(rect.left() + 1, rect.top() + 1, rect.right() - 2, rect.top() + 1);
+        painter.drawLine(rect.left() + 1, rect.top() + 2, rect.left() + 1, rect.bottom() - 2);
+
+        painter.setPen(darkHighlight);
+        painter.drawLine(rect.right() - 2, rect.top() + 1, rect.right() - 2, rect.bottom() - 2);
+        painter.drawLine(rect.left() + 1, rect.bottom() - 2, rect.right() - 1, rect.bottom() - 2);
+
+        painter.setPen(highlight);
+        painter.drawLine(rect.right() - 1, rect.top(), rect.right() - 1, rect.bottom() - 1);
+        painter.drawLine(rect.left(), rect.bottom() - 1, rect.right(), rect.bottom() - 1);
+    } else {
+        // Normal state - raised appearance
+        painter.setPen(highlight);
+        painter.drawLine(rect.left(), rect.top(), rect.right() - 1, rect.top());
+        painter.drawLine(rect.left(), rect.top() + 1, rect.left(), rect.bottom() - 1);
+
+        painter.setPen(darkHighlight);
+        painter.drawLine(rect.left() + 1, rect.top() + 1, rect.right() - 2, rect.top() + 1);
+        painter.drawLine(rect.left() + 1, rect.top() + 2, rect.left() + 1, rect.bottom() - 2);
+
+        painter.setPen(lightShadow);
+        painter.drawLine(rect.right() - 2, rect.top() + 1, rect.right() - 2, rect.bottom() - 2);
+        painter.drawLine(rect.left() + 1, rect.bottom() - 2, rect.right() - 1, rect.bottom() - 2);
+
+        painter.setPen(shadow);
+        painter.drawLine(rect.right() - 1, rect.top(), rect.right() - 1, rect.bottom() - 1);
+        painter.drawLine(rect.left(), rect.bottom() - 1, rect.right(), rect.bottom() - 1);
+    }
+}
+
+void SpriteButton::drawSprite(QPainter& painter, const QRect& rect) {
+    // Content area with 2px padding (matching original DCButton)
+    QRect contentRect = rect.adjusted(2, 2, -2, -2);
+
+    if (sprite_) {
+        // TODO: Implement sprite drawing when Sprite interface is available
+        // For now, draw a placeholder
+        painter.fillRect(contentRect, QColor(100, 100, 100, 128));
+        painter.setPen(Qt::white);
+        painter.drawText(contentRect, Qt::AlignCenter, QString("S%1").arg(spriteId_));
+    } else if (!currentPixmap_.isNull()) {
+        // Draw pixmap centered in content area
+        QRect pixmapRect = currentPixmap_.rect();
         pixmapRect.moveCenter(contentRect.center());
-
-        painter.drawPixmap(pixmapRect.topLeft(), m_currentPixmap);
-    } else if (!option.icon.isNull() || !option.text.isEmpty()) {
-        // If no custom pixmap, but an icon or text was set (e.g. via constructor or setIcon/setText),
-        // let the style draw it. CE_PushButtonLabel handles both icon and text.
-        painter.drawControl(QStyle::CE_PushButtonLabel, option);
+        painter.drawPixmap(pixmapRect.topLeft(), currentPixmap_);
     }
+}
 
-    // Draw focus rectangle if button has focus
-    if (option.state & QStyle::State_HasFocus) {
-        QStyleOptionFocusRect focusRectOption;
-        focusRectOption.QStyleOption::operator=(option);
-        focusRectOption.rect = style()->subElementRect(QStyle::SE_PushButtonFocusRect, &option, this);
-        painter.drawPrimitive(QStyle::PE_FrameFocusRect, &focusRectOption);
-    }
+void SpriteButton::drawOverlay(QPainter& painter, const QRect& rect) {
+    if (!overlay_) return;
+
+    // Content area with 2px padding (matching original DCButton)
+    QRect contentRect = rect.adjusted(2, 2, -2, -2);
+
+    // TODO: Implement overlay sprite drawing when Sprite interface is available
+    // For now, draw a selection indicator
+    painter.setPen(QPen(Qt::yellow, 2));
+    painter.drawRect(contentRect);
 }

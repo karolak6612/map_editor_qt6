@@ -248,16 +248,23 @@ void TableBrush::initLookupTable() {
 
 
 bool TableBrush::load(const QDomElement& element, QString& warnings) {
+    // Direct migration from wxwidgets TableBrush::load
     m_name = element.attribute("name");
 
+    // Load server_lookid first (migrated from wxwidgets)
     QString serverLookIdStr = element.attribute("server_lookid");
     if (!serverLookIdStr.isEmpty()) {
-        // Placeholder for ItemManager interaction
-        // ItemType& it = ItemManager::getInstance().getItemType(serverLookIdStr.toUShort());
-        // if (it.isValid()) m_look_id = it.clientId;
-        // else m_look_id = serverLookIdStr.toUShort();
-        m_look_id = serverLookIdStr.toUShort(); // Simplified
-    } else {
+        bool ok;
+        quint16 serverId = serverLookIdStr.toUShort(&ok);
+        if (ok) {
+            // In wxwidgets: look_id = g_items[attribute.as_ushort()].clientID;
+            // For now, use server ID directly until ItemManager is fully integrated
+            m_look_id = serverId;
+        }
+    }
+
+    // Fallback to lookid if server_lookid not found (migrated from wxwidgets)
+    if (m_look_id == 0) {
         m_look_id = element.attribute("lookid").toUShort();
     }
 
@@ -343,47 +350,65 @@ quint16 TableBrush::getRandomItemIdForAlignment(QtTableAlignment alignment) cons
 }
 
 void TableBrush::draw(Map* map, Tile* tile, void* parameter) {
+    // Direct migration from wxwidgets TableBrush::draw
+    Q_UNUSED(parameter);
+
     if (!map || !tile) return;
 
-    undraw(map, tile);
+    undraw(map, tile); // Remove old tables from this brush
 
-    quint16 itemIdToPlace = getRandomItemIdForAlignment(TABLE_ALONE);
+    // Get table items for TABLE_ALONE (index 0) - migrated from wxwidgets
+    const QtTableNode& tn = m_table_items[TABLE_ALONE];
+    if (tn.total_chance <= 0) {
+        return;
+    }
 
-    if (itemIdToPlace != 0) {
-        Item* newItem = ItemManager::getInstance().createItem(itemIdToPlace);
-        if (newItem) {
-            // TODO: Handle action ID
+    // Random selection based on chance - migrated from wxwidgets
+    int chance = Randomizer::getRandom(1, tn.total_chance);
+    quint16 type = 0;
+
+    for (const QtTableVariation& table_iter : tn.items) {
+        if (chance <= table_iter.chance) {
+            type = table_iter.item_id;
+            break;
+        }
+        chance -= table_iter.chance;
+    }
+
+    if (type != 0) {
+        Item* new_item = ItemManager::getInstance().createItem(type);
+        if (new_item) {
+            // Handle action ID if GUI system is available (migrated from wxwidgets)
             // if (g_gui.IsCurrentActionIDEnabled()) {
-            //     newItem->setActionID(g_gui.GetCurrentActionID());
+            //     new_item->setActionID(g_gui.GetCurrentActionID());
             // }
-            tile->addItem(newItem);
+            tile->addItem(new_item);
             map->markModified();
         }
     }
 }
 
 void TableBrush::undraw(Map* map, Tile* tile) {
+    // Direct migration from wxwidgets TableBrush::undraw
     if (!map || !tile) return;
 
-    QMutableListIterator<Item*> it(tile->getItemsForWrite()); // Assuming Tile provides this for modification
-    bool changed = false;
-    while (it.hasNext()) {
-        Item* item = it.next();
+    // Migrate wxwidgets iterator logic
+    auto items = tile->getItems(); // Get copy for safe iteration
+    for (auto it = items.begin(); it != items.end(); ) {
+        Item* item = *it;
         if (item && item->isTable()) {
-            Brush* itemBrush = item->getBrush();
-            if (itemBrush == this) { // Check if it's the same brush instance
-                it.remove();
+            TableBrush* tb = item->getTableBrush();
+            if (tb == this) {
+                tile->removeItem(item);
                 delete item;
-                changed = true;
+                it = items.erase(it);
+                map->markModified();
+            } else {
+                ++it;
             }
+        } else {
+            ++it;
         }
-    }
-    if (changed) {
-        map->markModified();
-        // tile->update(); // Assuming update might be needed, e.g. to clear TILESTATE_HAS_TABLE
-                        // This depends on how Tile::hasTable() is determined.
-                        // If hasTable() checks items, removing items is enough.
-                        // If it's a flag, it needs to be cleared if no tables remain.
     }
 }
 

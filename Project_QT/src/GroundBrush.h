@@ -11,6 +11,7 @@ class GroundBrush : public TerrainBrush { // Changed base class
 
 public:
     explicit GroundBrush(QObject *parent = nullptr);
+    explicit GroundBrush(quint16 groundItemId, QObject *parent = nullptr); // Task 38 requirement
     ~GroundBrush() override;
 
     // --- Overrides from Brush/TerrainBrush ---
@@ -51,13 +52,30 @@ public:
     void setCurrentGroundItemId(quint16 itemId);
     quint16 getCurrentGroundItemId() const;
 
-    // Optional border support
+    // Optional border support (Task 38 requirement)
     virtual bool hasOptionalBorder() const;
+    virtual bool useSoloOptionalBorder() const;
+    virtual bool isReRandomizable() const;
+
+    // Border system hooks (Task 38 requirement - placeholders for Task 52)
+    void requestBorderUpdate(Map* map, const QPointF& tilePos) const;
+    bool checkGroundEquivalent(Map* map, const QPointF& tilePos, quint16 groundItemId) const;
+
+    // Ground placement validation (Task 38 requirement)
+    bool canPlaceGroundAt(Map* map, const QPointF& tilePos, quint16 groundItemId) const;
+
+    // XML loading support (structure for Task 81)
+    virtual bool load(const QDomElement& element, QStringList& warnings) override;
 
 private:
+    // Core ground brush properties (Task 38 requirement)
     quint16 currentGroundItemId_ = 0;
-    // Add a known default if possible, e.g. common grass ID, otherwise 0 indicates "not set".
-    // bool m_supportsOptionalBorder = false; // Member for hasOptionalBorder - can be added later
+    bool hasOptionalBorder_ = false;
+    bool useSoloOptionalBorder_ = false;
+    bool isReRandomizable_ = false;
+
+    // Ground equivalent groups for placement validation
+    QVector<quint16> groundEquivalentGroup_;
 };
 
 #endif // GROUNDBRUSH_H

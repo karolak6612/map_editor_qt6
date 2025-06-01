@@ -75,6 +75,9 @@ protected:
     // Helper to get an item ID for a given alignment, considering chances and fallbacks
     quint16 getRandomCarpetIdByAlignment(quint8 alignment_idx) const;
 
+    // Direct migration from wxwidgets CarpetBrush::getRandomCarpet
+    quint16 getRandomCarpet(BorderType alignment);
+
 private:
     QString m_name;
     quint16 m_look_id;

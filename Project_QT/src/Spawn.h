@@ -33,6 +33,21 @@ public:
     bool isSelected() const;
     void setSelected(bool selected);
 
+    quint32 memsize() const; // Memory footprint calculation
+
+    // Additional methods (wxWidgets compatibility)
+    Spawn* deepCopy() const;
+    bool canDraw() const;
+
+    // Spawn area management
+    bool isInSpawnArea(const MapPos& pos) const;
+    QList<MapPos> getSpawnArea() const;
+    int getSpawnAreaSize() const;
+
+    // Validation
+    bool isValid() const;
+    QString getValidationError() const;
+
 signals:
     void spawnChanged();
 

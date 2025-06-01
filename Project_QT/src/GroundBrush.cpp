@@ -7,9 +7,25 @@
 
 // Constructor
 GroundBrush::GroundBrush(QObject *parent)
-    : TerrainBrush(parent) { // Call base class constructor
+    : TerrainBrush(parent),
+      currentGroundItemId_(0),
+      hasOptionalBorder_(false),
+      useSoloOptionalBorder_(false),
+      isReRandomizable_(false) {
     setSpecificName(tr("Ground Brush")); // Set the specific name for this brush type
     // setLookID(SOME_DEFAULT_GROUND_ITEM_ID); // Optionally set a default lookId_
+}
+
+// Constructor with ground item ID (Task 38 requirement)
+GroundBrush::GroundBrush(quint16 groundItemId, QObject *parent)
+    : TerrainBrush(parent),
+      currentGroundItemId_(groundItemId),
+      hasOptionalBorder_(false),
+      useSoloOptionalBorder_(false),
+      isReRandomizable_(false) {
+    setSpecificName(QString("Ground %1").arg(groundItemId));
+    setLookID(groundItemId);
+    qDebug() << "GroundBrush: Created with ground item ID" << groundItemId << "name:" << specificName();
 }
 
 // Destructor
@@ -22,15 +38,26 @@ Brush::Type GroundBrush::type() const {
     return Brush::Type::Ground;
 }
 
-// Core action method stubs
+// Core action method stubs (enhanced for Task 38)
 bool GroundBrush::canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext) const {
-    Q_UNUSED(tilePos);      // Not used in this very basic check
-    Q_UNUSED(drawingContext); // Not used in this very basic check
+    Q_UNUSED(drawingContext);
 
     if (!map) {
         qWarning() << "GroundBrush::canDraw: Map pointer is null.";
         return false;
     }
+
+    quint16 groundItemId = getCurrentGroundItemId();
+    if (groundItemId == 0) {
+        qWarning() << "GroundBrush::canDraw: No ground item ID set.";
+        return false;
+    }
+
+    // Check ground equivalent restrictions (Task 38 requirement)
+    if (!canPlaceGroundAt(map, tilePos, groundItemId)) {
+        return false;
+    }
+
     return true;
 }
 
@@ -51,7 +78,17 @@ QUndoCommand* GroundBrush::applyBrush(Map* map, const QPointF& tilePos, QObject*
         return nullptr;
     }
 
+    // Check if we can place the ground at this position (Task 38 requirement)
+    if (!canPlaceGroundAt(map, tilePos, groundItemIdToPlace)) {
+        qDebug() << "GroundBrush::applyBrush: Cannot place ground ID" << groundItemIdToPlace << "at" << tilePos << "due to ground equivalent restrictions.";
+        return nullptr;
+    }
+
     qDebug() << "GroundBrush::applyBrush: Attempting to place ground ID" << groundItemIdToPlace << "at" << tilePos;
+
+    // Request border update for this position and neighbors (Task 38 requirement - placeholder for Task 52)
+    requestBorderUpdate(map, tilePos);
+
     return new SetGroundItemCommand(map, tilePos, groundItemIdToPlace, parentCommand);
 }
 
@@ -62,7 +99,12 @@ QUndoCommand* GroundBrush::removeBrush(Map* map, const QPointF& tilePos, QObject
         qWarning() << "GroundBrush::removeBrush: Map pointer is null.";
         return nullptr;
     }
+
     qDebug() << "GroundBrush::removeBrush: Attempting to remove ground at" << tilePos;
+
+    // Request border update for this position and neighbors (Task 38 requirement - placeholder for Task 52)
+    requestBorderUpdate(map, tilePos);
+
     return new SetGroundItemCommand(map, tilePos, 0, parentCommand); // 0 signifies ground removal
 }
 
@@ -85,17 +127,17 @@ quint16 GroundBrush::getCurrentGroundItemId() const {
     return currentGroundItemId_;
 }
 
-// Optional border support
+// Optional border support (Task 38 requirement)
 bool GroundBrush::hasOptionalBorder() const {
-    // Placeholder implementation.
-    // Actual logic would depend on how a ground brush type is defined
-    // to support optional borders (e.g., loaded from XML attribute,
-    // or based on its name/ID).
-    // For now, let's assume no ground brush supports it by default,
-    // unless a specific brush type overrides this or sets a member flag.
-    // Example: return m_supportsOptionalBorder;
-    // Example: if (name().contains("mountain", Qt::CaseInsensitive)) return true;
-    return false;
+    return hasOptionalBorder_;
+}
+
+bool GroundBrush::useSoloOptionalBorder() const {
+    return useSoloOptionalBorder_;
+}
+
+bool GroundBrush::isReRandomizable() const {
+    return isReRandomizable_;
 }
 
 // Cancel operation
@@ -153,5 +195,93 @@ QUndoCommand* GroundBrush::mouseReleaseEvent(const QPointF& mapPos, QMouseEvent*
 
 // Convenience method
 bool GroundBrush::isGround() const {
+    return true;
+}
+
+// Border system hooks (Task 38 requirement - placeholders for Task 52)
+void GroundBrush::requestBorderUpdate(Map* map, const QPointF& tilePos) const {
+    if (!map) {
+        return;
+    }
+
+    // Placeholder for border system integration (Task 52)
+    // This will request border recalculation for the affected tile and its neighbors
+    map->requestBorderUpdate(tilePos);
+
+    qDebug() << "GroundBrush::requestBorderUpdate: Requested border update for tile at" << tilePos;
+}
+
+bool GroundBrush::checkGroundEquivalent(Map* map, const QPointF& tilePos, quint16 groundItemId) const {
+    Q_UNUSED(map);
+    Q_UNUSED(tilePos);
+
+    // Check if the ground item is in our equivalent group
+    if (groundEquivalentGroup_.isEmpty()) {
+        return true; // No restrictions if no equivalent group is defined
+    }
+
+    return groundEquivalentGroup_.contains(groundItemId);
+}
+
+// Ground placement validation (Task 38 requirement)
+bool GroundBrush::canPlaceGroundAt(Map* map, const QPointF& tilePos, quint16 groundItemId) const {
+    if (!map) {
+        return false;
+    }
+
+    // Check ground equivalent restrictions
+    if (!checkGroundEquivalent(map, tilePos, groundItemId)) {
+        qDebug() << "GroundBrush::canPlaceGroundAt: Ground ID" << groundItemId << "not in equivalent group for position" << tilePos;
+        return false;
+    }
+
+    // Additional placement validation can be added here
+    // For example, checking neighboring tiles for compatibility
+
+    return true;
+}
+
+// XML loading support (structure for Task 81)
+bool GroundBrush::load(const QDomElement& element, QStringList& warnings) {
+    // Call base class load first
+    if (!TerrainBrush::load(element, warnings)) {
+        return false;
+    }
+
+    // Load ground-specific properties
+    bool ok;
+
+    // Load ground item ID
+    quint16 groundId = element.attribute("groundId", "0").toUShort(&ok);
+    if (ok && groundId > 0) {
+        setCurrentGroundItemId(groundId);
+        setLookID(groundId);
+        setSpecificName(QString("Ground %1").arg(groundId));
+    }
+
+    // Load border properties
+    hasOptionalBorder_ = element.attribute("hasOptionalBorder", "false") == "true";
+    useSoloOptionalBorder_ = element.attribute("useSoloOptionalBorder", "false") == "true";
+    isReRandomizable_ = element.attribute("isReRandomizable", "false") == "true";
+
+    // Load ground equivalent group
+    QString equivalentGroup = element.attribute("groundEquivalentGroup");
+    if (!equivalentGroup.isEmpty()) {
+        QStringList idStrings = equivalentGroup.split(",", Qt::SkipEmptyParts);
+        groundEquivalentGroup_.clear();
+        for (const QString& idStr : idStrings) {
+            quint16 id = idStr.trimmed().toUShort(&ok);
+            if (ok && id > 0) {
+                groundEquivalentGroup_.append(id);
+            } else {
+                warnings.append(QString("Invalid ground equivalent ID: %1").arg(idStr));
+            }
+        }
+    }
+
+    qDebug() << "GroundBrush::load: Loaded ground brush with ID" << getCurrentGroundItemId()
+             << "hasOptionalBorder:" << hasOptionalBorder_
+             << "equivalent group size:" << groundEquivalentGroup_.size();
+
     return true;
 }

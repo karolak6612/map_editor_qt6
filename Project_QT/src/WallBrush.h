@@ -60,19 +60,62 @@ public:
     void setCurrentWallItemId(quint16 itemId);
     quint16 getCurrentWallItemId() const;
 
-    // Methods for more detailed configuration (implementation deferred)
-    // void addWallItemConfig(WallAlignment alignment, quint16 itemId, int chance = 100);
-    // void addDoorConfig(WallAlignment alignment, DoorTypeQt doorType, quint16 itemId, bool isLocked = false);
-    // const QVector<WallItemConfig>* getWallItemsFor(WallAlignment alignment) const;
-    // const QVector<WallDoorConfig>* getDoorItemsFor(WallAlignment alignment) const;
+    // Wall alignment and connection system (Task 39 requirement)
+    enum class WallAlignment {
+        Undefined = 0,
+        Horizontal = 1,
+        Vertical = 2,
+        Corner = 3,
+        TJunction = 4,
+        Cross = 5
+    };
+
+    // Door handling (Task 39 requirement)
+    enum class DoorType {
+        None = 0,
+        Normal = 1,
+        Locked = 2,
+        Quest = 3,
+        Magic = 4,
+        Level = 5,
+        Key = 6
+    };
+
+    // Auto-connection stubs (Task 39 requirement - placeholders for full implementation)
+    void requestWallUpdate(Map* map, const QPointF& tilePos) const;
+    WallAlignment calculateWallAlignment(Map* map, const QPointF& tilePos) const;
+    quint16 getWallItemForAlignment(WallAlignment alignment) const;
+
+    // Door information handling (Task 39 requirement)
+    bool hasWall(quint16 itemId) const;
+    DoorType getDoorTypeFromID(quint16 itemId) const;
+    bool isDoorItem(quint16 itemId) const;
+    void setDoorType(DoorType doorType);
+    DoorType getDoorType() const;
+
+    // Wall selection/deselection stubs (Task 39 requirement)
+    void selectWall(Map* map, const QPointF& tilePos);
+    void deselectWall(Map* map, const QPointF& tilePos);
+
+    // XML loading support (structure for Task 81)
+    virtual bool load(const QDomElement& element, QStringList& warnings) override;
 
 private:
+    // Initialization helper (Task 39 requirement)
+    void initializeDefaultWallMappings();
+    // Core wall brush properties (Task 39 requirement)
     quint16 currentWallItemId_ = 0; // Primary item ID to place for this wall type
+    DoorType currentDoorType_ = DoorType::None; // Current door type for this wall
+    WallAlignment currentAlignment_ = WallAlignment::Undefined; // Current wall alignment
 
-    // Complex configuration deferred to later tasks / XML loading
-    // QMap<WallAlignment, QVector<WallItemConfig>> wallItemConfigs_;
-    // QMap<WallAlignment, QVector<WallDoorConfig>> doorItemConfigs_;
-    // WallBrush* redirectTo_ = nullptr;
+    // Wall item mapping for different alignments (Task 39 requirement)
+    QMap<WallAlignment, quint16> wallItemsByAlignment_;
+
+    // Door item ranges for identification (Task 39 requirement)
+    QVector<QPair<quint16, quint16>> doorItemRanges_; // Start and end IDs for door items
+
+    // Wall item ranges for identification (Task 39 requirement)
+    QVector<QPair<quint16, quint16>> wallItemRanges_; // Start and end IDs for wall items
 };
 
 #endif // WALLBRUSH_H

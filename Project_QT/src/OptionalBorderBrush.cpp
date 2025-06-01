@@ -124,6 +124,64 @@ bool OptionalBorderBrush::canDraw(Map* map, const QPointF& tilePos, QObject* dra
     return false;
 }
 
+// Direct migration from wxwidgets OptionalBorderBrush::canDraw
+bool OptionalBorderBrush::canDraw(Map* map, const QPoint& position) const {
+    if (!map) return false;
+
+    Tile* tile = map->getTile(position.x(), position.y(), 0);
+
+    // You can't do gravel on a mountain tile (migrated from wxwidgets)
+    if (tile) {
+        if (GroundBrush* bb = tile->getGroundBrush()) {
+            if (bb->hasOptionalBorder()) {
+                return false;
+            }
+        }
+    }
+
+    quint32 x = position.x();
+    quint32 y = position.y();
+    quint32 z = 0; // Default floor level
+
+    // Check all 8 neighbors for ground brushes with optional borders (migrated from wxwidgets)
+    for (int dx = -1; dx <= 1; ++dx) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            if (dx == 0 && dy == 0) continue;
+
+            tile = map->getTile(x + dx, y + dy, z);
+            if (tile) {
+                if (GroundBrush* bb = tile->getGroundBrush()) {
+                    if (bb->hasOptionalBorder()) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+// Direct migration from wxwidgets OptionalBorderBrush::draw
+void OptionalBorderBrush::draw(Map* map, Tile* tile, void* parameter) {
+    Q_UNUSED(parameter);
+
+    if (!map || !tile) return;
+
+    // The bordering algorithm will handle this automagically (migrated from wxwidgets)
+    tile->setOptionalBorder(true);
+}
+
+// Direct migration from wxwidgets OptionalBorderBrush::undraw
+void OptionalBorderBrush::undraw(Map* map, Tile* tile) {
+    Q_UNUSED(map);
+
+    if (!tile) return;
+
+    // The bordering algorithm will handle this automagically (migrated from wxwidgets)
+    tile->setOptionalBorder(false);
+}
+
 QUndoCommand* OptionalBorderBrush::applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
     Q_UNUSED(drawingContext);
     if (!map) return nullptr;

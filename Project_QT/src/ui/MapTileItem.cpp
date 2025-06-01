@@ -1,22 +1,32 @@
 #include "MapTileItem.h"
 #include <QPainter>
 #include <QStyleOptionGraphicsItem>
+#include <QGraphicsSceneMouseEvent>
 #include <QDebug>
 #include <QVariant>
 #include <QPainterPath>
+#include <QDateTime>
 
 // Assuming Tile.h provides full definition for Tile methods like isBlocking, getPosition, draw
-#include "../Tile.h" 
+#include "../Tile.h"
 // Assuming Map.h provides full definition for Map methods like getSelection
-#include "../Map.h"   
+#include "../Map.h"
 // Assuming Selection.h provides full definition for Selection methods like isSelected
-#include "../Selection.h" 
+#include "../Selection.h"
 
 MapTileItem::MapTileItem(Tile* tile, Map* mapContext, QGraphicsItem* parent)
     : QGraphicsObject(parent), tile_(tile), mapContext_(mapContext) {
     setFlag(QGraphicsItem::ItemIsSelectable);
-    // Consider ItemSendsGeometryChanges if its position can change and you need to react to it.
+    setFlag(QGraphicsItem::ItemSendsGeometryChanges);
     setCacheMode(QGraphicsItem::DeviceCoordinateCache);
+
+    // Connect to tile changes for cache invalidation
+    if (tile_) {
+        connect(tile_, &Tile::tileChanged, this, &MapTileItem::invalidateCache);
+        connect(tile_, &Tile::visualChanged, this, &MapTileItem::invalidateCache);
+        lastTileModification_ = QDateTime::currentMSecsSinceEpoch();
+    }
+
     // drawingOptions_ is default-initialized by its own constructor
 }
 
@@ -41,69 +51,42 @@ void MapTileItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* optio
         return;
     }
 
-    // Start with the item's own drawing options, then potentially override with view-specific ones.
-    // For this task, the passed 'option' (QStyleOptionGraphicsItem) is key for selection state.
-    DrawingOptions currentDrawingOptions = drawingOptions_; // Copy member options
+    // Sync selection state between QGraphicsItem and Tile
+    syncSelectionWithTile();
 
-    // Update selection highlight based on QGraphicsItem's selection state
-    if (option->state & QStyle::State_Selected) {
-        // The QGraphicsScene handles drawing the default selection rectangle if ItemIsSelectable is true.
-        // So, we might not need to do this manually unless we want a custom highlight
-        // that Tile::draw itself provides when options.highlightSelectedTile is true.
-        // Let's assume Tile::draw handles its own selection highlight if currentDrawingOptions.highlightSelectedTile is true.
-        // The 'isSelected()' on the Tile itself is now the primary source for Tile::draw.
-        // Here, we just ensure the option is passed correctly.
-        // This logic might be redundant if Tile::isSelected() is the sole source of truth for selection.
-        // However, QGraphicsItem selection is a separate state.
-        // For now, we let Tile::draw handle its own selection based on its internal Tile::isSelected()
-        // and the options.highlightSelectedTile flag.
-        // If we want QGraphicsItem selection to drive Tile's selection appearance:
-        if (tile_) { // Ensure tile exists
-             currentDrawingOptions.highlightSelectedTile = true; // Tell Tile::draw to highlight
-        }
-    } else {
-         if (tile_) {
-             currentDrawingOptions.highlightSelectedTile = false; // Tell Tile::draw NOT to highlight based on this QGraphicsItem state
-         }
+    if (!tile_) {
+        // Enhanced placeholder for a null tile
+        drawNullTilePlaceholder(painter, boundingRect());
+        return;
     }
-    // However, the tile_ itself might be marked as selected via its own setSelected method.
-    // The Tile::draw method should primarily use tile_->isSelected() and options.highlightSelectedTile.
-    // So, we just pass the currentDrawingOptions which might have highlightSelectedTile true by default.
 
-    if (tile_) {
-        // If the tile_ itself knows it's selected (e.g. via tile_->isSelected()),
-        // and currentDrawingOptions.highlightSelectedTile is true (which it is by default),
-        // then Tile::draw should render the highlight.
-        // If QGraphicsItem selection state should override tile's own selection state for drawing,
-        // then we would do: tile_->setSelected(option->state & QStyle::State_Selected); before drawing.
-        // For now, let's assume Tile::draw uses a combination of options.highlightSelectedTile AND tile_->isSelected().
-        // The currentDrawingOptions passed to tile_->draw already has its highlightSelectedTile field.
-        // We need to ensure that if the QGraphicsItem is selected, the tile knows to draw highlighted.
-        // This means the DrawingOptions passed to tile_->draw must reflect this.
-        
-        // Simpler: Let Tile::draw handle its own selection state.
-        // QStyleOptionGraphicsItem's selection state is mainly for the view/scene to draw its own indicators.
-        // We can use it to *inform* our custom drawing if needed.
-        // If Tile::draw's selection highlight is driven by `options.highlightSelectedTile && tile->isSelected()`,
-        // then we need to ensure `tile->isSelected()` is accurate or `options.highlightSelectedTile` from `currentDrawingOptions` is set.
-        // The most straightforward is to let Tile::draw handle it based on its own state and the general option.
-        // If QStyle::State_Selected is set, we can force the highlight for Tile::draw if desired.
-        DrawingOptions finalOptions = drawingOptions_; // Start with the item's base options
-        if (option->state & QStyle::State_Selected) {
-            finalOptions.highlightSelectedTile = true; // Force highlight if QGraphicsItem is selected
-        } else {
-            // If not selected by QGraphicsItem, respect the original setting in drawingOptions_
-            // (which might be true if the tile is part of a persistent selection independent of view focus)
-            finalOptions.highlightSelectedTile = drawingOptions_.highlightSelectedTile && (tile_ ? tile_->isSelected() : false);
+    // Prepare drawing options based on current state
+    DrawingOptions finalOptions = drawingOptions_;
+
+    // Update selection highlighting
+    bool isItemSelected = (option->state & QStyle::State_Selected) || tile_->isSelected();
+    finalOptions.highlightSelectedTile = isItemSelected;
+
+    // Check if we can use cached rendering
+    updateCacheIfNeeded();
+
+    if (isCacheValid() && cachedOptions_.highlightSelectedTile == finalOptions.highlightSelectedTile) {
+        // Use cached pixmap for performance
+        painter->drawPixmap(boundingRect().toRect(), cachedPixmap_);
+
+        // Draw selection highlight on top if needed
+        if (isItemSelected && finalOptions.highlightSelectedTile) {
+            painter->save();
+            QPen pen(Qt::yellow, 2);
+            pen.setStyle(Qt::DotLine);
+            painter->setPen(pen);
+            painter->setBrush(QColor(255, 255, 0, 50));
+            painter->drawRect(boundingRect());
+            painter->restore();
         }
-
-
-        tile_->draw(painter, boundingRect(), finalOptions);
     } else {
-        // Draw a placeholder for a null tile
-        painter->fillRect(boundingRect(), Qt::magenta);
-        painter->setPen(Qt::black);
-        painter->drawText(boundingRect(), Qt::AlignCenter, "No Tile Data");
+        // Direct rendering - cache will be updated by updateCacheIfNeeded
+        tile_->draw(painter, boundingRect(), finalOptions);
     }
 }
 
@@ -153,6 +136,167 @@ void MapTileItem::setDrawingOptions(const DrawingOptions& options) {
     }
     drawingOptions_ = options;
     if (needsUpdate) {
+        invalidateCache();
         update(); // Repaint with new options
+    }
+}
+
+// --- Cache Management ---
+
+void MapTileItem::invalidateCache() {
+    cacheValid_ = false;
+    update(); // Trigger repaint
+}
+
+void MapTileItem::updateCache() {
+    if (!tile_) return;
+
+    cachedPixmap_ = QPixmap(TILE_PIXEL_SIZE, TILE_PIXEL_SIZE);
+    cachedPixmap_.fill(Qt::transparent);
+
+    QPainter cachePainter(&cachedPixmap_);
+    cachePainter.setRenderHint(QPainter::Antialiasing);
+
+    // Draw tile content to cache (without selection highlight)
+    DrawingOptions cacheOptions = drawingOptions_;
+    cacheOptions.highlightSelectedTile = false; // Selection drawn separately
+
+    tile_->draw(&cachePainter, QRectF(0, 0, TILE_PIXEL_SIZE, TILE_PIXEL_SIZE), cacheOptions);
+
+    cachePainter.end();
+
+    cachedOptions_ = cacheOptions;
+    cacheValid_ = true;
+    lastTileModification_ = QDateTime::currentMSecsSinceEpoch();
+}
+
+bool MapTileItem::isCacheValid() const {
+    return cacheValid_ && !cachedPixmap_.isNull();
+}
+
+void MapTileItem::drawNullTilePlaceholder(QPainter* painter, const QRectF& rect) const {
+    if (!painter) return;
+
+    painter->save();
+
+    // Draw a distinctive pattern for null tiles
+    QColor backgroundColor = Qt::magenta;
+    backgroundColor.setAlpha(150);
+    painter->fillRect(rect, backgroundColor);
+
+    // Draw diagonal stripes to indicate missing data
+    QPen stripePen(Qt::black, 1);
+    painter->setPen(stripePen);
+
+    const qreal stripeSpacing = 8.0;
+    for (qreal x = rect.left(); x < rect.right() + rect.height(); x += stripeSpacing) {
+        painter->drawLine(QPointF(x, rect.top()),
+                         QPointF(x - rect.height(), rect.bottom()));
+    }
+
+    // Draw border
+    QPen borderPen(Qt::black, 2);
+    painter->setPen(borderPen);
+    painter->drawRect(rect);
+
+    // Draw text if there's enough space
+    if (rect.width() > 40 && rect.height() > 20) {
+        QFont font = painter->font();
+        font.setPointSize(qMax(6, font.pointSize() - 2));
+        font.setBold(true);
+        painter->setFont(font);
+        painter->setPen(Qt::white);
+
+        QRectF textRect = rect.adjusted(2, 2, -2, -2);
+        painter->drawText(textRect, Qt::AlignCenter | Qt::TextWordWrap, "NULL\nTILE");
+    }
+
+    painter->restore();
+}
+
+// --- Enhanced Collision Interface ---
+
+bool MapTileItem::hasBlockingItems() const {
+    if (!tile_) return false;
+
+    // Check if any items on the tile are blocking
+    for (Item* item : tile_->items()) {
+        if (item && item->isBlocking()) {
+            return true;
+        }
+    }
+
+    // Check ground
+    Item* ground = tile_->getGround();
+    return ground && ground->isBlocking();
+}
+
+bool MapTileItem::hasWalkableGround() const {
+    if (!tile_) return false;
+
+    Item* ground = tile_->getGround();
+    return ground && !ground->isBlocking();
+}
+
+int MapTileItem::getMovementCost() const {
+    if (!tile_) return 100; // High cost for invalid tiles
+
+    if (tile_->isBlocking()) return 100; // Blocked tiles have high cost
+
+    // Base movement cost
+    int cost = 10;
+
+    // Modify based on ground type
+    Item* ground = tile_->getGround();
+    if (ground) {
+        // Different ground types could have different movement costs
+        // This would need to be implemented based on item properties
+        cost = 10; // Default for now
+    }
+
+    return cost;
+}
+
+// --- Mouse Event Handling ---
+
+void MapTileItem::mousePressEvent(QGraphicsSceneMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        // Handle tile selection
+        setSelected(!isSelected());
+
+        if (tile_) {
+            qDebug() << "MapTileItem clicked at" << tile_->mapPos().x << "," << tile_->mapPos().y << "," << tile_->mapPos().z;
+        }
+    }
+
+    QGraphicsObject::mousePressEvent(event);
+}
+
+void MapTileItem::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
+    QGraphicsObject::mouseReleaseEvent(event);
+}
+
+// --- Helper Methods ---
+
+void MapTileItem::syncSelectionWithTile() {
+    if (!tile_) return;
+
+    bool graphicsItemSelected = isSelected();
+    bool tileSelected = tile_->isSelected();
+
+    // Sync selection states if they differ
+    if (graphicsItemSelected != tileSelected) {
+        if (graphicsItemSelected) {
+            tile_->setSelected(true);
+        } else {
+            // Only deselect tile if graphics item is not selected
+            // This allows for external tile selection to persist
+        }
+    }
+}
+
+void MapTileItem::updateCacheIfNeeded() const {
+    if (!isCacheValid()) {
+        const_cast<MapTileItem*>(this)->updateCache();
     }
 }

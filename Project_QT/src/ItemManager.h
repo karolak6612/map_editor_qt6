@@ -7,9 +7,15 @@
 #include <QVariant> // For potential future use in ItemProperties if some attributes are generic
 #include <QtGlobal> // For quint16, qint8, etc.
 
-// Forward declaration
+// Forward declarations
 class Item;
+class TeleportItem;
+class ContainerItem;
+class DoorItem;
+class DepotItem;
+class PodiumItem;
 class Brush; // Added forward declaration
+class SpriteManager; // Task 64: For core properties access
 
 // Define enums based on wxwidgets/items.h (can be moved to a common types file later)
 // These are typically used as flags or simple type identifiers.
@@ -87,6 +93,7 @@ struct ItemProperties {
     bool isLocked = false;        // For doors, usually runtime state
     bool isTable = false;         // For rendering order/behavior
     bool isCarpet = false;        // For rendering order/behavior
+    bool isBorder = false;        // For border items (automagic bordering)
     bool isMetaItem = false;      // Special editor items not for game
     bool floorChangeDown = false;
     bool floorChangeNorth = false;
@@ -114,10 +121,25 @@ struct ItemProperties {
     qint16 armor = 0;
     quint16 volume = 0;           // For containers
     quint16 classification = 0;   // For Tibia 12.81+ items
+    quint8 minimapColor = 0xFF;   // Minimap color (0xFF = invalid/default)
+
+    // Additional fields for complete wxWidgets compatibility
+    quint16 groundEquivalent = 0; // Ground equivalent item ID
+    quint16 borderGroup = 0;      // Border group for automagic borders
+    bool hasEquivalent = false;   // Has ground equivalent
+    bool wallHateMe = false;      // Wall hate flag for borders
+    bool canWriteText = false;    // Can write text (separate from readable)
+
+    // Brush system integration
     Brush* brush = nullptr;       // Added Brush pointer
+    Brush* doodadBrush = nullptr; // Doodad brush pointer
+    Brush* collectionBrush = nullptr; // Collection brush pointer
+    Brush* rawBrush = nullptr;    // Raw brush pointer
+    bool hasRaw = false;          // Has raw brush
+    bool inOtherTileset = false;  // In other tileset
 
     // Default constructor to initialize with sensible defaults
-    ItemProperties() = default; 
+    ItemProperties() = default;
 };
 
 
@@ -130,10 +152,31 @@ public:
     bool loadDefinitions(const QString& otbPath, const QString& xmlPath = QString());
     const ItemProperties& getItemProperties(quint16 serverId) const;
     bool itemTypeExists(quint16 serverId) const;
-    Item* createItem(quint16 serverId, QObject* parent = nullptr); // Returns Item pointer, parent for Qt ownership
+    // Item creation is now handled by ItemFactory class
     void clearDefinitions();
     bool isLoaded() const;
     quint16 getMaxServerId() const;
+
+    // Enhanced lookup methods
+    quint16 getItemIdByClientID(quint16 clientId) const;
+    QList<quint16> getItemsByClientID(quint16 clientId) const; // Multiple items can have same client ID
+
+    // Meta item support
+    bool loadMetaItem(const QString& id, const QString& name = QString());
+    bool isMetaItem(quint16 serverId) const;
+
+    // Version information
+    quint32 getMajorVersion() const { return majorVersion_; }
+    quint32 getMinorVersion() const { return minorVersion_; }
+    quint32 getBuildNumber() const { return buildNumber_; }
+
+    // Task 64: SpriteManager integration for core properties
+    void setSpriteManager(SpriteManager* spriteManager);
+    SpriteManager* getSpriteManager() const { return spriteManager_; }
+
+    // Task 64: Enhanced property loading with core properties from SpriteManager
+    bool loadCorePropertiesFromSprites();
+    void applyCorePropertiesToItem(quint16 serverId, quint16 clientId);
 
 
 signals:
@@ -147,11 +190,23 @@ private:
     ~ItemManager() override;
 
     bool parseOtb(const QString& filePath);
-    bool parseXml(const QString& filePath); 
+    bool parseXml(const QString& filePath);
+    bool parseOtbVersion1(QDataStream& stream, QString& error, QStringList& warnings);
+    bool parseOtbVersion2(QDataStream& stream, QString& error, QStringList& warnings);
+    bool parseOtbVersion3(QDataStream& stream, QString& error, QStringList& warnings);
 
     QMap<quint16, ItemProperties> itemPropertiesMap_;
+    QMap<quint16, QList<quint16>> clientIdToServerIds_; // Client ID to Server IDs mapping
     bool loaded_ = false;
     quint16 maxServerId_ = 0;
+
+    // Version information from OTB
+    quint32 majorVersion_ = 0;
+    quint32 minorVersion_ = 0;
+    quint32 buildNumber_ = 0;
+
+    // Task 64: SpriteManager integration
+    SpriteManager* spriteManager_ = nullptr;
 
     static ItemManager* s_instance;
     static ItemProperties defaultProperties_; // For returning on unknown ID, or if ID 0 is requested

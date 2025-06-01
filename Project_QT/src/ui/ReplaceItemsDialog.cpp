@@ -1,3 +1,5 @@
+// ReplaceItemsDialog.cpp - Enhanced Find and Replace Items Dialog for Task 50
+
 #include "ReplaceItemsDialog.h"
 #include <QLineEdit>
 #include <QCheckBox>
@@ -7,143 +9,215 @@
 #include <QGroupBox>
 #include <QFormLayout>
 #include <QVBoxLayout>
-#include <QHBoxLayout> // For action buttons layout if not using QDialogButtonBox for them
+#include <QHBoxLayout>
 #include <QDialogButtonBox>
+#include <QTabWidget>
+#include <QSplitter>
+#include <QSpinBox>
+#include <QRadioButton>
+#include <QButtonGroup>
+#include <QProgressBar>
+#include <QLabel>
+#include <QTextEdit>
 #include <QDebug>
-#include <QVariant> // For QComboBox item data
+#include <QVariant>
 
-ReplaceItemsDialog::ReplaceItemsDialog(QWidget *parent) : QDialog(parent) {
-    setWindowTitle(tr("Find and Replace Items"));
-    setMinimumSize(500, 400); // Set a reasonable minimum size
+ReplaceItemsDialog::ReplaceItemsDialog(QWidget *parent)
+    : QDialog(parent)
+    , m_searchInProgress(false)
+    , m_totalResultsFound(0) {
 
-    setupUi(); // Call helper to create UI elements
+    setWindowTitle(tr("Find and Replace Items - Enhanced"));
+    setMinimumSize(800, 600);
+    resize(1000, 700);
 
-    // Connect signals to slots
-    if (m_findButton) {
-        connect(m_findButton, &QPushButton::clicked, this, &ReplaceItemsDialog::onFindClicked);
-    }
-    if (m_replaceSelectedButton) {
-        connect(m_replaceSelectedButton, &QPushButton::clicked, this, &ReplaceItemsDialog::onReplaceSelectedClicked);
-    }
-    if (m_replaceAllButton) {
-        connect(m_replaceAllButton, &QPushButton::clicked, this, &ReplaceItemsDialog::onReplaceAllClicked);
-    }
-    if (m_pickFindItemButton) {
-        connect(m_pickFindItemButton, &QPushButton::clicked, this, &ReplaceItemsDialog::onPickFindItemClicked);
-    }
-    if (m_pickReplaceItemButton) {
-        connect(m_pickReplaceItemButton, &QPushButton::clicked, this, &ReplaceItemsDialog::onPickReplaceItemClicked);
-    }
+    setupUi();
+    connectSignals();
+    updateButtonStates();
+    populateItemTypeComboBox();
+    populatePresetComboBox();
 
-    if (m_dialogButtonBox) {
-        // Assuming QDialogButtonBox::Close was used, it emits rejected()
-        connect(m_dialogButtonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        // If using Ok/Cancel:
-        // connect(m_dialogButtonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-        // connect(m_dialogButtonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    }
-    qDebug() << "ReplaceItemsDialog created and UI setup.";
+    qDebug() << "Enhanced ReplaceItemsDialog created (Task 50).";
 }
 
 ReplaceItemsDialog::~ReplaceItemsDialog() {
-    qDebug() << "ReplaceItemsDialog destroyed.";
-    // Child widgets and layouts are automatically deleted by Qt's parent-child mechanism.
+    qDebug() << "Enhanced ReplaceItemsDialog destroyed.";
 }
 
+// Task 50: Public interface methods
+void ReplaceItemsDialog::setSearchScope(bool selectionOnly) {
+    if (selectionOnly) {
+        m_scopeSelectionRadio->setChecked(true);
+    } else {
+        m_scopeWholeMapRadio->setChecked(true);
+    }
+}
+
+void ReplaceItemsDialog::setInitialFindItemId(int itemId) {
+    m_findItemIdLineEdit->setText(QString::number(itemId));
+}
+
+void ReplaceItemsDialog::setInitialReplaceItemId(int itemId) {
+    m_replaceItemIdLineEdit->setText(QString::number(itemId));
+}
+
+// Task 50: Enhanced UI setup
 void ReplaceItemsDialog::setupUi() {
-    m_mainLayout = new QVBoxLayout(this); // Main layout for the dialog
+    m_mainLayout = new QVBoxLayout(this);
+    m_mainLayout->setContentsMargins(10, 10, 10, 10);
+    m_mainLayout->setSpacing(10);
 
-    // --- Find Criteria Group ---
-    m_findCriteriaGroup = new QGroupBox(tr("Find Criteria"));
-    QFormLayout* findLayout = new QFormLayout();
+    // Create main splitter for layout
+    m_mainSplitter = new QSplitter(Qt::Vertical, this);
 
-    m_findItemIdLineEdit = new QLineEdit();
-    m_findItemIdLineEdit->setPlaceholderText(tr("Enter Item ID (e.g., 3031)"));
-    findLayout->addRow(tr("Item ID:"), m_findItemIdLineEdit);
+    // Create tab widget for organized input
+    m_tabWidget = new QTabWidget();
 
-    m_findNameLineEdit = new QLineEdit();
-    m_findNameLineEdit->setPlaceholderText(tr("Enter part of item name (case-insensitive)"));
-    findLayout->addRow(tr("Name contains:"), m_findNameLineEdit);
+    // Setup individual tabs
+    setupFindCriteriaTab();
+    setupReplacementTab();
+    setupSearchScopeTab();
+    setupAdvancedOptionsTab();
 
-    m_findIsMoveableCheckBox = new QCheckBox(tr("Is Moveable"));
-    findLayout->addRow(m_findIsMoveableCheckBox);
+    // Add tabs to widget
+    m_tabWidget->addTab(m_findCriteriaTab, tr("Find Criteria"));
+    m_tabWidget->addTab(m_replacementTab, tr("Replacement"));
+    m_tabWidget->addTab(m_searchScopeTab, tr("Search Scope"));
+    m_tabWidget->addTab(m_advancedOptionsTab, tr("Advanced"));
 
-    m_findIsBlockingCheckBox = new QCheckBox(tr("Is Blocking"));
-    findLayout->addRow(m_findIsBlockingCheckBox);
+    m_mainSplitter->addWidget(m_tabWidget);
 
-    // Add more common property checkboxes here if desired later (e.g. stackable, pickupable)
-    // m_findIsStackableCheckBox = new QCheckBox(tr("Is Stackable"));
-    // findLayout->addRow(m_findIsStackableCheckBox);
+    // Setup results area
+    setupResultsArea();
+    m_mainSplitter->addWidget(m_resultsGroup);
 
-    m_findItemTypeComboBox = new QComboBox();
-    m_findItemTypeComboBox->addItem(tr("Any Type"), QVariant(-1)); // -1 or specific enum for 'any'
-    m_findItemTypeComboBox->addItem(tr("Ground Tile"), QVariant(0)); // Placeholder values
-    m_findItemTypeComboBox->addItem(tr("Border"), QVariant(1));
-    m_findItemTypeComboBox->addItem(tr("Wall"), QVariant(2));
-    m_findItemTypeComboBox->addItem(tr("Generic Item"), QVariant(3));
-    m_findItemTypeComboBox->addItem(tr("Container"), QVariant(4));
-    m_findItemTypeComboBox->addItem(tr("Creature"), QVariant(5)); // If searching creatures
-    m_findItemTypeComboBox->addItem(tr("Spawn"), QVariant(6));    // If searching spawns
-    findLayout->addRow(tr("Item Type:"), m_findItemTypeComboBox);
+    // Setup preset management
+    setupPresetManagement();
 
-    m_pickFindItemButton = new QPushButton(tr("Pick Item Properties..."));
-    m_pickFindItemButton->setToolTip(tr("Use an item property editor to define find criteria (placeholder)"));
-    findLayout->addRow(m_pickFindItemButton);
+    // Set splitter proportions
+    m_mainSplitter->setStretchFactor(0, 1);
+    m_mainSplitter->setStretchFactor(1, 1);
 
-    m_findCriteriaGroup->setLayout(findLayout);
-    m_mainLayout->addWidget(m_findCriteriaGroup);
+    m_mainLayout->addWidget(m_mainSplitter);
+    m_mainLayout->addWidget(m_presetGroup);
 
-    // --- Replacement Rule Group ---
-    m_replaceRuleGroup = new QGroupBox(tr("Replacement Rule"));
-    QFormLayout* replaceLayout = new QFormLayout();
-
-    m_replaceItemIdLineEdit = new QLineEdit();
-    m_replaceItemIdLineEdit->setPlaceholderText(tr("Enter Item ID to replace with"));
-    replaceLayout->addRow(tr("Replace with Item ID:"), m_replaceItemIdLineEdit);
-
-    m_deleteFoundItemsCheckBox = new QCheckBox(tr("Or, Delete Found Items"));
-    replaceLayout->addRow(m_deleteFoundItemsCheckBox);
-
-    m_pickReplaceItemButton = new QPushButton(tr("Pick Replacement Item..."));
-    m_pickReplaceItemButton->setToolTip(tr("Use an item property editor to define replacement item (placeholder)"));
-    replaceLayout->addRow(m_pickReplaceItemButton);
-
-    m_replaceRuleGroup->setLayout(replaceLayout);
-    m_mainLayout->addWidget(m_replaceRuleGroup);
-
-    // --- Results Group (Placeholder) ---
-    m_resultsGroup = new QGroupBox(tr("Found Items / Tiles (Placeholder)"));
-    QVBoxLayout* resultsLayout = new QVBoxLayout();
-    m_resultsListWidget = new QListWidget();
-    m_resultsListWidget->setMinimumHeight(100);
-    m_resultsListWidget->addItem(tr("(Search results will appear here)")); // Placeholder item
-    resultsLayout->addWidget(m_resultsListWidget);
-    m_resultsGroup->setLayout(resultsLayout);
-    m_mainLayout->addWidget(m_resultsGroup);
-    m_resultsGroup->setVisible(false); // Initially hidden, shown after "Find"
-
-    // --- Actions Group / Buttons ---
-    // Using QHBoxLayout for main action buttons for now
-    m_actionsGroup = new QGroupBox(tr("Actions")); // Optional grouping
-    QHBoxLayout* actionsButtonLayout = new QHBoxLayout();
+    // Setup action buttons
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
     m_findButton = new QPushButton(tr("Find"));
     m_replaceSelectedButton = new QPushButton(tr("Replace Selected"));
     m_replaceAllButton = new QPushButton(tr("Replace All"));
-    m_replaceSelectedButton->setEnabled(false); // Initially disabled
-    m_replaceAllButton->setEnabled(false);     // Initially disabled
+    m_cancelButton = new QPushButton(tr("Cancel"));
 
-    actionsButtonLayout->addWidget(m_findButton);
-    actionsButtonLayout->addStretch();
-    actionsButtonLayout->addWidget(m_replaceSelectedButton);
-    actionsButtonLayout->addWidget(m_replaceAllButton);
-    m_actionsGroup->setLayout(actionsButtonLayout);
-    m_mainLayout->addWidget(m_actionsGroup);
+    buttonLayout->addWidget(m_findButton);
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(m_replaceSelectedButton);
+    buttonLayout->addWidget(m_replaceAllButton);
+    buttonLayout->addWidget(m_cancelButton);
 
-    // --- Dialog Button Box (for Close) ---
+    m_mainLayout->addLayout(buttonLayout);
+
+    // Dialog button box
     m_dialogButtonBox = new QDialogButtonBox(QDialogButtonBox::Close);
     m_mainLayout->addWidget(m_dialogButtonBox);
+}
 
-    setLayout(m_mainLayout); // Set the main layout for the dialog
+void ReplaceItemsDialog::setupFindCriteriaTab() {
+    m_findCriteriaTab = new QWidget();
+    QVBoxLayout* mainLayout = new QVBoxLayout(m_findCriteriaTab);
+
+    // Basic criteria group
+    m_findCriteriaGroup = new QGroupBox(tr("Basic Search Criteria"));
+    QFormLayout* basicLayout = new QFormLayout(m_findCriteriaGroup);
+
+    m_findItemIdLineEdit = new QLineEdit();
+    m_findItemIdLineEdit->setPlaceholderText(tr("Enter Item ID (e.g., 3031)"));
+    basicLayout->addRow(tr("Item ID:"), m_findItemIdLineEdit);
+
+    m_findNameLineEdit = new QLineEdit();
+    m_findNameLineEdit->setPlaceholderText(tr("Enter part of item name"));
+    basicLayout->addRow(tr("Name contains:"), m_findNameLineEdit);
+
+    m_findMatchCaseCheckBox = new QCheckBox(tr("Match Case"));
+    m_findWholeWordCheckBox = new QCheckBox(tr("Whole Word Only"));
+    QHBoxLayout* textOptionsLayout = new QHBoxLayout();
+    textOptionsLayout->addWidget(m_findMatchCaseCheckBox);
+    textOptionsLayout->addWidget(m_findWholeWordCheckBox);
+    textOptionsLayout->addStretch();
+    basicLayout->addRow(tr("Text Options:"), textOptionsLayout);
+
+    m_findItemTypeComboBox = new QComboBox();
+    basicLayout->addRow(tr("Item Type:"), m_findItemTypeComboBox);
+
+    // Count range
+    QHBoxLayout* countLayout = new QHBoxLayout();
+    m_findMinCountSpinBox = new QSpinBox();
+    m_findMinCountSpinBox->setRange(0, 999);
+    m_findMinCountSpinBox->setValue(1);
+    m_findMaxCountSpinBox = new QSpinBox();
+    m_findMaxCountSpinBox->setRange(0, 999);
+    m_findMaxCountSpinBox->setValue(999);
+    countLayout->addWidget(new QLabel(tr("Min:")));
+    countLayout->addWidget(m_findMinCountSpinBox);
+    countLayout->addWidget(new QLabel(tr("Max:")));
+    countLayout->addWidget(m_findMaxCountSpinBox);
+    countLayout->addStretch();
+    basicLayout->addRow(tr("Count Range:"), countLayout);
+
+    // Action and Unique IDs
+    m_findActionIdLineEdit = new QLineEdit();
+    m_findActionIdLineEdit->setPlaceholderText(tr("Action ID (optional)"));
+    basicLayout->addRow(tr("Action ID:"), m_findActionIdLineEdit);
+
+    m_findUniqueIdLineEdit = new QLineEdit();
+    m_findUniqueIdLineEdit->setPlaceholderText(tr("Unique ID (optional)"));
+    basicLayout->addRow(tr("Unique ID:"), m_findUniqueIdLineEdit);
+
+    mainLayout->addWidget(m_findCriteriaGroup);
+
+    // Item properties group
+    QGroupBox* propertiesGroup = new QGroupBox(tr("Item Properties"));
+    QVBoxLayout* propsLayout = new QVBoxLayout(propertiesGroup);
+
+    // Create property checkboxes in a grid
+    QHBoxLayout* row1 = new QHBoxLayout();
+    m_findIsMoveableCheckBox = new QCheckBox(tr("Is Moveable"));
+    m_findIsBlockingCheckBox = new QCheckBox(tr("Is Blocking"));
+    m_findIsStackableCheckBox = new QCheckBox(tr("Is Stackable"));
+    m_findIsPickupableCheckBox = new QCheckBox(tr("Is Pickupable"));
+    row1->addWidget(m_findIsMoveableCheckBox);
+    row1->addWidget(m_findIsBlockingCheckBox);
+    row1->addWidget(m_findIsStackableCheckBox);
+    row1->addWidget(m_findIsPickupableCheckBox);
+
+    QHBoxLayout* row2 = new QHBoxLayout();
+    m_findIsReadableCheckBox = new QCheckBox(tr("Is Readable"));
+    m_findIsWriteableCheckBox = new QCheckBox(tr("Is Writeable"));
+    m_findIsRotateableCheckBox = new QCheckBox(tr("Is Rotateable"));
+    m_findIsHangableCheckBox = new QCheckBox(tr("Is Hangable"));
+    row2->addWidget(m_findIsReadableCheckBox);
+    row2->addWidget(m_findIsWriteableCheckBox);
+    row2->addWidget(m_findIsRotateableCheckBox);
+    row2->addWidget(m_findIsHangableCheckBox);
+
+    QHBoxLayout* row3 = new QHBoxLayout();
+    m_findIsVerticalCheckBox = new QCheckBox(tr("Is Vertical"));
+    m_findIsHorizontalCheckBox = new QCheckBox(tr("Is Horizontal"));
+    row3->addWidget(m_findIsVerticalCheckBox);
+    row3->addWidget(m_findIsHorizontalCheckBox);
+    row3->addStretch();
+
+    propsLayout->addLayout(row1);
+    propsLayout->addLayout(row2);
+    propsLayout->addLayout(row3);
+
+    mainLayout->addWidget(propertiesGroup);
+
+    // Item property editor integration
+    m_pickFindItemButton = new QPushButton(tr("Pick Item Properties..."));
+    m_pickFindItemButton->setToolTip(tr("Use item property editor to define find criteria"));
+    mainLayout->addWidget(m_pickFindItemButton);
+
+    mainLayout->addStretch();
 }
 
 // Placeholder implementations for slots (to be created in Step 3)

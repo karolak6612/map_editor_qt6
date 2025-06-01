@@ -48,8 +48,9 @@ public:
     void setCurrentDecorationItemId(quint16 itemId);
     quint16 getCurrentDecorationItemId() const;
 
-private:
-    quint16 currentDecorationItemId_ = 0;
+    // Direct migration from wxwidgets - uses same XML loading as WallBrush (Task 40 requirement)
+    // WallDecorationBrush uses the exact same wall_items structure and loading algorithm as WallBrush
+    // The difference is in the draw() method which places decorations based on existing wall alignment
 };
 
 #endif // WALLDECORATIONBRUSH_H

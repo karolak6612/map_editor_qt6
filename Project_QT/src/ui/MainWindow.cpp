@@ -3,7 +3,8 @@
 #include <QMenu>
 #include <QAction>
 #include <QKeySequence>
-#include <QDebug> 
+#include <QDebug>
+#include <QMap>
 #include <QApplication> 
 #include <QToolBar>     
 #include <QIcon>        
@@ -14,6 +15,7 @@
 #include <QPushButton>  
 #include <QDockWidget> // Added for QDockWidget
 #include <QStatusBar>  // Added for QStatusBar
+#include <QVBoxLayout> // Added for QVBoxLayout in dockable views
 #include "BrushPalettePanel.h"   // Renamed from PlaceholderPaletteWidget.h
 #include "PlaceholderMinimapWidget.h"
 #include "TilePropertyEditor.h"  // Renamed from PlaceholderPropertiesWidget.h
@@ -21,36 +23,131 @@
 #include "Item.h"                // For instantiating Item in test slot
 #include "ui/ReplaceItemsDialog.h" // For ReplaceItemsDialog
 #include "AutomagicSettingsDialog.h" // Include for AutomagicSettingsDialog
+// Task7: Basic dialog includes
+#include "ui/GroundValidationDialog.h"
+#include "ui/ImportMapDialog.h"
+#include "ui/ExportMiniMapDialog.h"
+#include "ui/GotoPositionDialog.h"
 #include "ClipboardData.h"           // For internal clipboard
 #include "Map.h"                     // For Map and MapPos
 #include "Selection.h"               // For Selection
+#include "SettingsManager.h"         // For settings management
+#include "BorderSystem.h"            // For border system
+#include "MenuActionHandler.h"       // For menu action handling
+#include "StatusBarManager.h"        // For status bar management
+#include "ToolBarManager.h"          // For toolbar management
+#include "DialogManager.h"           // For dialog management
+#include "PerspectiveManager.h"      // For perspective management
+#include "MapView.h"                // For MapView
 #include <QApplication>             // For future QClipboard access
 #include <QClipboard>               // For future QClipboard access
 #include <QtMath>                   // For qRound
 #include <QSettings>                // For saving/restoring state
 #include <QByteArray>               // For saving/restoring state
 #include <QCloseEvent>              // For closeEvent
+#include <QWidget>                  // For QWidget in dockable views
+#include <QTabWidget>               // For tab management (Task 62)
+#include <QVBoxLayout>              // For layout management (Task 62)
+#include <QHBoxLayout>              // For layout management (Task 62)
+#include <QSplitter>                // For splitter layout (Task 62)
+#include <QTimer>                   // For auto-save timer (Task 62)
+#include <QMessageBox>              // For close confirmation (Task 62)
 // QDebug is already included via QAction or similar Qt headers usually, but explicit include is fine if needed
 
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
+    paletteCounter_(1),
+    currentMapTabIndex_(-1),
+    windowStateRestored_(false) {
+
     setWindowTitle(tr("Idler's Map Editor (Qt)"));
     resize(1280, 720);
 
+    // Task 62: Initialize settings and state management
+    settings_ = new QSettings("IdlerMapEditor", "MainWindow", this);
+    autoSaveTimer_ = new QTimer(this);
+    autoSaveTimer_->setInterval(30000); // Auto-save every 30 seconds
+    connect(autoSaveTimer_, &QTimer::timeout, this, &MainWindow::onSaveWindowState);
+
+    // Initialize settings and border system
+    settingsManager_ = SettingsManager::getInstance();
+    borderSystem_ = BorderSystem::getInstance();
+
+    // Initialize menu action handler
+    menuActionHandler_ = new MenuActionHandler(this, this);
+    menuActionHandler_->setBorderSystem(borderSystem_);
+
+    // Initialize status bar manager
+    statusBarManager_ = new StatusBarManager(statusBar(), this);
+
+    // Initialize toolbar manager
+    toolBarManager_ = new ToolBarManager(this, this);
+
+    // Initialize dialog manager
+    dialogManager_ = new DialogManager(this, this);
+
+    // Task 77: Initialize brush manager
+    brushManager_ = new BrushManager(this);
+
+    // Task 77: Connect BrushManager signals for UI synchronization
+    connect(brushManager_, &BrushManager::currentBrushChanged,
+            this, &MainWindow::onBrushManagerBrushChanged);
+    connect(brushManager_, &BrushManager::actionIdChanged,
+            this, &MainWindow::onBrushManagerActionIdChanged);
+    connect(brushManager_, &BrushManager::selectedItemChanged,
+            this, &MainWindow::onBrushManagerSelectedItemChanged);
+    connect(brushManager_, &BrushManager::drawingModeChanged,
+            this, &MainWindow::onBrushManagerDrawingModeChanged);
+
+    // Task 77: Connect ToolBarManager signals for UI synchronization
+    connect(toolBarManager_, &ToolBarManager::toolbarActionTriggered,
+            this, &MainWindow::onToolbarActionTriggered);
+
+    // Initialize perspective manager
+    perspectiveManager_ = new PerspectiveManager(this, this);
+
+    // Initialize core map components (placeholders for now)
+    map_ = nullptr; // TODO: Initialize with actual map when available
+    selection_ = nullptr; // TODO: Initialize with actual selection when available
     internalClipboard_ = new ClipboardData();
 
+    // Initialize MapView (placeholder for now - will be properly initialized when map system is ready)
+    mapView_ = nullptr; // TODO: Initialize with actual MapView when BrushManager and Map are available
+
     setupMenuBar();
-    setupToolBars(); 
+    setupToolBars();
+    setupCentralWidget(); // Task 62: Setup central widget with tab management
     setupDockWidgets(); // Call setupDockWidgets
     setupStatusBar();
-    
+
     restoreToolBarState(); // Restore state after UI is setup
-    qDebug() << "MainWindow created. Menu, toolbars, and docks setup initiated. State restored.";
+    loadPerspective(); // Load dock layout perspective
+    onRestoreWindowState(); // Task 62: Restore window state
+    autoSaveTimer_->start(); // Task 62: Start auto-save timer
+    qDebug() << "MainWindow created. Menu, toolbars, central widget, and docks setup initiated. State restored.";
 }
 
 MainWindow::~MainWindow() {
     delete internalClipboard_;
     internalClipboard_ = nullptr;
+
+    delete mapView_;
+    mapView_ = nullptr;
+
+    delete menuActionHandler_;
+    menuActionHandler_ = nullptr;
+
+    delete statusBarManager_;
+    statusBarManager_ = nullptr;
+
+    delete toolBarManager_;
+    toolBarManager_ = nullptr;
+
+    delete dialogManager_;
+    dialogManager_ = nullptr;
+
+    delete perspectiveManager_;
+    perspectiveManager_ = nullptr;
 }
 
 void MainWindow::setupMenuBar() {
@@ -116,43 +213,66 @@ void MainWindow::setupMenuBar() {
 }
 
 void MainWindow::setupToolBars() {
-    standardToolBar_ = createStandardToolBar();
-    if (standardToolBar_) { 
-        addToolBar(Qt::TopToolBarArea, standardToolBar_);
-        standardToolBar_->setVisible(true); 
-    }
+    if (toolBarManager_) {
+        toolBarManager_->setupToolBars();
 
-    brushesToolBar_ = createBrushesToolBar();
-    if (brushesToolBar_) { 
-         addToolBar(Qt::TopToolBarArea, brushesToolBar_);
-         brushesToolBar_->setVisible(true); 
-    }
-    
-    positionToolBar_ = createPositionToolBar();
-    if (positionToolBar_){
-        addToolBar(Qt::TopToolBarArea, positionToolBar_);
-        positionToolBar_->setVisible(true); 
-    }
+        // Get references to toolbars for backward compatibility
+        standardToolBar_ = toolBarManager_->getStandardToolBar();
+        brushesToolBar_ = toolBarManager_->getBrushesToolBar();
+        positionToolBar_ = toolBarManager_->getPositionToolBar();
+        sizesToolBar_ = toolBarManager_->getSizesToolBar();
 
-    sizesToolBar_ = createSizesToolBar();
-    if(sizesToolBar_){
-        addToolBar(Qt::TopToolBarArea, sizesToolBar_);
-        sizesToolBar_->setVisible(true); 
+        // Get references to controls for backward compatibility
+        zoomSpinBox_ = toolBarManager_->getZoomSpinBox();
+        layerComboBox_ = toolBarManager_->getLayerComboBox();
+        xCoordSpinBox_ = toolBarManager_->getXCoordSpinBox();
+        yCoordSpinBox_ = toolBarManager_->getYCoordSpinBox();
+        zCoordSpinBox_ = toolBarManager_->getZCoordSpinBox();
+
+        // Connect toolbar manager signals to MainWindow slots
+        connect(toolBarManager_, &ToolBarManager::zoomControlChanged,
+                this, &MainWindow::onZoomControlChanged);
+        connect(toolBarManager_, &ToolBarManager::layerControlChanged,
+                this, &MainWindow::onLayerControlChanged);
+        connect(toolBarManager_, &ToolBarManager::positionControlChanged,
+                this, &MainWindow::onPositionGo);
+        connect(toolBarManager_, &ToolBarManager::brushShapeActionTriggered,
+                this, &MainWindow::onBrushShapeActionTriggered);
+        connect(toolBarManager_, &ToolBarManager::brushSizeActionTriggered,
+                this, &MainWindow::onBrushSizeActionTriggered);
+        connect(toolBarManager_, &ToolBarManager::brushActionTriggered,
+                this, &MainWindow::onBrushActionTriggered);
+    } else {
+        qWarning("MainWindow::setupToolBars: ToolBarManager is null!");
     }
-    qDebug() << "All toolbars setup attempted.";
 }
 
 void MainWindow::setupDockWidgets() {
     setDockNestingEnabled(true);
 
-    // Palette Dock
+    // Palette Dock (Primary)
     paletteDock_ = new QDockWidget(tr("Palette"), this);
     paletteDock_->setObjectName(QStringLiteral("PaletteDock"));
     paletteDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     BrushPalettePanel* paletteContent = new BrushPalettePanel("Palette", paletteDock_); // Renamed class
     paletteDock_->setWidget(paletteContent);
     addDockWidget(Qt::LeftDockWidgetArea, paletteDock_);
-    paletteDock_->setVisible(true); 
+    paletteDock_->setVisible(true);
+
+    // Task 77: Connect MainPalette signals for UI synchronization
+    if (paletteContent) {
+        // Connect action ID changes from palette to MainWindow
+        connect(paletteContent, &BrushPalettePanel::actionIdChanged,
+                this, &MainWindow::onMainPaletteActionIdChanged);
+
+        // Connect brush selection from palette to MainWindow
+        connect(paletteContent, &BrushPalettePanel::brushSelected,
+                this, &MainWindow::onMainPaletteBrushSelected);
+    }
+
+    // Track the primary palette in our list
+    paletteDocks_.append(paletteDock_);
+
     if (viewPaletteDockAction_) { // Ensure action exists (created in createWindowMenu)
         viewPaletteDockAction_->setChecked(paletteDock_->isVisible());
     }
@@ -187,49 +307,42 @@ void MainWindow::setupDockWidgets() {
     qDebug() << "Dock widgets setup.";
 }
 
-void MainWindow::setupStatusBar() {
-    QStatusBar *sb = statusBar(); // QMainWindow::statusBar() creates one if it doesn't exist
-    if (!sb) {
-        qWarning("MainWindow: Could not get or create QStatusBar.");
-        return;
-    }
+void MainWindow::setupCentralWidget() {
+    // Task 62: Setup central widget with tab management (replacing wxAuiNotebook)
+    centralWidget_ = new QWidget(this);
+    centralLayout_ = new QVBoxLayout(centralWidget_);
+    centralLayout_->setContentsMargins(0, 0, 0, 0);
+    centralLayout_->setSpacing(0);
 
-    // Initialize and add labels as permanent widgets
-    // Permanent widgets are typically added from right to left
+    // Create tab widget for multiple map views (replaces wxAuiNotebook)
+    mapTabWidget_ = new QTabWidget(centralWidget_);
+    mapTabWidget_->setTabsClosable(true);
+    mapTabWidget_->setMovable(true);
+    mapTabWidget_->setDocumentMode(true);
+    mapTabWidget_->setUsesScrollButtons(true);
 
-    currentLayerLabel_ = new QLabel(this);
-    currentLayerLabel_->setText(tr("Floor: 7"));
-    currentLayerLabel_->setToolTip(tr("Current map floor/layer"));
-    sb->addPermanentWidget(currentLayerLabel_);
+    // Connect tab widget signals
+    connect(mapTabWidget_, &QTabWidget::currentChanged,
+            this, &MainWindow::onMapTabChanged);
+    connect(mapTabWidget_, &QTabWidget::tabCloseRequested,
+            this, &MainWindow::onMapTabCloseRequested);
+    connect(mapTabWidget_, &QTabWidget::tabBarClicked,
+            [this](int index) { setCurrentMapTab(index); });
 
-    zoomLevelLabel_ = new QLabel(this);
-    zoomLevelLabel_->setText(tr("Zoom: 100%"));
-    zoomLevelLabel_->setToolTip(tr("Current map zoom level"));
-    sb->addPermanentWidget(zoomLevelLabel_);
+    centralLayout_->addWidget(mapTabWidget_);
+    setCentralWidget(centralWidget_);
 
-    itemInfoLabel_ = new QLabel(this);
-    itemInfoLabel_->setText(tr("Item: None")); // Placeholder
-    itemInfoLabel_->setToolTip(tr("Information about the selected item or item under cursor"));
-    itemInfoLabel_->setMinimumWidth(200); // Give it some space
-    sb->addPermanentWidget(itemInfoLabel_);
-
-    brushInfoLabel_ = new QLabel(this);
-    brushInfoLabel_->setText(tr("Brush: None")); // Placeholder
-    brushInfoLabel_->setToolTip(tr("Current active brush"));
-    sb->addPermanentWidget(brushInfoLabel_);
-
-    // mouseCoordsLabel_ will be a normal message shown with showMessage, or a temporary widget.
-    // For persistent coordinate display, it can also be a permanent widget. Let's make it permanent for now.
-    mouseCoordsLabel_ = new QLabel(this);
-    mouseCoordsLabel_->setText(tr("X: -, Y: -, Z: -"));
-    mouseCoordsLabel_->setToolTip(tr("Current map coordinates under mouse cursor"));
-    mouseCoordsLabel_->setMinimumWidth(150); // Give it some space
-    sb->addPermanentWidget(mouseCoordsLabel_);
-
-    // Main status messages will appear on the left, temporary messages.
-    sb->showMessage(tr("Ready"), 2000); // Example temporary message
-    qDebug() << "Status bar setup complete.";
+    qDebug() << "Central widget with tab management setup complete.";
 }
+
+void MainWindow::setupStatusBar() {
+    if (statusBarManager_) {
+        statusBarManager_->setupStatusBar();
+    } else {
+        qWarning("MainWindow::setupStatusBar: StatusBarManager is null!");
+    }
+}
+
 
 
 QAction* MainWindow::createAction(const QString& text, const QString& objectName, const QIcon& icon, const QString& shortcut, const QString& statusTip, bool checkable, bool checked, bool connectToGenericHandler) {
@@ -248,46 +361,86 @@ QAction* MainWindow::createAction(const QString& text, const QString& objectName
     return action;
 }
 
+QAction* MainWindow::createActionWithId(MenuBar::ActionID actionId, const QString& text, const QIcon& icon, const QString& shortcut, const QString& statusTip, bool checkable, bool checked) {
+    QAction *action = new QAction(tr(text.toStdString().c_str()), this);
+    action->setObjectName(QString("ACTION_%1").arg(static_cast<int>(actionId))); // Set object name based on ID
+    action->setIcon(icon);
+    if (!shortcut.isEmpty()) {
+        action->setShortcut(QKeySequence::fromString(tr(shortcut.toStdString().c_str())));
+    }
+    action->setStatusTip(tr(statusTip.toStdString().c_str()));
+    action->setCheckable(checkable);
+    action->setChecked(checked);
+
+    // Store action in map for easy access
+    actions_[actionId] = action;
+
+    // Connect to centralized action handler
+    connect(action, &QAction::triggered, [this, actionId]() {
+        onActionTriggered(actionId);
+    });
+
+    return action;
+}
+
+QAction* MainWindow::getAction(MenuBar::ActionID actionId) const {
+    return actions_.value(actionId, nullptr);
+}
+
 QMenu* MainWindow::createFileMenu() {
     QMenu *fileMenu = new QMenu(tr("&File"), this);
-    newAction_ = createAction("&New...", "NEW", QIcon::fromTheme("document-new"), QKeySequence::New, "Create a new map."); // Corrected: Was "P"
+    // Use ActionID system for main file actions
+    newAction_ = createActionWithId(MenuBar::NEW, "&New...", QIcon::fromTheme("document-new"), "Ctrl+N", "Create a new map.");
     fileMenu->addAction(newAction_);
-    openAction_ = createAction("&Open...", "OPEN", QIcon::fromTheme("document-open"), QKeySequence::Open, "Open another map.");
+    openAction_ = createActionWithId(MenuBar::OPEN, "&Open...", QIcon::fromTheme("document-open"), "Ctrl+O", "Open another map.");
     fileMenu->addAction(openAction_);
-    saveAction_ = createAction("&Save", "SAVE", QIcon::fromTheme("document-save"), QKeySequence::Save, "Save the current map.");
+    saveAction_ = createActionWithId(MenuBar::SAVE, "&Save", QIcon::fromTheme("document-save"), "Ctrl+S", "Save the current map.");
     fileMenu->addAction(saveAction_);
-    fileMenu->addAction(createAction("Save &As...", "SAVE_AS", QIcon::fromTheme("document-save-as"), QKeySequence::SaveAs, "Save the current map as a new file."));
-    fileMenu->addAction(createAction("&Generate Map", "GENERATE_MAP", QIcon(), QKeySequence("Ctrl+Shift+G"), "Generate a new map."));
-    fileMenu->addAction(createAction("&Close", "CLOSE", QIcon::fromTheme("window-close"), QKeySequence("Ctrl+W"), "Closes the currently open map.")); // Changed Shift+B to Ctrl+W for consistency
+    saveAsAction_ = createActionWithId(MenuBar::SAVE_AS, "Save &As...", QIcon::fromTheme("document-save-as"), "Ctrl+Shift+S", "Save the current map as a new file.");
+    fileMenu->addAction(saveAsAction_);
+    fileMenu->addAction(createActionWithId(MenuBar::GENERATE_MAP, "&Generate Map", QIcon(), "Ctrl+Shift+G", "Generate a new map."));
+    fileMenu->addAction(createActionWithId(MenuBar::CLOSE, "&Close", QIcon::fromTheme("window-close"), "Ctrl+W", "Closes the currently open map."));
     fileMenu->addSeparator();
     QMenu *importMenu = fileMenu->addMenu(tr("&Import"));
-    importMenu->addAction(createAction("Import &Map...", "IMPORT_MAP", QIcon::fromTheme("document-import"), "", "Import map data from another map file."));
-    importMenu->addAction(createAction("Import &Monsters/NPC...", "IMPORT_MONSTERS", QIcon::fromTheme("document-import"), "", "Import either a monsters.xml file or a specific monster/NPC."));
+
+    // Use ActionID system for import/export actions
+    importMenu->addAction(createActionWithId(MenuBar::IMPORT_MAP, "Import &Map...", QIcon::fromTheme("document-import"), "", "Import map data from another map file"));
+    importMenu->addAction(createActionWithId(MenuBar::IMPORT_MONSTERS, "Import &Monsters/NPC...", QIcon::fromTheme("document-import"), "", "Import either a monsters.xml file or a specific monster/NPC."));
+    importMenu->addAction(createActionWithId(MenuBar::IMPORT_MINIMAP, "Import M&inimap...", QIcon::fromTheme("document-import"), "", "Import minimap data from an image file."));
+
     QMenu *exportMenu = fileMenu->addMenu(tr("&Export"));
-    exportMenu->addAction(createAction("Export &Minimap...", "EXPORT_MINIMAP", QIcon::fromTheme("document-export"), "", "Export minimap to an image file."));
-    exportMenu->addAction(createAction("Export &Tilesets...", "EXPORT_TILESETS", QIcon::fromTheme("document-export"), "", "Export tilesets to an xml file."));
-    QMenu *reloadMenu = fileMenu->addMenu(tr("&Reload"));
-    reloadMenu->addAction(createAction("&Reload All Data", "RELOAD_DATA", QIcon::fromTheme("view-refresh"), QKeySequence::Refresh, "Reloads all data files.")); // F5 is Refresh
+    exportMenu->addAction(createActionWithId(MenuBar::EXPORT_MINIMAP, "Export &Minimap...", QIcon::fromTheme("document-export"), "", "Export minimap to an image file"));
+    exportMenu->addAction(createActionWithId(MenuBar::EXPORT_TILESETS, "Export &Tilesets...", QIcon::fromTheme("document-export"), "", "Export tilesets to an xml file."));
     fileMenu->addSeparator();
+    fileMenu->addAction(createActionWithId(MenuBar::RELOAD_DATA, "&Reload Data", QIcon::fromTheme("view-refresh"), "F5", "Reloads all data files."));
+    fileMenu->addSeparator();
+
+    // Recent files submenu (placeholder for now)
     QMenu *recentFilesMenu = fileMenu->addMenu(tr("Recent &Files"));
     recentFilesMenu->setObjectName(QStringLiteral("RECENT_FILES"));
     QAction* placeholderRecent = recentFilesMenu->addAction(tr("(No recent files)"));
     placeholderRecent->setEnabled(false);
-    fileMenu->addAction(createAction("&Preferences", "PREFERENCES", QIcon::fromTheme("preferences-system"), QKeySequence::Preferences, "Configure the map editor.")); // Often Ctrl+, or Ctrl+Shift+P
+
     fileMenu->addSeparator();
-    fileMenu->addAction(createAction("E&xit", "EXIT", QIcon::fromTheme("application-exit"), QKeySequence::Quit, "Close the editor."));
+    fileMenu->addAction(createActionWithId(MenuBar::PREFERENCES, "&Preferences...", QIcon::fromTheme("preferences-system"), "", "Configure the map editor."));
+    fileMenu->addSeparator();
+    fileMenu->addAction(createActionWithId(MenuBar::EXIT, "E&xit", QIcon::fromTheme("application-exit"), "Ctrl+Q", "Close the editor."));
     return fileMenu;
 }
 
 QMenu* MainWindow::createEditMenu() {
     QMenu *editMenu = new QMenu(tr("&Edit"), this);
-    undoAction_ = createAction("&Undo", "UNDO", QIcon::fromTheme("edit-undo"), QKeySequence::Undo, "Undo last action.");
+    // Use ActionID system for main edit actions
+    undoAction_ = createActionWithId(MenuBar::UNDO, "&Undo", QIcon::fromTheme("edit-undo"), "Ctrl+Z", "Undo last action.");
     editMenu->addAction(undoAction_);
-    redoAction_ = createAction("&Redo", "REDO", QIcon::fromTheme("edit-redo"), QKeySequence::Redo, "Redo last undid action.");
+    redoAction_ = createActionWithId(MenuBar::REDO, "&Redo", QIcon::fromTheme("edit-redo"), "Ctrl+Y", "Redo last undid action.");
     editMenu->addAction(redoAction_);
     editMenu->addSeparator();
-    editMenu->addAction(createAction("&Replace Items...", "REPLACE_ITEMS", QIcon::fromTheme("edit-find-replace"), QKeySequence("Ctrl+Shift+F"), "Replaces all occurrences of one item with another.")); // QKeySequence::Replace is specific to find/replace dialog context
-    editMenu->addAction(createAction("Refresh Items", "REFRESH_ITEMS", QIcon::fromTheme("view-refresh"), "", "Refresh items to fix flags"));
+    // Find and Replace actions (matching wxWidgets structure)
+    editMenu->addAction(createActionWithId(MenuBar::FIND_ITEM, "&Find Item...", QIcon::fromTheme("edit-find"), "Ctrl+F", "Find all instances of an item type on the map."));
+    editMenu->addAction(createActionWithId(MenuBar::FIND_CREATURE, "Find &Creature...", QIcon::fromTheme("edit-find"), "Ctrl+Shift+C", "Find all instances of a creature on the map."));
+    editMenu->addAction(createActionWithId(MenuBar::REPLACE_ITEMS, "&Replace Items...", QIcon::fromTheme("edit-find-replace"), "Ctrl+H", "Replaces all occurrences of one item with another."));
+    editMenu->addAction(createActionWithId(MenuBar::REFRESH_ITEMS, "Refresh Items", QIcon::fromTheme("view-refresh"), "", "Refresh items to fix flags"));
     editMenu->addSeparator();
     QMenu *borderOptionsMenu = editMenu->addMenu(tr("&Border Options"));
     borderOptionsMenu->addAction(createAction("Border &Automagic", "AUTOMAGIC", QIcon(), QKeySequence("A"), "Turns on all automatic border functions.", true));
@@ -300,12 +453,21 @@ QMenu* MainWindow::createEditMenu() {
     otherOptionsMenu->addAction(createAction("Remove all &Unreachable Tiles...", "MAP_REMOVE_UNREACHABLE_TILES", QIcon(), "", "Removes all tiles that cannot be reached (or seen) by the player from the map."));
     otherOptionsMenu->addAction(createAction("&Clear Invalid Houses", "CLEAR_INVALID_HOUSES", QIcon(), "", "Clears house tiles not belonging to any house."));
     otherOptionsMenu->addAction(createAction("Clear &Modified State", "CLEAR_MODIFIED_STATE", QIcon(), "", "Clears the modified state from all tiles."));
+    otherOptionsMenu->addSeparator();
+
+    // Task7: Add Ground Validation dialog to Other Options menu
+    QAction* groundValidationAction = new QAction(tr("&Ground Validation..."), this);
+    groundValidationAction->setObjectName("GROUND_VALIDATION_ACTION");
+    groundValidationAction->setStatusTip(tr("Validate and fix ground tile issues"));
+    connect(groundValidationAction, &QAction::triggered, this, &MainWindow::onShowGroundValidationDialog);
+    otherOptionsMenu->addAction(groundValidationAction);
     editMenu->addSeparator();
-    cutAction_ = createAction("Cu&t", "CUT", QIcon::fromTheme("edit-cut"), QKeySequence::Cut, "Cut a part of the map.");
+    // Use ActionID system for clipboard actions
+    cutAction_ = createActionWithId(MenuBar::CUT, "Cu&t", QIcon::fromTheme("edit-cut"), "Ctrl+X", "Cut a part of the map.");
     editMenu->addAction(cutAction_);
-    copyAction_ = createAction("&Copy", "COPY", QIcon::fromTheme("edit-copy"), QKeySequence::Copy, "Copy a part of the map.");
+    copyAction_ = createActionWithId(MenuBar::COPY, "&Copy", QIcon::fromTheme("edit-copy"), "Ctrl+C", "Copy a part of the map.");
     editMenu->addAction(copyAction_);
-    pasteAction_ = createAction("&Paste", "PASTE", QIcon::fromTheme("edit-paste"), QKeySequence::Paste, "Paste a part of the map.");
+    pasteAction_ = createActionWithId(MenuBar::PASTE, "&Paste", QIcon::fromTheme("edit-paste"), "Ctrl+V", "Paste a part of the map.");
     editMenu->addAction(pasteAction_);
     editMenu->addSeparator();
 
@@ -328,9 +490,12 @@ QMenu* MainWindow::createEditorMenu() {
     editorMenu->addAction(createAction("Take &Screenshot", "TAKE_SCREENSHOT", QIcon::fromTheme("applets-screenshooter"), QKeySequence("F10"), "Saves the current view to the disk."));
     editorMenu->addSeparator();
     QMenu *zoomMenu = editorMenu->addMenu(tr("&Zoom"));
-    zoomMenu->addAction(createAction("Zoom &In", "ZOOM_IN", QIcon::fromTheme("zoom-in"), QKeySequence::ZoomIn, "Increase the zoom."));
-    zoomMenu->addAction(createAction("Zoom &Out", "ZOOM_OUT", QIcon::fromTheme("zoom-out"), QKeySequence::ZoomOut, "Decrease the zoom."));
-    zoomMenu->addAction(createAction("Zoom &Normal", "ZOOM_NORMAL", QIcon::fromTheme("zoom-original"), QKeySequence("Ctrl+0"), "Normal zoom(100%).")); // Ctrl+0 is standard for actual size
+    QAction* zoomInAction = createActionWithId(MenuBar::ZOOM_IN, "Zoom &In", QIcon::fromTheme("zoom-in"), "Ctrl+=", "Increase the zoom.");
+    zoomMenu->addAction(zoomInAction);
+    QAction* zoomOutAction = createActionWithId(MenuBar::ZOOM_OUT, "Zoom &Out", QIcon::fromTheme("zoom-out"), "Ctrl+-", "Decrease the zoom.");
+    zoomMenu->addAction(zoomOutAction);
+    QAction* zoomNormalAction = createActionWithId(MenuBar::ZOOM_NORMAL, "Zoom &Normal", QIcon::fromTheme("zoom-original"), "Ctrl+0", "Normal zoom(100%).");
+    zoomMenu->addAction(zoomNormalAction);
     return editorMenu;
 }
 
@@ -414,15 +579,22 @@ QMenu* MainWindow::createShowMenu() {
 
 QMenu* MainWindow::createNavigateMenu() {
     QMenu* menu = new QMenu(tr("&Navigate"), this);
-    menu->addAction(createAction("Go to &Previous Position", "GOTO_PREVIOUS_POSITION", QIcon::fromTheme("go-previous"), QKeySequence("P"), "Go to the previous screen center position.")); // "P" is not standard, but kept as per original.
+    // Use ActionID system for navigation actions
+    menu->addAction(createActionWithId(MenuBar::GOTO_PREVIOUS_POSITION, "Go to &Previous Position", QIcon::fromTheme("go-previous"), "P", "Go to the previous screen center position."));
+    menu->addAction(createActionWithId(MenuBar::GOTO_POSITION, "&Go to Position...", QIcon::fromTheme("go-jump"), "Ctrl+G", "Navigate to a specific map position"));
+    menu->addSeparator();
+
+    // Floor submenu with ActionID system
     QMenu *floorMenu = menu->addMenu(tr("&Floor"));
     QActionGroup* floorGroup = new QActionGroup(this);
     floorGroup->setExclusive(true);
     for (int i = 0; i <= 15; ++i) {
-        QAction* floorAction = createAction(QString("Floor %1").arg(i), QString("FLOOR_%1").arg(i), QIcon(), "", "", true); // No individual icons for floors
+        MenuBar::ActionID floorActionId = static_cast<MenuBar::ActionID>(static_cast<int>(MenuBar::FLOOR_0) + i);
+        QString shortcut = (i <= 9) ? QString::number(i) : ""; // Shortcuts 0-9 for floors 0-9
+        QAction* floorAction = createActionWithId(floorActionId, QString("Floor %1").arg(i), QIcon(), shortcut, QString("Switch to floor %1").arg(i), true);
         floorMenu->addAction(floorAction);
         floorGroup->addAction(floorAction);
-        if (i == 7) floorAction->setChecked(true); 
+        if (i == 7) floorAction->setChecked(true); // Ground floor default
     }
     return menu;
 }
@@ -430,14 +602,20 @@ QMenu* MainWindow::createNavigateMenu() {
 QMenu* MainWindow::createWindowMenu() { 
     QMenu* menu = new QMenu(tr("&Window"), this);
 
-    viewPaletteDockAction_ = createAction(tr("Palette Panel"), "VIEW_PALETTE_DOCK", QIcon(), "", "Show or hide the Palette panel.", true, true); // Icon set by dock itself?
+    viewPaletteDockAction_ = createActionWithId(MenuBar::VIEW_PALETTE_DOCK, "Palette Panel", QIcon(), "", "Show or hide the Palette panel", true, true);
     menu->addAction(viewPaletteDockAction_);
-    viewMinimapDockAction_ = createAction(tr("Minimap Panel"), "VIEW_MINIMAP_DOCK", QIcon(), "", "Show or hide the Minimap panel.", true, true);
+    viewMinimapDockAction_ = createActionWithId(MenuBar::VIEW_MINIMAP_DOCK, "Minimap Panel", QIcon(), "", "Show or hide the Minimap panel", true, true);
     menu->addAction(viewMinimapDockAction_);
-    viewPropertiesDockAction_ = createAction(tr("Properties Panel"), "VIEW_PROPERTIES_DOCK", QIcon(), "", "Show or hide the Properties panel.", true, true);
+    viewPropertiesDockAction_ = createActionWithId(MenuBar::VIEW_PROPERTIES_DOCK, "Properties Panel", QIcon(), "", "Show or hide the Properties panel", true, true);
     menu->addAction(viewPropertiesDockAction_);
     menu->addSeparator();
-    menu->addAction(createAction("&New Palette", "NEW_PALETTE", QIcon::fromTheme("document-new"), "", "Creates a new palette."));
+    menu->addAction(createActionWithId(MenuBar::NEW_PALETTE, "&New Palette", QIcon::fromTheme("document-new"), "Ctrl+Shift+P", "Creates a new palette."));
+    menu->addAction(createActionWithId(MenuBar::DESTROY_PALETTE, "&Destroy Palette", QIcon::fromTheme("window-close"), "", "Destroy the current palette window"));
+    menu->addSeparator();
+
+    // Dockable views
+    menu->addAction(createActionWithId(MenuBar::NEW_DOCKABLE_VIEW, "New &Dockable View", QIcon::fromTheme("view-split-left-right"), "", "Create a new dockable map view"));
+    menu->addAction(createActionWithId(MenuBar::CLOSE_DOCKABLE_VIEWS, "&Close Dockable Views", QIcon::fromTheme("window-close"), "", "Close all dockable map views"));
     menu->addSeparator();
 
     QMenu *paletteMenu = menu->addMenu(tr("&Palette"));
@@ -446,10 +624,18 @@ QMenu* MainWindow::createWindowMenu() {
     menu->addSeparator(); 
 
     QMenu *toolbarsMenu = menu->addMenu(tr("&Toolbars"));
-    toolbarsMenu->addAction(createAction("&Brushes", "VIEW_TOOLBARS_BRUSHES", QIcon(), "", "Show or hide the Brushes toolbar.", true, true));
-    toolbarsMenu->addAction(createAction("&Position", "VIEW_TOOLBARS_POSITION", QIcon(), "", "Show or hide the Position toolbar.", true, true));
-    toolbarsMenu->addAction(createAction("&Sizes", "VIEW_TOOLBARS_SIZES", QIcon(), "", "Show or hide the Sizes toolbar.", true, true));
-    toolbarsMenu->addAction(createAction("&Standard", "VIEW_TOOLBARS_STANDARD", QIcon(), "", "Show or hide the Standard toolbar.", true, true));
+    toolbarsMenu->addAction(createActionWithId(MenuBar::VIEW_TOOLBARS_BRUSHES, "&Brushes", QIcon(), "", "Show or hide the Brushes toolbar", true, true));
+    toolbarsMenu->addAction(createActionWithId(MenuBar::VIEW_TOOLBARS_POSITION, "&Position", QIcon(), "", "Show or hide the Position toolbar", true, true));
+    toolbarsMenu->addAction(createActionWithId(MenuBar::VIEW_TOOLBARS_SIZES, "&Sizes", QIcon(), "", "Show or hide the Sizes toolbar", true, true));
+    toolbarsMenu->addAction(createActionWithId(MenuBar::VIEW_TOOLBARS_STANDARD, "&Standard", QIcon(), "", "Show or hide the Standard toolbar", true, true));
+    menu->addSeparator();
+
+    // Perspective management
+    QMenu* perspectiveMenu = menu->addMenu(tr("&Perspective"));
+    perspectiveMenu->addAction(createActionWithId(MenuBar::SAVE_PERSPECTIVE, "&Save Perspective", QIcon::fromTheme("document-save"), "", "Save the current layout perspective"));
+    perspectiveMenu->addAction(createActionWithId(MenuBar::LOAD_PERSPECTIVE, "&Load Perspective", QIcon::fromTheme("document-open"), "", "Load the saved layout perspective"));
+    perspectiveMenu->addAction(createActionWithId(MenuBar::RESET_PERSPECTIVE, "&Reset Perspective", QIcon::fromTheme("view-restore"), "", "Reset layout to default perspective"));
+
     return menu;
 }
 
@@ -460,10 +646,13 @@ QMenu* MainWindow::createExperimentalMenu() {
 }
 
 QMenu* MainWindow::createAboutMenu() {
-    QMenu* menu = new QMenu(tr("A&bout"), this); 
-    menu->addAction(createAction("E&xtensions...", "EXTENSIONS", QIcon::fromTheme("system-extensions"), QKeySequence("F2"), ""));
-    menu->addAction(createAction("&Goto Website", "GOTO_WEBSITE", QIcon::fromTheme("web-browser"), QKeySequence("F3"), ""));
-    menu->addAction(createAction("&About...", "ABOUT", QIcon::fromTheme("help-about"), QKeySequence::HelpContents, "")); // F1 for Help
+    QMenu* menu = new QMenu(tr("A&bout"), this);
+    // Use ActionID system for About menu
+    menu->addAction(createActionWithId(MenuBar::EXTENSIONS, "E&xtensions...", QIcon::fromTheme("system-extensions"), "F2", "Manage editor extensions"));
+    menu->addAction(createActionWithId(MenuBar::GOTO_WEBSITE, "&Goto Website", QIcon::fromTheme("web-browser"), "F3", "Visit the project website"));
+    menu->addAction(createActionWithId(MenuBar::SHOW_HOTKEYS, "&Hotkeys", QIcon::fromTheme("help-keyboard-shortcuts"), "F6", "Show keyboard shortcuts"));
+    menu->addSeparator();
+    menu->addAction(createActionWithId(MenuBar::ABOUT, "&About...", QIcon::fromTheme("help-about"), "F1", "About this application"));
     return menu;
 }
 
@@ -480,184 +669,13 @@ QMenu* MainWindow::createIdlerMenu() {
     return menu;
 }
 
-QToolBar* MainWindow::createStandardToolBar() {
-    QToolBar* tb = new QToolBar(tr("Standard"), this);
-    tb->setObjectName(QStringLiteral("StandardToolBar"));
-    if (newAction_) tb->addAction(newAction_);
-    if (openAction_) tb->addAction(openAction_);
-    if (saveAction_) tb->addAction(saveAction_);
-    tb->addSeparator();
-    if (undoAction_) tb->addAction(undoAction_);
-    if (redoAction_) tb->addAction(redoAction_);
-    tb->addSeparator();
-    if (cutAction_) tb->addAction(cutAction_);
-    if (copyAction_) tb->addAction(copyAction_);
-    if (pasteAction_) tb->addAction(pasteAction_);
-    tb->addSeparator();
-    tb->addWidget(new QLabel(tr("Zoom:"), this));
-    zoomSpinBox_ = new QSpinBox(this);
-    zoomSpinBox_->setRange(10, 400); 
-    zoomSpinBox_->setValue(100);
-    zoomSpinBox_->setSuffix(tr("%"));
-    zoomSpinBox_->setToolTip(tr("Set map zoom level"));
-    connect(zoomSpinBox_, qOverload<int>(&QSpinBox::valueChanged), this, &MainWindow::onZoomControlChanged);
-    tb->addWidget(zoomSpinBox_);
-    tb->addWidget(new QLabel(tr("Layer:"), this));
-    layerComboBox_ = new QComboBox(this);
-    for (int i = 0; i <= 15; ++i) { 
-        layerComboBox_->addItem(QString(tr("Floor %1")).arg(i), i); 
-    }
-    layerComboBox_->setCurrentIndex(7); 
-    layerComboBox_->setToolTip(tr("Select current map layer/floor"));
-    connect(layerComboBox_, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::onLayerControlChanged);
-    tb->addWidget(layerComboBox_);
-    return tb;
-}
 
-QToolBar* MainWindow::createBrushesToolBar() {
-    QToolBar* tb = new QToolBar(tr("Brushes"), this);
-    tb->setObjectName(QStringLiteral("BrushesToolBar"));
-    QActionGroup* brushGroup = new QActionGroup(this);
-    brushGroup->setExclusive(true);
 
-    // Helper lambda to create actions, trying specific icons first, then theme icons.
-    auto addBrushAction = [&](const QString& text, const QString& objectName, const QString& iconName, const QString& themeIconName, const QString& toolTip) {
-        QIcon icon(QStringLiteral(":/icons/%1.png").arg(iconName));
-        if (icon.isNull()) {
-            icon = QIcon::fromTheme(themeIconName);
-        }
-        if (icon.isNull()) { // Fallback if theme icon also not found
-            qDebug() << "Icon not found for" << objectName << ", tried" << QStringLiteral(":/icons/%1.png").arg(iconName) << "and theme" << themeIconName;
-            icon = QIcon(); // Empty icon
-        }
-        QAction* action = createAction(text, objectName, icon, "", toolTip, true, false); // connectToGenericHandler = false
-        connect(action, &QAction::triggered, this, &MainWindow::onBrushActionTriggered);
-        tb->addAction(action);
-        brushGroup->addAction(action);
-        return action;
-    };
 
-    addBrushAction("Optional Border", "BRUSH_OPTIONAL_BORDER", "optional_border_small", "draw-border", "Toggle optional border brush");
-    addBrushAction("Eraser", "BRUSH_ERASER", "eraser_small", "edit-clear", "Toggle eraser brush");
-    tb->addSeparator();
-    addBrushAction("Protected Zone", "BRUSH_PZ", "pz_zone", "security-high", "Toggle Protected Zone brush");
-    addBrushAction("No PvP Zone", "BRUSH_NOPVP", "nopvp_zone", "user-block", "Toggle No PvP Zone brush");
-    addBrushAction("No Logout Zone", "BRUSH_NOLOGOUT", "nologout_zone", "system-log-out", "Toggle No Logout Zone brush");
-    addBrushAction("PvP Zone", "BRUSH_PVP", "pvp_zone", "security-medium", "Toggle PvP Zone brush");
-    addBrushAction("Zone Brush", "BRUSH_ZONE", "zone_brush", "draw-polygon", "Toggle generic zone brush");
-    tb->addSeparator();
-    addBrushAction("Normal Door", "BRUSH_DOOR_NORMAL", "door_normal_small", "object-UNSET", "Toggle normal door brush");
-    addBrushAction("Locked Door", "BRUSH_DOOR_LOCKED", "door_locked_small", "object-UNSET", "Toggle locked door brush");
-    addBrushAction("Magic Door", "BRUSH_DOOR_MAGIC", "door_magic_small", "object-UNSET", "Toggle magic door brush");
-    addBrushAction("Quest Door", "BRUSH_DOOR_QUEST", "door_quest_small", "object-UNSET", "Toggle quest door brush");
-    addBrushAction("Normal Door (alt)", "BRUSH_DOOR_NORMAL_ALT", "door_normal_alt_small", "object-UNSET", "Toggle alternative normal door brush");
-    addBrushAction("Archway", "BRUSH_DOOR_ARCHWAY", "door_archway_small", "object-UNSET", "Toggle archway brush");
-    tb->addSeparator();
-    addBrushAction("Hatch Window", "BRUSH_WINDOW_HATCH", "window_hatch_small", "object-UNSET", "Toggle hatch window brush");
-    addBrushAction("Window", "BRUSH_WINDOW_NORMAL", "window_normal_small", "object-UNSET", "Toggle normal window brush");
 
-    if (!tb->actions().isEmpty() && tb->actions().first()->isCheckable()) {
-        tb->actions().first()->setChecked(true); // Set first brush as active by default
-    }
-    return tb;
-}
 
-QToolBar* MainWindow::createPositionToolBar() {
-    QToolBar* tb = new QToolBar(tr("Position"), this);
-    tb->setObjectName(QStringLiteral("PositionToolBar"));
-    tb->addWidget(new QLabel(tr("X:"), this));
-    xCoordSpinBox_ = new QSpinBox(this);
-    xCoordSpinBox_->setRange(0, 32767); 
-    xCoordSpinBox_->setToolTip(tr("X Coordinate")); // Updated tooltip
-    connect(xCoordSpinBox_, qOverload<int>(&QSpinBox::valueChanged), this, &MainWindow::onPositionXChanged);
-    tb->addWidget(xCoordSpinBox_);
-    tb->addWidget(new QLabel(tr("Y:"), this));
-    yCoordSpinBox_ = new QSpinBox(this);
-    yCoordSpinBox_->setRange(0, 32767); 
-    yCoordSpinBox_->setToolTip(tr("Y Coordinate")); // Updated tooltip
-    connect(yCoordSpinBox_, qOverload<int>(&QSpinBox::valueChanged), this, &MainWindow::onPositionYChanged);
-    tb->addWidget(yCoordSpinBox_);
-    tb->addWidget(new QLabel(tr("Z:"), this));
-    zCoordSpinBox_ = new QSpinBox(this);
-    zCoordSpinBox_->setRange(0, 15);    
-    zCoordSpinBox_->setToolTip(tr("Z Coordinate")); // Updated tooltip
-    connect(zCoordSpinBox_, qOverload<int>(&QSpinBox::valueChanged), this, &MainWindow::onPositionZChanged);
-    tb->addWidget(zCoordSpinBox_);
 
-    QPushButton* goButton = new QPushButton(this);
-    goButton->setToolTip(tr("Go To Position")); // Updated tooltip
-    QIcon goIcon = QIcon::fromTheme("go-jump");
-    if (goIcon.isNull()) {
-        goIcon = QIcon(QStringLiteral(":/icons/position_go.png"));
-    }
-    if (goIcon.isNull()) {
-         qDebug() << "Icon not found for Go button";
-    }
-    goButton->setIcon(goIcon);
-    goButton->setText(tr("Go")); // Keep text for clarity if icon is missing
-    connect(goButton, &QPushButton::clicked, this, &MainWindow::onPositionGo);
-    tb->addWidget(goButton);
-    return tb;
-}
 
-QToolBar* MainWindow::createSizesToolBar() {
-    QToolBar* tb = new QToolBar(tr("Sizes"), this);
-    tb->setObjectName(QStringLiteral("SizesToolBar"));
-
-    brushShapeActionGroup_ = new QActionGroup(this);
-    brushShapeActionGroup_->setExclusive(true);
-
-    QIcon rectIcon(QStringLiteral(":/icons/rectangular_brush.png"));
-    if (rectIcon.isNull()) rectIcon = QIcon::fromTheme("draw-rectangle");
-    rectangularBrushShapeAction_ = createAction(tr("Rectangular"), "TOGGLE_BRUSH_SHAPE_RECT", rectIcon, "", "Use rectangular brush shape", true, false); // connectToGenericHandler = false
-    rectangularBrushShapeAction_->setChecked(true);
-    connect(rectangularBrushShapeAction_, &QAction::triggered, this, &MainWindow::onBrushShapeActionTriggered);
-    brushShapeActionGroup_->addAction(rectangularBrushShapeAction_);
-    tb->addAction(rectangularBrushShapeAction_);
-
-    QIcon circIcon(QStringLiteral(":/icons/circular_brush.png"));
-    if (circIcon.isNull()) circIcon = QIcon::fromTheme("draw-ellipse");
-    circularBrushShapeAction_ = createAction(tr("Circular"), "TOGGLE_BRUSH_SHAPE_CIRC", circIcon, "", "Use circular brush shape", true, false); // connectToGenericHandler = false
-    connect(circularBrushShapeAction_, &QAction::triggered, this, &MainWindow::onBrushShapeActionTriggered);
-    brushShapeActionGroup_->addAction(circularBrushShapeAction_);
-    tb->addAction(circularBrushShapeAction_);
-
-    tb->addSeparator();
-
-    brushSizeActionGroup_ = new QActionGroup(this);
-    brushSizeActionGroup_->setExclusive(true);
-
-    auto addSizeAction = [&](int size, const QString& objectNameSuffix, const QString& toolTipSuffix) {
-        // Default to rectangular icons, assuming dynamic update later if shape changes
-        QIcon icon(QStringLiteral(":/icons/rectangular_%1.png").arg(size));
-        if (icon.isNull()) {
-            // Fallback or no icon if specific size icons don't exist
-            // For now, let's use a generic draw-primitive icon or none
-            icon = QIcon::fromTheme("draw-primitive");
-             if (icon.isNull()) {
-                qDebug() << "Icon not found for brush size" << size;
-             }
-        }
-        // In wx, sizes were 0-6 mapping to 1x1 to 13x13 (actual_size = 2*N+1)
-        // Here, N is 1-7 for actions. Let's assume N directly maps to the icon number.
-        int displaySize = (size -1) * 2 + 1;
-        QAction* action = createAction(tr("Size %1x%1").arg(displaySize), QString("SET_BRUSH_SIZE_%1").arg(objectNameSuffix), icon, "", QString("Set brush size to %1").arg(toolTipSuffix), true, false); // connectToGenericHandler = false
-        connect(action, &QAction::triggered, this, &MainWindow::onBrushSizeActionTriggered);
-        brushSizeActionGroup_->addAction(action);
-        tb->addAction(action);
-        return action;
-    };
-
-    brushSize1Action_ = addSizeAction(1, "1", "1x1");
-    brushSize1Action_->setChecked(true); 
-    brushSize2Action_ = addSizeAction(2, "2", "3x3");
-    brushSize3Action_ = addSizeAction(3, "3", "5x5");
-    brushSize4Action_ = addSizeAction(4, "4", "7x7");
-    brushSize5Action_ = addSizeAction(5, "5", "9x9");
-    brushSize6Action_ = addSizeAction(6, "6", "11x11");
-    brushSize7Action_ = addSizeAction(7, "7", "13x13");
-    return tb;
-}
 
 // Slots for new toolbar actions
 void MainWindow::onBrushActionTriggered() {
@@ -848,43 +866,41 @@ void MainWindow::onLayerControlChanged(int index) {
 // Automagic Settings Placeholder Implementations
 
 void MainWindow::openAutomagicSettingsDialog() {
-    AutomagicSettingsDialog dialog(this);
-
-    // Load current settings into the dialog (using placeholder getters from MainWindow)
-    dialog.setSettings(
-        mainGetAutomagicEnabled(),
-        mainGetSameGroundTypeBorderEnabled(),
-        mainGetWallsRepelBordersEnabled(),
-        mainGetLayerCarpetsEnabled(),
-        mainGetBorderizeDeleteEnabled(),
-        mainGetCustomBorderEnabled(),
-        mainGetCustomBorderId()
-    );
-
-    if (dialog.exec() == QDialog::Accepted) {
-        // Apply new settings from the dialog (using placeholder updater in MainWindow)
-        mainUpdateAutomagicSettings(
-            dialog.isAutomagicEnabled(),
-            dialog.isSameGroundTypeBorderEnabled(),
-            dialog.isWallsRepelBordersEnabled(),
-            dialog.isLayerCarpetsEnabled(),
-            dialog.isBorderizeDeleteEnabled(),
-            dialog.isCustomBorderEnabled(),
-            dialog.getCustomBorderId()
-        );
+    if (dialogManager_) {
+        dialogManager_->showAutomagicSettingsDialog();
     }
 }
 
-bool MainWindow::mainGetAutomagicEnabled() const { qDebug("MainWindow::mainGetAutomagicEnabled (stub)"); return false; }
-bool MainWindow::mainGetSameGroundTypeBorderEnabled() const { qDebug("MainWindow::mainGetSameGroundTypeBorderEnabled (stub)"); return true; } // Default true based on common use
-bool MainWindow::mainGetWallsRepelBordersEnabled() const { qDebug("MainWindow::mainGetWallsRepelBordersEnabled (stub)"); return true; } // Default true
-bool MainWindow::mainGetLayerCarpetsEnabled() const { qDebug("MainWindow::mainGetLayerCarpetsEnabled (stub)"); return true; } // Default true
-bool MainWindow::mainGetBorderizeDeleteEnabled() const { qDebug("MainWindow::mainGetBorderizeDeleteEnabled (stub)"); return false; }
-bool MainWindow::mainGetCustomBorderEnabled() const { qDebug("MainWindow::mainGetCustomBorderEnabled (stub)"); return false; }
-int MainWindow::mainGetCustomBorderId() const { qDebug("MainWindow::mainGetCustomBorderId (stub)"); return 1; }
+bool MainWindow::mainGetAutomagicEnabled() const {
+    return settingsManager_->isAutomagicEnabled();
+}
+
+bool MainWindow::mainGetSameGroundTypeBorderEnabled() const {
+    return settingsManager_->isSameGroundTypeBorderEnabled();
+}
+
+bool MainWindow::mainGetWallsRepelBordersEnabled() const {
+    return settingsManager_->isWallsRepelBordersEnabled();
+}
+
+bool MainWindow::mainGetLayerCarpetsEnabled() const {
+    return settingsManager_->isLayerCarpetsEnabled();
+}
+
+bool MainWindow::mainGetBorderizeDeleteEnabled() const {
+    return settingsManager_->isBorderizeDeleteEnabled();
+}
+
+bool MainWindow::mainGetCustomBorderEnabled() const {
+    return settingsManager_->isCustomBorderEnabled();
+}
+
+int MainWindow::mainGetCustomBorderId() const {
+    return settingsManager_->getCustomBorderId();
+}
 
 void MainWindow::mainUpdateAutomagicSettings(bool automagicEnabled, bool sameGround, bool wallsRepel, bool layerCarpets, bool borderizeDelete, bool customBorder, int customBorderId) {
-    qDebug() << "MainWindow::mainUpdateAutomagicSettings (stub) called with values:";
+    qDebug() << "MainWindow::mainUpdateAutomagicSettings called with values:";
     qDebug() << "  Automagic:" << automagicEnabled;
     qDebug() << "  Same Ground:" << sameGround;
     qDebug() << "  Walls Repel:" << wallsRepel;
@@ -892,15 +908,38 @@ void MainWindow::mainUpdateAutomagicSettings(bool automagicEnabled, bool sameGro
     qDebug() << "  Borderize Delete:" << borderizeDelete;
     qDebug() << "  Custom Border:" << customBorder;
     qDebug() << "  Custom Border ID:" << customBorderId;
-    
-    // In a real scenario, this would update some internal state or call a settings manager
-    // And then potentially trigger a refresh
+
+    // Update settings through SettingsManager
+    settingsManager_->setAutomagicEnabled(automagicEnabled);
+    settingsManager_->setSameGroundTypeBorderEnabled(sameGround);
+    settingsManager_->setWallsRepelBordersEnabled(wallsRepel);
+    settingsManager_->setLayerCarpetsEnabled(layerCarpets);
+    settingsManager_->setBorderizeDeleteEnabled(borderizeDelete);
+    settingsManager_->setCustomBorderEnabled(customBorder);
+    settingsManager_->setCustomBorderId(customBorderId);
+
+    // Save settings to disk
+    settingsManager_->saveSettings();
+
+    // Update status bar
+    QString statusMessage = automagicEnabled ? "Automagic enabled." : "Automagic disabled.";
+    showTemporaryStatusMessage(statusMessage, 3000);
+
+    // Trigger refresh
     mainTriggerMapOrUIRefreshForAutomagic();
 }
 
 void MainWindow::mainTriggerMapOrUIRefreshForAutomagic() {
-    qDebug() << "MainWindow::mainTriggerMapOrUIRefreshForAutomagic (stub) called.";
-    // This would eventually call methods on MapView or other relevant UI components
+    qDebug() << "MainWindow::mainTriggerMapOrUIRefreshForAutomagic called.";
+
+    // Update border system with new settings
+    borderSystem_->updateFromSettings();
+
+    // TODO: Trigger map view refresh when MapView is implemented
+    // TODO: Update any UI elements that depend on automagic settings
+    // TODO: Refresh palette if needed
+
+    qDebug() << "Automagic settings refresh completed.";
 }
 
 // --- Clipboard Operation Handlers (Stubs) ---
@@ -987,49 +1026,205 @@ MapPos MainWindow::getPasteTargetPosition() const {
 // --- Status Bar Update Method Implementations ---
 
 void MainWindow::updateMouseMapCoordinates(const QPointF& mapPos, int floor) {
-    if (mouseCoordsLabel_) {
-        // Round mapPos coordinates for display if they are very precise
-        mouseCoordsLabel_->setText(QString("X: %1, Y: %2, Z: %3")
-                                     .arg(qRound(mapPos.x()))
-                                     .arg(qRound(mapPos.y()))
-                                     .arg(floor));
+    if (statusBarManager_) {
+        statusBarManager_->updateMouseMapCoordinates(mapPos, floor);
     }
 }
 
 void MainWindow::updateZoomLevel(double zoom) {
-    if (zoomLevelLabel_) {
-        zoomLevelLabel_->setText(QString("Zoom: %1%").arg(static_cast<int>(zoom * 100)));
+    if (statusBarManager_) {
+        statusBarManager_->updateZoomLevel(zoom);
     }
 }
 
 void MainWindow::updateCurrentLayer(int layer) {
-    if (currentLayerLabel_) {
-        currentLayerLabel_->setText(QString("Floor: %1").arg(layer));
+    if (statusBarManager_) {
+        statusBarManager_->updateCurrentLayer(layer);
     }
     // This slot might also be connected to the layerComboBox_ valueChanged if needed
     // and zCoordSpinBox_ valueChanged.
 }
 
 void MainWindow::updateCurrentBrush(const QString& brushName) {
-    if (brushInfoLabel_) {
-        brushInfoLabel_->setText(QString("Brush: %1").arg(brushName.isEmpty() ? "None" : brushName));
+    if (statusBarManager_) {
+        statusBarManager_->updateCurrentBrush(brushName);
+    }
+}
+
+// --- Toolbar State Management Methods ---
+
+void MainWindow::updateToolbarStates() {
+    if (toolBarManager_) {
+        toolBarManager_->updateToolbarStates();
+    }
+}
+
+void MainWindow::updateStandardToolbarStates() {
+    if (toolBarManager_) {
+        toolBarManager_->updateStandardToolbarStates();
+    }
+}
+
+void MainWindow::updateBrushToolbarStates() {
+    if (toolBarManager_) {
+        toolBarManager_->updateBrushToolbarStates();
+    }
+}
+
+// --- Dock Widget Management Methods ---
+
+void MainWindow::createNewPalette() {
+    if (perspectiveManager_) {
+        perspectiveManager_->createNewPalette();
+    }
+}
+
+void MainWindow::destroyCurrentPalette() {
+    if (perspectiveManager_) {
+        perspectiveManager_->destroyCurrentPalette();
+    }
+}
+
+void MainWindow::createDockableMapView() {
+    if (perspectiveManager_) {
+        perspectiveManager_->createDockableMapView();
+    }
+}
+
+void MainWindow::closeDockableViews() {
+    if (perspectiveManager_) {
+        perspectiveManager_->closeDockableViews();
+    }
+}
+
+// --- Perspective Management Methods ---
+
+void MainWindow::savePerspective() {
+    if (perspectiveManager_) {
+        perspectiveManager_->savePerspective();
+    }
+}
+
+void MainWindow::loadPerspective() {
+    if (perspectiveManager_) {
+        perspectiveManager_->loadPerspective();
+    }
+}
+
+void MainWindow::resetPerspective() {
+    if (perspectiveManager_) {
+        perspectiveManager_->resetPerspective();
     }
 }
 
 void MainWindow::updateSelectedItemInfo(const QString& itemInfo) {
-    if (itemInfoLabel_) {
-        itemInfoLabel_->setText(itemInfo.isEmpty() ? "Item: None" : itemInfo);
+    if (statusBarManager_) {
+        statusBarManager_->updateSelectedItemInfo(itemInfo);
+    }
+}
+
+void MainWindow::updateSelectedItemInfo(const Item* item) {
+    if (statusBarManager_) {
+        statusBarManager_->updateSelectedItemInfo(item);
+    }
+}
+
+void MainWindow::updateStatusBarProgress(const QString& operation, int progress) {
+    if (statusBarManager_) {
+        statusBarManager_->updateProgress(operation, progress);
+    }
+}
+
+void MainWindow::handleStatusUpdateRequest(const QString& type, const QVariantMap& data) {
+    if (statusBarManager_) {
+        statusBarManager_->handleStatusUpdateRequest(type, data);
     }
 }
 
 void MainWindow::showTemporaryStatusMessage(const QString& message, int timeout) {
-    statusBar()->showMessage(message, timeout);
+    if (statusBarManager_) {
+        statusBarManager_->showTemporaryMessage(message, timeout);
+    }
 }
 
 // State Saving and Restoring
 void MainWindow::closeEvent(QCloseEvent *event) {
+    // Task 62: Enhanced close event handling with tab management
+
+    // Check for unsaved changes in all open maps
+    bool hasUnsavedChanges = false;
+    QStringList unsavedMaps;
+
+    for (int i = 0; i < getMapTabCount(); ++i) {
+        MapView* mapView = getMapViewAt(i);
+        if (mapView) {
+            // TODO: Check if map has unsaved changes
+            // For now, assume no unsaved changes
+            bool mapModified = false; // mapView->isModified();
+            if (mapModified) {
+                hasUnsavedChanges = true;
+                unsavedMaps.append(getMapTabTitle(i));
+            }
+        }
+    }
+
+    // If there are unsaved changes, ask user what to do
+    if (hasUnsavedChanges) {
+        QString message;
+        if (unsavedMaps.size() == 1) {
+            message = tr("The map '%1' has unsaved changes. Do you want to save before closing?")
+                     .arg(unsavedMaps.first());
+        } else {
+            message = tr("The following maps have unsaved changes:\n%1\n\nDo you want to save them before closing?")
+                     .arg(unsavedMaps.join("\n"));
+        }
+
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            tr("Close Application"),
+            message,
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+            QMessageBox::Save
+        );
+
+        switch (reply) {
+            case QMessageBox::Save:
+                // TODO: Implement save all functionality
+                qDebug() << "Save all requested before closing application";
+                break;
+            case QMessageBox::Discard:
+                // Continue with closing
+                break;
+            case QMessageBox::Cancel:
+                event->ignore();
+                return;
+            default:
+                event->ignore();
+                return;
+        }
+    }
+
+    // Stop auto-save timer
+    if (autoSaveTimer_) {
+        autoSaveTimer_->stop();
+    }
+
+    // Save window state
+    onSaveWindowState();
+
+    // Save toolbar and dock states (existing functionality)
     saveToolBarState();
-    QMainWindow::closeEvent(event); // Important to call base class
+    savePerspective(); // Save dock layout perspective
+
+    // Close all map tabs
+    while (getMapTabCount() > 0) {
+        removeMapTab(0);
+    }
+
+    // Accept the close event
+    event->accept();
+
+    qDebug() << "Application closing - all states saved and tabs closed";
 }
 
 void MainWindow::saveToolBarState() {
@@ -1038,6 +1233,11 @@ void MainWindow::saveToolBarState() {
 
     settings.setValue("mainWindowGeometry", saveGeometry());
     settings.setValue("mainWindowState", saveState());
+
+    // Task 46: Use ToolBarManager to save toolbar state
+    if (toolBarManager_) {
+        toolBarManager_->saveToolBarState();
+    }
 
     if (standardToolBar_) settings.setValue("standardToolBarVisible", standardToolBar_->isVisible());
     if (brushesToolBar_) settings.setValue("brushesToolBarVisible", brushesToolBar_->isVisible());
@@ -1229,10 +1429,635 @@ void MainWindow::onTestUpdateTileProperties() {
 }
 
 void MainWindow::onShowReplaceItemsDialog() {
-    qDebug() << "Showing ReplaceItemsDialog...";
-    ReplaceItemsDialog dialog(this); // Parent the dialog to MainWindow
-    // dialog.setModal(true); // exec() makes it modal by default
-    int result = dialog.exec(); // Show modally and get result if needed
-    qDebug() << "ReplaceItemsDialog closed with result:" << result;
-    // result will be QDialog::Accepted or QDialog::Rejected if dialog uses accept()/reject()
+    if (dialogManager_) {
+        dialogManager_->showReplaceItemsDialog();
+    }
+}
+
+// Task7: Basic dialog implementations
+void MainWindow::onShowGroundValidationDialog() {
+    if (dialogManager_) {
+        dialogManager_->showGroundValidationDialog();
+    }
+}
+
+void MainWindow::onShowImportMapDialog() {
+    if (dialogManager_) {
+        dialogManager_->showImportMapDialog();
+    }
+}
+
+void MainWindow::onShowExportMiniMapDialog() {
+    if (dialogManager_) {
+        dialogManager_->showExportMiniMapDialog();
+    }
+}
+
+void MainWindow::onShowGotoPositionDialog() {
+    if (dialogManager_) {
+        dialogManager_->showGotoPositionDialog();
+    }
+}
+
+// Centralized action handler for MenuBar::ActionID - now delegates to MenuActionHandler
+void MainWindow::onActionTriggered(MenuBar::ActionID actionId) {
+    if (menuActionHandler_) {
+        menuActionHandler_->handleAction(actionId);
+    } else {
+        qWarning() << "MainWindow::onActionTriggered: MenuActionHandler is null!";
+    }
+}
+
+// Accessor method for MapView
+MapView* MainWindow::getMapView() const {
+    return mapView_;
+}
+
+// MapView integration methods
+void MainWindow::setMapView(MapView* mapView) {
+    if (mapView_ != mapView) {
+        mapView_ = mapView;
+        connectMapViewToStatusBar();
+    }
+}
+
+void MainWindow::connectMapViewToStatusBar() {
+    if (mapView_ && statusBarManager_) {
+        // Connect MapView status update signal to MainWindow status update handler
+        connect(mapView_, &MapView::statusUpdateRequested,
+                this, &MainWindow::handleStatusUpdateRequest);
+
+        qDebug() << "MapView connected to status bar for status updates";
+    }
+}
+
+// Task 62: Tab management implementation
+int MainWindow::addMapTab(MapView* mapView, const QString& title) {
+    if (!mapView || !mapTabWidget_) {
+        qWarning() << "MainWindow::addMapTab: Invalid mapView or mapTabWidget";
+        return -1;
+    }
+
+    // Add to tab widget
+    int index = mapTabWidget_->addTab(mapView, title);
+
+    // Add to our list
+    mapViews_.append(mapView);
+
+    // Connect MapView signals for panel communication
+    connect(mapView, &MapView::statusUpdateRequested,
+            this, &MainWindow::handleStatusUpdateRequest);
+
+    // Set as current tab
+    mapTabWidget_->setCurrentIndex(index);
+    currentMapTabIndex_ = index;
+
+    // Emit signals
+    emit mapTabAdded(index);
+    emit activeMapChanged(mapView);
+
+    qDebug() << "Added map tab at index" << index << "with title:" << title;
+    return index;
+}
+
+void MainWindow::removeMapTab(int index) {
+    if (!mapTabWidget_ || index < 0 || index >= mapTabWidget_->count()) {
+        qWarning() << "MainWindow::removeMapTab: Invalid index" << index;
+        return;
+    }
+
+    // Get the MapView before removing
+    MapView* mapView = getMapViewAt(index);
+
+    // Remove from tab widget
+    mapTabWidget_->removeTab(index);
+
+    // Remove from our list
+    if (index < mapViews_.size()) {
+        mapViews_.removeAt(index);
+    }
+
+    // Update current index
+    if (mapTabWidget_->count() == 0) {
+        currentMapTabIndex_ = -1;
+        emit activeMapChanged(nullptr);
+    } else {
+        currentMapTabIndex_ = mapTabWidget_->currentIndex();
+        emit activeMapChanged(getCurrentMapView());
+    }
+
+    // Emit signal
+    emit mapTabRemoved(index);
+
+    // Clean up MapView if needed
+    if (mapView) {
+        mapView->disconnect(this);
+    }
+
+    qDebug() << "Removed map tab at index" << index;
+}
+
+void MainWindow::setCurrentMapTab(int index) {
+    if (!mapTabWidget_ || index < 0 || index >= mapTabWidget_->count()) {
+        qWarning() << "MainWindow::setCurrentMapTab: Invalid index" << index;
+        return;
+    }
+
+    mapTabWidget_->setCurrentIndex(index);
+    currentMapTabIndex_ = index;
+
+    MapView* mapView = getCurrentMapView();
+    emit activeMapChanged(mapView);
+
+    qDebug() << "Set current map tab to index" << index;
+}
+
+int MainWindow::getCurrentMapTabIndex() const {
+    return mapTabWidget_ ? mapTabWidget_->currentIndex() : -1;
+}
+
+MapView* MainWindow::getCurrentMapView() const {
+    int index = getCurrentMapTabIndex();
+    return getMapViewAt(index);
+}
+
+MapView* MainWindow::getMapViewAt(int index) const {
+    if (!mapTabWidget_ || index < 0 || index >= mapTabWidget_->count()) {
+        return nullptr;
+    }
+
+    QWidget* widget = mapTabWidget_->widget(index);
+    return qobject_cast<MapView*>(widget);
+}
+
+int MainWindow::getMapTabCount() const {
+    return mapTabWidget_ ? mapTabWidget_->count() : 0;
+}
+
+void MainWindow::setMapTabTitle(int index, const QString& title) {
+    if (!mapTabWidget_ || index < 0 || index >= mapTabWidget_->count()) {
+        qWarning() << "MainWindow::setMapTabTitle: Invalid index" << index;
+        return;
+    }
+
+    mapTabWidget_->setTabText(index, title);
+    emit mapTabTitleChanged(index, title);
+
+    qDebug() << "Set map tab title at index" << index << "to:" << title;
+}
+
+QString MainWindow::getMapTabTitle(int index) const {
+    if (!mapTabWidget_ || index < 0 || index >= mapTabWidget_->count()) {
+        return QString();
+    }
+
+    return mapTabWidget_->tabText(index);
+}
+
+void MainWindow::cycleMapTabs(bool forward) {
+    if (!mapTabWidget_ || mapTabWidget_->count() <= 1) {
+        return;
+    }
+
+    int currentIndex = mapTabWidget_->currentIndex();
+    int newIndex;
+
+    if (forward) {
+        newIndex = (currentIndex + 1) % mapTabWidget_->count();
+    } else {
+        newIndex = (currentIndex - 1 + mapTabWidget_->count()) % mapTabWidget_->count();
+    }
+
+    setCurrentMapTab(newIndex);
+    qDebug() << "Cycled map tabs from" << currentIndex << "to" << newIndex;
+}
+
+// Task 62: Tab management slots implementation
+void MainWindow::onMapTabChanged(int index) {
+    if (index == currentMapTabIndex_) {
+        return; // No change
+    }
+
+    currentMapTabIndex_ = index;
+    MapView* mapView = getCurrentMapView();
+
+    // Update UI elements based on new active tab/map
+    if (mapView) {
+        // Update status bar with current map info
+        if (statusBarManager_) {
+            statusBarManager_->updateMapInfo(mapView);
+        }
+
+        // Update palettes and other panels
+        emit activeMapChanged(mapView);
+
+        // Update layer controls and other UI elements
+        if (toolBarManager_) {
+            toolBarManager_->updateForMapView(mapView);
+        }
+    }
+
+    emit currentMapTabChanged(index);
+    qDebug() << "Map tab changed to index" << index;
+}
+
+void MainWindow::onMapTabCloseRequested(int index) {
+    if (index < 0 || index >= getMapTabCount()) {
+        return;
+    }
+
+    MapView* mapView = getMapViewAt(index);
+    if (!mapView) {
+        removeMapTab(index);
+        return;
+    }
+
+    // Check if map has unsaved changes
+    bool hasUnsavedChanges = false; // TODO: Implement map modification checking
+
+    if (hasUnsavedChanges) {
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            tr("Close Map"),
+            tr("The map '%1' has unsaved changes. Do you want to save before closing?")
+                .arg(getMapTabTitle(index)),
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+            QMessageBox::Save
+        );
+
+        switch (reply) {
+            case QMessageBox::Save:
+                // TODO: Implement save functionality
+                qDebug() << "Save requested before closing tab" << index;
+                break;
+            case QMessageBox::Discard:
+                // Continue with closing
+                break;
+            case QMessageBox::Cancel:
+                return; // Don't close
+            default:
+                return;
+        }
+    }
+
+    removeMapTab(index);
+}
+
+void MainWindow::onMapTabMoved(int from, int to) {
+    // Update our internal list to match the tab widget order
+    if (from >= 0 && from < mapViews_.size() && to >= 0 && to < mapViews_.size()) {
+        mapViews_.move(from, to);
+        qDebug() << "Map tab moved from" << from << "to" << to;
+    }
+}
+
+void MainWindow::onNewMapTab() {
+    // TODO: Create new map and MapView
+    qDebug() << "New map tab requested - placeholder implementation";
+
+    // For now, create a placeholder tab
+    QWidget* placeholder = new QWidget();
+    placeholder->setStyleSheet("background-color: #f0f0f0;");
+
+    int index = mapTabWidget_->addTab(placeholder, tr("New Map %1").arg(getMapTabCount() + 1));
+    mapTabWidget_->setCurrentIndex(index);
+
+    emit mapTabAdded(index);
+}
+
+void MainWindow::onCloseCurrentMapTab() {
+    int currentIndex = getCurrentMapTabIndex();
+    if (currentIndex >= 0) {
+        onMapTabCloseRequested(currentIndex);
+    }
+}
+
+void MainWindow::onCloseAllMapTabs() {
+    while (getMapTabCount() > 0) {
+        onMapTabCloseRequested(0);
+    }
+}
+
+void MainWindow::onNextMapTab() {
+    cycleMapTabs(true);
+}
+
+void MainWindow::onPreviousMapTab() {
+    cycleMapTabs(false);
+}
+
+// Task 62: Panel communication slots
+void MainWindow::onPanelBrushChanged(const QString& brushName) {
+    emit activeBrushChanged(brushName);
+
+    // Update current MapView if needed
+    MapView* currentMapView = getCurrentMapView();
+    if (currentMapView) {
+        // TODO: Update MapView brush selection
+        qDebug() << "Panel brush changed to:" << brushName;
+    }
+}
+
+void MainWindow::onPanelLayerChanged(int layer) {
+    emit activeLayerChanged(layer);
+
+    // Update current MapView if needed
+    MapView* currentMapView = getCurrentMapView();
+    if (currentMapView) {
+        // TODO: Update MapView layer
+        qDebug() << "Panel layer changed to:" << layer;
+    }
+}
+
+void MainWindow::onPanelSelectionChanged() {
+    emit selectionChanged();
+
+    // Update UI elements based on selection
+    MapView* currentMapView = getCurrentMapView();
+    if (currentMapView) {
+        // TODO: Update selection-dependent UI elements
+        qDebug() << "Panel selection changed";
+    }
+}
+
+void MainWindow::onMapViewModified(bool modified) {
+    emit mapModified(modified);
+
+    // Update tab title to show modification state
+    int currentIndex = getCurrentMapTabIndex();
+    if (currentIndex >= 0) {
+        QString title = getMapTabTitle(currentIndex);
+        if (modified && !title.endsWith("*")) {
+            setMapTabTitle(currentIndex, title + "*");
+        } else if (!modified && title.endsWith("*")) {
+            title.chop(1);
+            setMapTabTitle(currentIndex, title);
+        }
+    }
+}
+
+void MainWindow::onDockWidgetVisibilityChanged(bool visible) {
+    // Update menu actions to reflect dock widget visibility
+    QDockWidget* dock = qobject_cast<QDockWidget*>(sender());
+    if (!dock) return;
+
+    if (dock == paletteDock_ && viewPaletteDockAction_) {
+        viewPaletteDockAction_->setChecked(visible);
+    } else if (dock == minimapDock_ && viewMinimapDockAction_) {
+        viewMinimapDockAction_->setChecked(visible);
+    } else if (dock == propertiesDock_ && viewPropertiesDockAction_) {
+        viewPropertiesDockAction_->setChecked(visible);
+    }
+
+    qDebug() << "Dock widget visibility changed:" << dock->objectName() << visible;
+}
+
+// Task 62: Window state management slots
+void MainWindow::onSaveWindowState() {
+    if (!settings_) return;
+
+    // Save window geometry and state
+    settings_->setValue("geometry", saveGeometry());
+    settings_->setValue("windowState", saveState());
+
+    // Save dock widget states
+    settings_->setValue("paletteDockVisible", paletteDock_ ? paletteDock_->isVisible() : false);
+    settings_->setValue("minimapDockVisible", minimapDock_ ? minimapDock_->isVisible() : false);
+    settings_->setValue("propertiesDockVisible", propertiesDock_ ? propertiesDock_->isVisible() : false);
+
+    // Save tab information
+    settings_->setValue("currentMapTabIndex", getCurrentMapTabIndex());
+    settings_->setValue("mapTabCount", getMapTabCount());
+
+    // Save tab titles
+    settings_->beginWriteArray("mapTabs");
+    for (int i = 0; i < getMapTabCount(); ++i) {
+        settings_->setArrayIndex(i);
+        settings_->setValue("title", getMapTabTitle(i));
+    }
+    settings_->endArray();
+
+    settings_->sync();
+    qDebug() << "Window state saved";
+}
+
+void MainWindow::onRestoreWindowState() {
+    if (!settings_) return;
+
+    // Restore window geometry and state
+    QByteArray geometry = settings_->value("geometry").toByteArray();
+    if (!geometry.isEmpty()) {
+        restoreGeometry(geometry);
+    }
+
+    QByteArray windowState = settings_->value("windowState").toByteArray();
+    if (!windowState.isEmpty()) {
+        restoreState(windowState);
+    }
+
+    // Restore dock widget visibility
+    if (paletteDock_) {
+        bool visible = settings_->value("paletteDockVisible", true).toBool();
+        paletteDock_->setVisible(visible);
+        if (viewPaletteDockAction_) {
+            viewPaletteDockAction_->setChecked(visible);
+        }
+    }
+
+    if (minimapDock_) {
+        bool visible = settings_->value("minimapDockVisible", true).toBool();
+        minimapDock_->setVisible(visible);
+        if (viewMinimapDockAction_) {
+            viewMinimapDockAction_->setChecked(visible);
+        }
+    }
+
+    if (propertiesDock_) {
+        bool visible = settings_->value("propertiesDockVisible", true).toBool();
+        propertiesDock_->setVisible(visible);
+        if (viewPropertiesDockAction_) {
+            viewPropertiesDockAction_->setChecked(visible);
+        }
+    }
+
+    windowStateRestored_ = true;
+    qDebug() << "Window state restored";
+}
+
+void MainWindow::onResetWindowLayout() {
+    // Reset to default layout
+    if (paletteDock_) {
+        addDockWidget(Qt::LeftDockWidgetArea, paletteDock_);
+        paletteDock_->setVisible(true);
+    }
+
+    if (minimapDock_) {
+        addDockWidget(Qt::RightDockWidgetArea, minimapDock_);
+        minimapDock_->setVisible(true);
+    }
+
+    if (propertiesDock_) {
+        addDockWidget(Qt::RightDockWidgetArea, propertiesDock_);
+        propertiesDock_->setVisible(true);
+    }
+
+    // Reset window size
+    resize(1280, 720);
+
+    // Update menu actions
+    if (viewPaletteDockAction_) viewPaletteDockAction_->setChecked(true);
+    if (viewMinimapDockAction_) viewMinimapDockAction_->setChecked(true);
+    if (viewPropertiesDockAction_) viewPropertiesDockAction_->setChecked(true);
+
+    qDebug() << "Window layout reset to defaults";
+}
+
+// Task 77: Enhanced UI synchronization slot implementations
+void MainWindow::onBrushManagerBrushChanged(Brush* newBrush, Brush* previousBrush) {
+    Q_UNUSED(previousBrush)
+
+    if (newBrush) {
+        updateCurrentBrush(newBrush->getName());
+
+        // Update drawing mode based on brush type
+        QString modeName = QString("Brush: %1").arg(newBrush->getName());
+        QString description = QString("Drawing with %1 brush").arg(newBrush->getName());
+        updateDrawingMode(modeName, description);
+
+        qDebug() << "MainWindow: Brush changed to" << newBrush->getName();
+    } else {
+        updateCurrentBrush("None");
+        updateDrawingMode("None", "No brush selected");
+        qDebug() << "MainWindow: Brush cleared";
+    }
+
+    // Update toolbar button states
+    updateToolbarButtonStates();
+
+    // Update palette selections
+    updatePaletteSelections();
+}
+
+void MainWindow::onBrushManagerActionIdChanged(quint16 actionId, bool enabled) {
+    updateActionId(actionId, enabled);
+    qDebug() << "MainWindow: Action ID changed to" << actionId << "enabled:" << enabled;
+}
+
+void MainWindow::onBrushManagerSelectedItemChanged(Item* item, const QString& itemInfo) {
+    Q_UNUSED(item)
+    updateSelectedItemInfo(itemInfo);
+    qDebug() << "MainWindow: Selected item changed to" << itemInfo;
+}
+
+void MainWindow::onBrushManagerDrawingModeChanged(const QString& modeName, const QString& description) {
+    updateDrawingMode(modeName, description);
+    qDebug() << "MainWindow: Drawing mode changed to" << modeName;
+}
+
+void MainWindow::onMainPaletteActionIdChanged(quint16 actionId, bool enabled) {
+    // Forward to BrushManager to maintain single source of truth
+    if (brushManager_) {
+        brushManager_->setActionId(actionId);
+        brushManager_->setActionIdEnabled(enabled);
+    }
+    qDebug() << "MainWindow: Palette action ID changed to" << actionId << "enabled:" << enabled;
+}
+
+void MainWindow::onMainPaletteBrushSelected(Brush* brush) {
+    // Forward to BrushManager to maintain single source of truth
+    if (brushManager_) {
+        brushManager_->setCurrentBrush(brush);
+    }
+    qDebug() << "MainWindow: Palette brush selected:" << (brush ? brush->getName() : "None");
+}
+
+void MainWindow::onToolbarActionTriggered(const QString& actionName, bool active) {
+    // Update toolbar state display
+    if (statusBarManager_) {
+        statusBarManager_->updateToolbarState(actionName, active);
+    }
+    qDebug() << "MainWindow: Toolbar action triggered:" << actionName << "active:" << active;
+}
+
+// Task 77: Enhanced UI synchronization method implementations
+void MainWindow::updateActionId(quint16 actionId, bool enabled) {
+    if (statusBarManager_) {
+        statusBarManager_->updateActionId(actionId, enabled);
+    }
+}
+
+void MainWindow::updateDrawingMode(const QString& modeName, const QString& description) {
+    if (statusBarManager_) {
+        statusBarManager_->updateDrawingMode(modeName, description);
+    }
+}
+
+void MainWindow::updateToolbarButtonStates() {
+    if (toolBarManager_) {
+        toolBarManager_->updateBrushToolbarStates();
+    }
+
+    // Update brush-related toolbar buttons based on current brush
+    if (brushManager_) {
+        Brush* currentBrush = brushManager_->getCurrentBrush();
+
+        // Update brush size actions
+        int brushSize = currentBrush ? currentBrush->getSize() : 1;
+        if (brushSizeActionGroup_) {
+            QList<QAction*> sizeActions = brushSizeActionGroup_->actions();
+            for (int i = 0; i < sizeActions.size(); ++i) {
+                if (i + 1 == brushSize) {
+                    sizeActions[i]->setChecked(true);
+                    break;
+                }
+            }
+        }
+
+        // Update brush shape actions
+        if (currentBrush && brushShapeActionGroup_) {
+            // This would need to be implemented based on actual brush shape properties
+            // For now, just ensure one is selected
+            if (!brushShapeActionGroup_->checkedAction()) {
+                rectangularBrushShapeAction_->setChecked(true);
+            }
+        }
+    }
+}
+
+void MainWindow::updatePaletteSelections() {
+    // Update palette selections to reflect current brush
+    // This would need to be implemented based on actual palette structure
+    // For now, just log the update
+    qDebug() << "MainWindow: Updating palette selections";
+}
+
+void MainWindow::synchronizeUIState() {
+    // Perform complete UI synchronization
+    if (brushManager_) {
+        // Update brush information
+        Brush* currentBrush = brushManager_->getCurrentBrush();
+        if (currentBrush) {
+            updateCurrentBrush(currentBrush->getName());
+        } else {
+            updateCurrentBrush("None");
+        }
+
+        // Update action ID
+        updateActionId(brushManager_->getActionId(), brushManager_->isActionIdEnabled());
+
+        // Update drawing mode
+        updateDrawingMode(brushManager_->getCurrentDrawingMode(),
+                         brushManager_->getCurrentDrawingModeDescription());
+
+        // Update selected item
+        updateSelectedItemInfo(brushManager_->getSelectedItemInfo());
+    }
+
+    // Update toolbar states
+    updateToolbarButtonStates();
+
+    // Update palette selections
+    updatePaletteSelections();
+
+    qDebug() << "MainWindow: UI state synchronized";
 }
