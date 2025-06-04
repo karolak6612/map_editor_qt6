@@ -174,6 +174,15 @@ QVector<Item*>& Tile::items() {
     return items_;
 }
 
+// New getItems implementations, calling the existing items() methods
+QVector<Item*>& Tile::getItems() {
+    return items(); // Calls the non-const items()
+}
+
+const QVector<Item*>& Tile::getItems() const {
+    return items(); // Calls the const items()
+}
+
 Creature* Tile::creature() const {
     return creature_;
 }

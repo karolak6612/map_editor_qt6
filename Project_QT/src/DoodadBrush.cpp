@@ -54,7 +54,7 @@ QUndoCommand* DoodadBrush::mouseReleaseEvent(const QPointF& mapPos, QMouseEvent*
 
 // Task 020: Implement remaining pure virtual methods
 Brush::Type DoodadBrush::type() const {
-    return Brush::Type::DOODAD_BRUSH;
+    return Brush::Type::Doodad;
 }
 
 void DoodadBrush::cancel() {
@@ -70,7 +70,7 @@ int DoodadBrush::getBrushSize() const {
 
 Brush::BrushShape DoodadBrush::getBrushShape() const {
     // Doodad brushes typically use square shape for single tile
-    return Brush::BrushShape::SQUARE;
+    return Brush::BrushShape::Square;
 }
 
 QString DoodadBrush::name() const {

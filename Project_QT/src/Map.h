@@ -175,6 +175,10 @@ public:
     // Selection methods
     Selection* getSelection() const;
     void updateSelection(const QSet<MapPos>& newSelection); // Example: takes a set of positions
+    QList<MapPos> getSelectedPositions() const;
+    void deselectPosition(const MapPos& pos);
+    void clearSelection();
+    void selectPosition(const MapPos& pos);
 
     // Iterator methods for high-performance tile traversal
     MapIterator begin();

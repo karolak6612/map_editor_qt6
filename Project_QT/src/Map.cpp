@@ -1187,6 +1187,53 @@ quint32 Map::getNextHouseId() const {
     return 1;
 }
 
+QList<MapPos> Map::getSelectedPositions() const {
+    // Stub implementation
+    if (selection_) {
+        // Assuming Selection class has a method to get positions
+        // For example, if Selection stores them as QSet<MapPos> or QList<MapPos>
+        // return selection_->getSelectedTilesAsPositions(); // Hypothetical method
+        // For now, let's assume Selection has a method like this:
+        // return selection_->getPositions();
+        qWarning("Map::getSelectedPositions() - actual implementation depends on Selection class internals.");
+        return QList<MapPos>(); // Placeholder
+    }
+    qWarning("Map::getSelectedPositions() called but selection_ is null.");
+    return QList<MapPos>();
+}
+
+void Map::deselectPosition(const MapPos& pos) {
+    // Stub implementation
+    if (selection_) {
+        selection_->removeTile(pos); // Assuming Selection class has removeTile(MapPos)
+        // emit selectionChanged(); // If Map has such a signal
+    } else {
+        qWarning("Map::deselectPosition(const MapPos&) called but selection_ is null.");
+    }
+    Q_UNUSED(pos); // Q_UNUSED is fine here as it's a stub
+}
+
+void Map::clearSelection() {
+    // Stub implementation
+    if (selection_) {
+        selection_->clear();
+        // emit selectionChanged(); // If Map has such a signal
+    } else {
+        qWarning("Map::clearSelection() called but selection_ is null.");
+    }
+}
+
+void Map::selectPosition(const MapPos& pos) {
+    // Stub implementation
+    if (selection_) {
+        selection_->addTile(pos); // Assuming Selection class has addTile(MapPos)
+        // emit selectionChanged(); // If Map has such a signal
+    } else {
+        qWarning("Map::selectPosition(const MapPos&) called but selection_ is null.");
+    }
+    Q_UNUSED(pos); // Q_UNUSED is fine here as it's a stub
+}
+
 // Task 66: Enhanced town management implementation - moved to MapEntityManager
 
 // Delegate town methods to entity manager

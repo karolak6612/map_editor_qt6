@@ -8,7 +8,8 @@
 #include <QImage>  
 #include <QPixmap> 
 
-#include "GameSprite.h" 
+#include "Outfit.h"       // Include the actual definition of Outfit
+#include "GameSprite.h"   // GameSprite uses Outfit in its declarations
 
 class Brush {}; 
 class CreatureBrush : public Brush { 
@@ -19,6 +20,8 @@ public:
     CreatureBrush(int type, const Outfit& outfit_details) : lookType(type), m_outfit(outfit_details) {}
 
     bool isCreature() const { return true; } 
+    // Ensuring the getter for Outfit returns const Outfit& and correctly returns m_outfit.
+    // This addresses C2440, assuming m_outfit is of a fully defined Outfit type.
     const Outfit& getOutfit() const { return m_outfit; } 
     int getLookType() const { return m_outfit.lookType; }
 };

@@ -67,8 +67,13 @@ public:
     void setGround(Item* groundItem);
     Item* getGround() const;
 
-    const QVector<Item*>& items() const;
-    QVector<Item*>& items();
+    const QVector<Item*>& items() const; // Existing method
+    QVector<Item*>& items();             // Existing method
+
+    // New getItems methods as aliases for existing items() methods
+    // to resolve C2039 in DoorBrush.cpp. Return type matches existing internal storage (QVector).
+    QVector<Item*>& getItems();
+    const QVector<Item*>& getItems() const;
     
     Creature* creature() const;
     void setCreature(Creature* creature);

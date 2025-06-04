@@ -24,10 +24,10 @@ QString CreatureSpriteManager::generateCacheKey(int looktype, const Outfit* outf
                       .arg(height);
     if (outfit_ptr) { 
         key += QString("_head:%1_body:%2_legs:%3_feet:%4")
-                   .arg(outfit_ptr->lookHead)
-                   .arg(outfit_ptr->lookBody)
-                   .arg(outfit_ptr->lookLegs)
-                   .arg(outfit_ptr->lookFeet);
+                   .arg(static_cast<int>(outfit_ptr->lookHead))
+                   .arg(static_cast<int>(outfit_ptr->lookBody))
+                   .arg(static_cast<int>(outfit_ptr->lookLegs))
+                   .arg(static_cast<int>(outfit_ptr->lookFeet));
     }
     return key;
 }
