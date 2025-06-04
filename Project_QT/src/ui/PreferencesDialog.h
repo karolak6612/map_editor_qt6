@@ -173,6 +173,15 @@ private:
     void setupTabWidget();
     void setupButtonBox();
     void connectSignals();
+
+    // Task 019: Settings save method declarations
+    void saveGeneralSettings();
+    void saveEditorSettings();
+    void saveGraphicsSettings();
+    void saveUISettings();
+    void saveClientVersionSettings();
+    void saveLODSettings();
+    void saveAutomagicSettings();
     
     // Tab creation methods
     QWidget* createGeneralTab();
@@ -198,14 +207,8 @@ private:
     void loadClientVersionSettings();
     void loadLODSettings();
     void loadAutomagicSettings();
-    
-    void saveGeneralSettings();
-    void saveEditorSettings();
-    void saveGraphicsSettings();
-    void saveUISettings();
-    void saveClientVersionSettings();
-    void saveLODSettings();
-    void saveAutomagicSettings();
+
+    // FIXED: Removed duplicate save*Settings() method declarations (already declared above)
     
     // UI components
     QTabWidget* tabWidget_;

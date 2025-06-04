@@ -8,11 +8,13 @@ class PixelBrush : public Brush {
     Q_OBJECT
 public:
     explicit PixelBrush(QObject *parent = nullptr);
+    explicit PixelBrush(const QColor& color, QObject *parent = nullptr);
     ~PixelBrush() override;
 
     QString name() const override;
     int getBrushSize() const override;      // From Brush base
     BrushShape getBrushShape() const override; // From Brush base
+    int getLookID() const override;         // From Brush base
 
     // New methods from Brush interface
     Type type() const override;

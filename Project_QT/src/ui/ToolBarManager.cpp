@@ -644,4 +644,4 @@ void ToolBarManager::updateBrushContext(const QString& brushName, int brushSize,
              << "Size=" << brushSize << "Circular=" << isCircular;
 }
 
-#include "ToolBarManager.moc"
+

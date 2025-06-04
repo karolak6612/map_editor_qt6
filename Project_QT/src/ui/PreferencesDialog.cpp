@@ -866,3 +866,75 @@ void PreferencesDialog::applySettings() {
         applyButton_->setEnabled(false);
     }
 }
+
+// Task 019: Implement missing settings save methods
+void PreferencesDialog::saveGeneralSettings() {
+    if (!settingsManager_) return;
+
+    // TODO: Implement actual settings saving based on UI controls
+    // For now, just log that the method was called
+    qDebug() << "PreferencesDialog::saveGeneralSettings: Saving general settings";
+
+    // Example implementation (would need actual UI controls):
+    // settingsManager_->setShowWelcomeDialog(showWelcomeCheckBox_->isChecked());
+    // settingsManager_->setAutoSave(autoSaveCheckBox_->isChecked());
+}
+
+void PreferencesDialog::saveEditorSettings() {
+    if (!settingsManager_) return;
+
+    qDebug() << "PreferencesDialog::saveEditorSettings: Saving editor settings";
+
+    // Example implementation:
+    // settingsManager_->setGridSize(gridSizeSpinBox_->value());
+    // settingsManager_->setShowGrid(showGridCheckBox_->isChecked());
+}
+
+void PreferencesDialog::saveGraphicsSettings() {
+    if (!settingsManager_) return;
+
+    qDebug() << "PreferencesDialog::saveGraphicsSettings: Saving graphics settings";
+
+    // Example implementation:
+    // settingsManager_->setHardwareAcceleration(hardwareAccelCheckBox_->isChecked());
+    // settingsManager_->setAntiAliasing(antiAliasingCheckBox_->isChecked());
+}
+
+void PreferencesDialog::saveUISettings() {
+    if (!settingsManager_) return;
+
+    qDebug() << "PreferencesDialog::saveUISettings: Saving UI settings";
+
+    // Example implementation:
+    // settingsManager_->setTheme(themeComboBox_->currentText());
+    // settingsManager_->setToolbarVisible(toolbarVisibleCheckBox_->isChecked());
+}
+
+void PreferencesDialog::saveClientVersionSettings() {
+    if (!settingsManager_) return;
+
+    qDebug() << "PreferencesDialog::saveClientVersionSettings: Saving client version settings";
+
+    // Example implementation:
+    // settingsManager_->setClientVersion(clientVersionComboBox_->currentText());
+}
+
+void PreferencesDialog::saveLODSettings() {
+    if (!settingsManager_) return;
+
+    qDebug() << "PreferencesDialog::saveLODSettings: Saving LOD settings";
+
+    // Example implementation:
+    // settingsManager_->setLODEnabled(lodEnabledCheckBox_->isChecked());
+    // settingsManager_->setLODDistance(lodDistanceSpinBox_->value());
+}
+
+void PreferencesDialog::saveAutomagicSettings() {
+    if (!settingsManager_) return;
+
+    qDebug() << "PreferencesDialog::saveAutomagicSettings: Saving automagic settings";
+
+    // Example implementation:
+    // settingsManager_->setAutomagicEnabled(automagicEnabledCheckBox_->isChecked());
+    // settingsManager_->setAutomagicBorderEnabled(automagicBorderCheckBox_->isChecked());
+}

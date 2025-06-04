@@ -982,4 +982,4 @@ bool House::hasValidExit(Map* map) const {
     return exitTile != nullptr;
 }
 
-#include "House.moc"
+

@@ -289,6 +289,9 @@ private:
     QVariantMap m_replaceStatistics;
     QStringList m_foundItemTypes;
     QMap<quint16, int> m_itemIdCounts;
+
+    // Task 019: Helper methods
+    QString getItemDisplayName(quint16 itemId);
 };
 
 #endif // REPLACEITEMSDIALOG_H

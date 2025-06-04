@@ -9,7 +9,7 @@
 #include <QKeySequence>
 #include <QIcon>
 #include <QList>
-#include "MapPos.h"
+#include "../MapPos.h"
 
 // Forward declarations
 class Map;

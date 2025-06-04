@@ -12,9 +12,9 @@
 #include <QPixmap>
 #include <QRadialGradient>
 #include <QHash>
+#include "SpriteLight.h"  // Include SpriteLight definition
 
 // Forward declarations
-struct SpriteLight;
 struct DrawingOptions;
 
 // Task 76: Qt-based light drawing system to replace OpenGL LightDrawer
@@ -90,13 +90,6 @@ private:
     static constexpr int GroundLayer = 7;
 };
 
-// Task 76: Light data structure for sprite lights
-struct SpriteLight {
-    uint8_t color = 0;
-    uint8_t intensity = 0;
-    
-    SpriteLight() = default;
-    SpriteLight(uint8_t c, uint8_t i) : color(c), intensity(i) {}
-};
+// SpriteLight definition moved to SpriteLight.h to avoid redefinition
 
 #endif // LIGHTDRAWER_H

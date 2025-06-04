@@ -4,7 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QColor>
-#include "Map.h" // For MapPos
+#include "MapPos.h" // Direct include for MapPos typedef
 
 class Waypoint : public QObject {
     Q_OBJECT

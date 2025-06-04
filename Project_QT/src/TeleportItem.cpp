@@ -116,4 +116,4 @@ bool TeleportItem::isTeleportType(quint16 serverId) {
     return props.type == ITEM_TYPE_TELEPORT || props.group == ITEM_GROUP_TELEPORT;
 }
 
-#include "TeleportItem.moc"
+

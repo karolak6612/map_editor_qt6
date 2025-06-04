@@ -1,4 +1,6 @@
 #include "Map.h"
+#include "MapIO.h"         // For I/O operations
+#include "MapEntityManager.h" // Task 011: Extracted entity management
 #include "Tile.h"
 #include "Item.h"          // For Item objects on tiles
 #include "Selection.h"
@@ -23,7 +25,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
-// #include <algorithm>
+#include <QtMath>          // For qFloor function
+#include <cmath>           // For std::floor as alternative
 
 // Note: MapPos struct is assumed to be defined in Map.h as per previous step.
 // If it were not, it would need to be defined here or included.
@@ -32,6 +35,10 @@ Map::Map(QObject *parent) : QObject(parent) {
     initialize(0, 0, 0);
     selection_ = new Selection(this);
     waypoints_ = new Waypoints(*this, this);
+    mapIO_ = new MapIO(this, this);
+
+    // Task 011: Initialize entity manager for mandate M6 compliance
+    entityManager_ = new MapEntityManager(this, this);
     m_modified = false;
     m_otbmMajorVersion = 0;
     m_otbmMinorVersion = 0;
@@ -47,6 +54,10 @@ Map::Map(int width, int height, int floors, const QString& description, QObject 
     initialize(width, height, floors, description);
     selection_ = new Selection(this);
     waypoints_ = new Waypoints(*this, this);
+    mapIO_ = new MapIO(this, this);
+
+    // Task 011: Initialize entity manager for mandate M6 compliance
+    entityManager_ = new MapEntityManager(this, this);
     m_modified = false;
     m_otbmMajorVersion = 0;
     m_otbmMinorVersion = 0;
@@ -65,6 +76,12 @@ Map::~Map() {
     selection_ = nullptr;
     delete waypoints_;
     waypoints_ = nullptr;
+    delete mapIO_;
+    mapIO_ = nullptr;
+
+    // Task 011: Clean up entity manager
+    delete entityManager_;
+    entityManager_ = nullptr;
     clear();
 }
 
@@ -168,6 +185,19 @@ void Map::setDescription(const QString& description) {
         description_ = description;
         setModified(true);
         emit mapChanged(); // Or a more specific signal like metadataChanged()
+    }
+}
+
+// FIXED: Current floor tracking for brush operations
+int Map::getCurrentFloor() const {
+    return floors_ > 0 ? currentFloor_ : 7; // Default to ground level if no floors
+}
+
+void Map::setCurrentFloor(int floor) {
+    if (floor >= 0 && floor < floors_) {
+        currentFloor_ = floor;
+    } else {
+        qWarning() << "Map::setCurrentFloor: Invalid floor" << floor << "- valid range is 0 to" << (floors_ - 1);
     }
 }
 
@@ -341,14 +371,14 @@ void Map::removeGround(const QPointF& pos) {
 
 // Task 52: Enhanced border update methods with Qt integration
 void Map::requestBorderUpdate(const QPointF& tilePos) {
-    QList<QPoint3D> affectedTiles;
+    QList<QVector3D> affectedTiles;
 
     int x = qFloor(tilePos.x());
     int y = qFloor(tilePos.y());
     int z = qFloor(tilePos.z());
 
     // Add the tile itself and its neighbors
-    affectedTiles.append(QPoint3D(x, y, z));
+    affectedTiles.append(QVector3D(x, y, z));
 
     // Add orthogonal neighbors
     const int dx[] = {0, 0, 1, -1};
@@ -359,7 +389,7 @@ void Map::requestBorderUpdate(const QPointF& tilePos) {
         int ny = y + dy[i];
 
         if (isCoordValid(nx, ny, z)) {
-            affectedTiles.append(QPoint3D(nx, ny, z));
+            affectedTiles.append(QVector3D(nx, ny, z));
         }
     }
 
@@ -376,7 +406,7 @@ void Map::requestBorderUpdate(const QList<QPointF>& tilePositions) {
         return;
     }
 
-    QList<QPoint3D> affectedTiles;
+    QList<QVector3D> affectedTiles;
 
     for (const QPointF& pos : tilePositions) {
         int x = qFloor(pos.x());
@@ -384,7 +414,7 @@ void Map::requestBorderUpdate(const QList<QPointF>& tilePositions) {
         int z = qFloor(pos.z());
 
         // Add the tile itself
-        affectedTiles.append(QPoint3D(x, y, z));
+        affectedTiles.append(QVector3D(x, y, z));
 
         // Add orthogonal neighbors
         const int dx[] = {0, 0, 1, -1};
@@ -395,7 +425,7 @@ void Map::requestBorderUpdate(const QList<QPointF>& tilePositions) {
             int ny = y + dy[i];
 
             if (isCoordValid(nx, ny, z)) {
-                QPoint3D neighbor(nx, ny, z);
+                QVector3D neighbor(nx, ny, z);
                 if (!affectedTiles.contains(neighbor)) {
                     affectedTiles.append(neighbor);
                 }
@@ -412,7 +442,7 @@ void Map::requestBorderUpdate(const QList<QPointF>& tilePositions) {
 }
 
 void Map::requestBorderUpdate(const QRect& area) {
-    QList<QPoint3D> affectedTiles;
+    QList<QVector3D> affectedTiles;
 
     // Process all tiles in the area plus a border around it
     QRect expandedArea = area.adjusted(-1, -1, 1, 1);
@@ -421,7 +451,7 @@ void Map::requestBorderUpdate(const QRect& area) {
         for (int y = expandedArea.top(); y <= expandedArea.bottom(); ++y) {
             for (int z = 0; z < floors_; ++z) {
                 if (isCoordValid(x, y, z)) {
-                    affectedTiles.append(QPoint3D(x, y, z));
+                    affectedTiles.append(QVector3D(x, y, z));
                 }
             }
         }
@@ -444,62 +474,51 @@ void Map::requestWallUpdate(const QPointF& tilePos) {
 }
 
 
-// Entity List Implementations
+// Entity List Implementations - Task 011: Delegate to entity manager
 void Map::addSpawn(Spawn* spawn) {
-    if (spawn) {
-        if (!spawns_.contains(spawn)) { // Optional: prevent duplicates if not desired
-            spawns_.append(spawn);
-            qDebug() << "Spawn added to map at position (" << spawn->position().x << "," << spawn->position().y << "," << spawn->position().z << ")";
-            setModified(true);
-            // emit spawnAdded(spawn); // Optional: more specific signal
-            emit mapChanged();
-        } else {
-            qDebug() << "Map::addSpawn - Spawn already exists in the list.";
-        }
-    } else {
-        qWarning() << "Map::addSpawn - Attempted to add a null spawn.";
+    if (entityManager_) {
+        entityManager_->addSpawn(spawn);
+        setModified(true);
+        emit mapChanged();
     }
 }
 
 void Map::removeSpawn(Spawn* spawn) {
-    if (spawn) {
-        if (spawns_.removeOne(spawn)) { // removeOne returns true if item was found and removed
-            qDebug() << "Spawn removed from map and deleted.";
-            delete spawn; // Delete the spawn object as the map owns it
-            setModified(true);
-            // emit spawnRemoved(spawn); // Optional: more specific signal
-            emit mapChanged();
-        } else {
-            qDebug() << "Map::removeSpawn - Spawn not found in the list.";
-        }
-    } else {
-        qWarning() << "Map::removeSpawn - Attempted to remove a null spawn.";
+    if (entityManager_) {
+        entityManager_->removeSpawn(spawn);
+        setModified(true);
+        emit mapChanged();
     }
 }
 
 const QList<Spawn*>& Map::getSpawns() const {
-    return spawns_;
+    if (entityManager_) {
+        return entityManager_->getSpawns();
+    }
+    return spawns_; // Fallback to local list
 }
 
 void Map::addHouse(House* house) {
-    if (house) {
-        houses_.append(house);
-        qDebug() << "House added (stub)";
+    if (entityManager_) {
+        entityManager_->addHouse(house);
         setModified(true);
         emit mapChanged();
     }
 }
 
 void Map::removeHouse(House* house) {
-    if (houses_.removeOne(house)) {
-        qDebug() << "House removed (stub)";
+    if (entityManager_) {
+        entityManager_->removeHouse(house);
         setModified(true);
         emit mapChanged();
     }
 }
 
 const QList<House*>& Map::getHouses() const {
-    return houses_;
+    if (entityManager_) {
+        return entityManager_->getHouses();
+    }
+    return houses_; // Fallback to local list
 }
 
 void Map::addWaypoint(Waypoint* waypoint) {
@@ -742,31 +761,11 @@ QString Map::detectFileFormat(const QString& path) const {
 }
 
 bool Map::loadByFormat(const QString& path, const QString& format) {
-    qDebug() << "Map::loadByFormat - Loading" << path << "as format:" << format;
-
-    if (format == "otbm") {
-        QFile file(path);
-        if (!file.open(QIODevice::ReadOnly)) {
-            qWarning() << "Map::loadByFormat - Could not open OTBM file for reading:" << path;
-            return false;
-        }
-
-        QDataStream stream(&file);
-        stream.setByteOrder(QDataStream::LittleEndian);
-        bool success = loadFromOTBM(stream);
-        file.close();
-        return success;
-
-    } else if (format == "xml") {
-        return loadFromXML(path);
-
-    } else if (format == "json") {
-        return loadFromJSON(path);
-
-    } else {
-        qWarning() << "Map::loadByFormat - Unsupported format:" << format;
+    if (!mapIO_) {
+        qWarning() << "Map::loadByFormat - MapIO not initialized";
         return false;
     }
+    return mapIO_->loadByFormat(path, format);
 }
 
 bool Map::save(const QString& path) const {
@@ -775,31 +774,11 @@ bool Map::save(const QString& path) const {
 }
 
 bool Map::saveByFormat(const QString& path, const QString& format) const {
-    qDebug() << "Map::saveByFormat - Saving" << path << "as format:" << format;
-
-    if (format == "otbm") {
-        QFile file(path);
-        if (!file.open(QIODevice::WriteOnly)) {
-            qWarning() << "Map::saveByFormat - Could not open OTBM file for writing:" << path;
-            return false;
-        }
-
-        QDataStream stream(&file);
-        stream.setByteOrder(QDataStream::LittleEndian);
-        bool success = saveToOTBM(stream);
-        file.close();
-        return success;
-
-    } else if (format == "xml") {
-        return saveToXML(path);
-
-    } else if (format == "json") {
-        return saveToJSON(path);
-
-    } else {
-        qWarning() << "Map::saveByFormat - Unsupported format:" << format;
+    if (!mapIO_) {
+        qWarning() << "Map::saveByFormat - MapIO not initialized";
         return false;
     }
+    return mapIO_->saveByFormat(path, format);
 }
 
 // Selection method implementations
@@ -823,688 +802,65 @@ void Map::updateSelection(const QSet<MapPos>& newSelection) {
 
 
 bool Map::loadFromOTBM(QDataStream& stream) {
-    clear(); // Clear existing map data
-
-    OtbmReader reader(stream);
-    ItemManager* itemManager = ItemManager::getInstancePtr(); // Get instance for item creation
-
-    quint8 rootNodeType;
-    if (!reader.enterNode(rootNodeType)) {
-        qWarning() << "Map::loadFromOTBM - Could not enter root node.";
+    if (!mapIO_) {
+        qWarning() << "Map::loadFromOTBM - MapIO not initialized";
         return false;
     }
-
-    if (rootNodeType != OTBM_ROOTV1) {
-        qWarning() << "Map::loadFromOTBM - Root node type is not OTBM_ROOTV1. Got:" << rootNodeType;
-        reader.leaveNode();
-        return false;
-    }
-    qDebug() << "Map::loadFromOTBM - Entered OTBM_ROOTV1 node.";
-
-    // Read attributes of ROOTV1 node
-    quint8 rootAttrId;
-    while(reader.nextAttributeId(rootAttrId)) {
-        quint16 rootAttrDataLen;
-        if (!(reader.stream() >> rootAttrDataLen)) {
-            qWarning() << "Map::loadFromOTBM - Failed to read data length for ROOTV1 attribute" << rootAttrId;
-            reader.leaveNode(); return false;
-        }
-        QByteArray rootAttrData = reader.readData(rootAttrDataLen);
-        if (reader.stream().status() != QDataStream::Ok && rootAttrDataLen > 0) {
-            qWarning() << "Map::loadFromOTBM - Failed to read data for ROOTV1 attribute" << rootAttrId;
-            reader.leaveNode(); return false;
-        }
-
-        QDataStream valueStream(rootAttrData);
-        valueStream.setByteOrder(QDataStream::LittleEndian);
-
-       switch (static_cast<OTBM_RootAttribute>(rootAttrId)) { // Cast to new enum
-           case OTBM_RootAttribute::OTBM_ROOT_ATTR_VERSION_MAJOR:
-               if (rootAttrDataLen == sizeof(quint32)) valueStream >> m_otbmMajorVersion;
-               else qWarning() << "Map::loadFromOTBM - Incorrect data length for OTBM_ROOT_ATTR_VERSION_MAJOR";
-               qDebug() << "OTBM Major Version:" << m_otbmMajorVersion;
-               break;
-           case OTBM_RootAttribute::OTBM_ROOT_ATTR_VERSION_MINOR:
-               if (rootAttrDataLen == sizeof(quint32)) valueStream >> m_otbmMinorVersion;
-               else qWarning() << "Map::loadFromOTBM - Incorrect data length for OTBM_ROOT_ATTR_VERSION_MINOR";
-               qDebug() << "OTBM Minor Version:" << m_otbmMinorVersion;
-               break;
-           case OTBM_RootAttribute::OTBM_ROOT_ATTR_VERSION_BUILD:
-               if (rootAttrDataLen == sizeof(quint32)) valueStream >> m_otbmBuildVersion; // Assuming build is also quint32
-               else qWarning() << "Map::loadFromOTBM - Incorrect data length for OTBM_ROOT_ATTR_VERSION_BUILD";
-               qDebug() << "OTBM Build Version:" << m_otbmBuildVersion;
-               break;
-           case OTBM_RootAttribute::OTBM_ROOT_ATTR_VERSION_DESC_STRING:
-               m_otbmVersionDescription = QString::fromUtf8(rootAttrData);
-               qDebug() << "OTBM Version Description:" << m_otbmVersionDescription;
-                // TODO (Task51): Implement client version specific logic.
-                // Based on m_otbmMajorVersion, m_otbmMinorVersion, m_otbmBuildVersion,
-                // some map properties or item interpretations might need adjustment.
-                // For example, if (m_otbmMajorVersion < X) { /* handle old format */ }
-               break;
-           default:
-               qDebug() << "Map::loadFromOTBM - Skipped unknown attribute" << rootAttrId << "in ROOTV1 node.";
-               // reader.skipBytes(rootAttrDataLen); // Already consumed by readData
-               break;
-       }
-    }
-
-    qDebug() << "Map::loadFromOTBM - Finished reading ROOTV1 attributes. Attempting to read map dimensions and OTB item versions.";
-
-    quint16 loadedMapWidth, loadedMapHeight;
-    if (!(reader.stream() >> loadedMapWidth)) {
-        qWarning() << "Map::loadFromOTBM - Failed to read map width from root node stream.";
-        reader.leaveNode(); // Leave ROOTV1
-        return false;
-    }
-    this->width_ = loadedMapWidth; // Set map width directly
-
-    if (!(reader.stream() >> loadedMapHeight)) {
-        qWarning() << "Map::loadFromOTBM - Failed to read map height from root node stream.";
-        reader.leaveNode(); // Leave ROOTV1
-        return false;
-    }
-    this->height_ = loadedMapHeight; // Set map height directly
-
-    if (!(reader.stream() >> m_otbItemsMajorVersion)) {
-        qWarning() << "Map::loadFromOTBM - Failed to read OTB items major version from root node stream.";
-        reader.leaveNode(); // Leave ROOTV1
-        return false;
-    }
-    qDebug() << "Map::loadFromOTBM - Read OTB Items Major Version:" << m_otbItemsMajorVersion;
-
-    if (!(reader.stream() >> m_otbItemsMinorVersion)) {
-        qWarning() << "Map::loadFromOTBM - Failed to read OTB items minor version from root node stream.";
-        reader.leaveNode(); // Leave ROOTV1
-        return false;
-    }
-    qDebug() << "Map::loadFromOTBM - Read OTB Items Minor Version:" << m_otbItemsMinorVersion;
-
-    // Note: Map floors are not read here; they are determined by TILE_AREA nodes.
-    // The tiles_ vector in Map needs to be able to accommodate tiles from any floor.
-    // A common approach is to resize tiles_ dynamically as new floors are encountered
-    // or pre-allocate to a max number of floors (e.g. 16) and then trim if necessary.
-    // The current Map::initialize (called by constructors) sets up tiles_ with initial dimensions.
-    // Since clear() is called at the start of loadFromOTBM, width_ and height_ are reset.
-    // We've now set width_ and height_. The floors_ member and tiles_ resizing needs to be handled
-    // correctly before or during TILE_AREA processing. For now, we assume this is handled.
-
-    // TODO (Task51-MapVer): If there were fundamental changes to OTBM_MAP_DATA,
-    // OTBM_TILE_AREA, or OTBM_TILE node structures in different OTBM versions,
-    // conditional parsing logic based on m_otbmMajorVersion (map format version)
-    // would be needed here. Current parsing assumes a generally stable structure
-    // for these core nodes across versions handled.
-
-    quint8 mapDataNodeType;
-    if (!reader.enterNode(mapDataNodeType)) {
-        qWarning() << "Map::loadFromOTBM - Could not enter MAP_DATA node.";
-        reader.leaveNode(); // Leave ROOTV1
-        return false;
-    }
-
-    if (mapDataNodeType != OTBM_MAP_DATA) {
-        qWarning() << "Map::loadFromOTBM - Expected OTBM_MAP_DATA node, got:" << mapDataNodeType;
-        reader.leaveNode(); // Leave MAP_DATA (or whatever it was)
-        reader.leaveNode(); // Leave ROOTV1
-        return false;
-    }
-    qDebug() << "Map::loadFromOTBM - Entered OTBM_MAP_DATA node.";
-
-    QString mapDescription;
-    // These are not typically set at map level in OTBM but rather discovered
-    // For now, we'll use them if present, otherwise derive from tile areas.
-    quint16 initialMapWidth = 0, initialMapHeight = 0, initialMapFloors = 0;
-
-    quint8 mapAttrId;
-    while(reader.nextAttributeId(mapAttrId)) {
-        quint16 mapAttrDataLen;
-        if (!(reader.stream() >> mapAttrDataLen)) {
-             qWarning() << "Map::loadFromOTBM - Failed to read data length for MAP_DATA attribute" << mapAttrId;
-             break;
-        }
-        QByteArray mapAttrData = reader.readData(mapAttrDataLen);
-        if (reader.stream().status() != QDataStream::Ok && mapAttrDataLen > 0) {
-            qWarning() << "Map::loadFromOTBM - Failed to read data for MAP_DATA attribute" << mapAttrId;
-            break;
-        }
-        QDataStream mapValueStream(mapAttrData);
-        mapValueStream.setByteOrder(QDataStream::LittleEndian);
-
-        switch (mapAttrId) {
-            case OTBM_ATTR_DESCRIPTION:
-                mapDescription = QString::fromUtf8(mapAttrData);
-                qDebug() << "Map Description:" << mapDescription;
-                break;
-            case OTBM_ATTR_EXT_SPAWN_FILE:
-                m_externalSpawnFile = QString::fromUtf8(mapAttrData);
-                qDebug() << "External Spawn File:" << m_externalSpawnFile;
-                break;
-            case OTBM_ATTR_EXT_HOUSE_FILE:
-                m_externalHouseFile = QString::fromUtf8(mapAttrData);
-                qDebug() << "External House File:" << m_externalHouseFile;
-                break;
-            // OTBM_ATTR_MAP_WIDTH, OTBM_ATTR_MAP_HEIGHT etc. are not standard OTBM attributes for MAP_DATA.
-            // Dimensions are typically derived from TILE_AREA nodes.
-            default:
-                qDebug() << "Map::loadFromOTBM - Skipping MAP_DATA attribute" << mapAttrId;
-                break;
-        }
-    }
-    setDescription(mapDescription); // Set map description if read
-
-    // The map dimensions will be determined by the extent of TILE_AREA nodes.
-    // We might need to do a first pass to find all TILE_AREAs and determine bounds,
-    // then initialize the map, then do a second pass to populate tiles.
-    // For simplicity in this step, we'll initialize/expand the map as we find areas.
-    // This is not ideal for performance or correctness if areas are not ordered.
-    // A better approach is to collect all area data first or use min/max extents.
-    // For now, we'll assume initialize(0,0,0) was called and expand as needed.
-    // This part is complex and will be simplified for this initial implementation.
-    // Actual robust dimension handling needs pre-scan or dynamic resizing.
-    // Let's assume for now the map is pre-sized or we handle it very simply.
-    // If map is not pre-sized, initialize with some default or first area's size.
-    // The current `initialize` clears the map, so it should be called once with final dimensions.
-    // This will be a placeholder: actual dimensions will be determined by TILE_AREAs.
-    // For now, let's assume the map is large enough or will be resized later.
-
-    quint8 nodeType;
-    while (reader.enterNode(nodeType)) {
-        if (nodeType == OTBM_TILE_AREA) {
-            quint16 areaBaseX, areaBaseY;
-            quint8 areaBaseZ;
-            reader.stream() >> areaBaseX >> areaBaseY >> areaBaseZ;
-            if (reader.stream().status() != QDataStream::Ok) {
-                qWarning() << "Map::loadFromOTBM - Failed to read TILE_AREA coordinates.";
-                reader.leaveNode(); break;
-            }
-            qDebug() << "Map::loadFromOTBM - Reading TILE_AREA at" << areaBaseX << areaBaseY << areaBaseZ;
-
-            // Placeholder: Ensure map is large enough. This is where dynamic resizing or pre-scan would be needed.
-            // For example: updateMapDimensions(areaBaseX + 255, areaBaseY + 255, areaBaseZ);
-            if (!isCoordValid(areaBaseX, areaBaseY, areaBaseZ) ||
-                !isCoordValid(areaBaseX + 255, areaBaseY + 255, areaBaseZ)) { // Rough check
-                // If map has not been initialized with proper dimensions yet.
-                // This is where a pre-scan to determine overall map dimensions would be crucial.
-                // For this step, we'll assume initialize() was called or we are just logging.
-                qWarning() << "Map::loadFromOTBM - TILE_AREA exceeds current map bounds or map not initialized. Area:" << areaBaseX << areaBaseY << areaBaseZ;
-                // To continue robustly, we'd need to skip this entire area's content.
-                // This requires skipping all its child tiles and their items.
-                // For now, we might fail or try to process if in bounds.
-                // Let's assume the map was initialized to a default or from header if those attributes existed.
-                // If not, this will likely try to access out of bounds.
-                // The provided Map::initialize clears everything, so it must be called once with final dimensions.
-            }
-
-
-            quint8 tileNodeType;
-            while(reader.enterNode(tileNodeType)) {
-                if (tileNodeType == OTBM_TILE || tileNodeType == OTBM_HOUSETILE) {
-                    quint8 relX, relY;
-                    reader.stream() >> relX >> relY; // Tile relative coordinates
-                    if (reader.stream().status() != QDataStream::Ok) {
-                        qWarning() << "Map::loadFromOTBM - Failed to read TILE relative coordinates.";
-                        reader.leaveNode(); break;
-                    }
-
-                    MapPos currentTilePos(areaBaseX + relX, areaBaseY + relY, areaBaseZ);
-                    // Ensure map is large enough before calling getOrCreateTile.
-                    // This is a critical part that needs robust dimension handling.
-                    // For now, if map wasn't pre-initialized to full size, getOrCreateTile might fail or try to access out of bounds.
-                    if (!isCoordValid(currentTilePos.x, currentTilePos.y, currentTilePos.z)) {
-                         qWarning() << "Map::loadFromOTBM - Tile coordinates" << currentTilePos.x << currentTilePos.y << currentTilePos.z << "are out of map bounds. Skipping tile.";
-                         // We need to skip this tile's attributes and items. This is complex.
-                         // For now, we'll just leave the node and continue, which might lead to errors.
-                         // A robust skip involves parsing until OTBM_NODE_END.
-                         reader.leaveNode(); // Attempt to leave this tile node
-                         continue; // Skip to next tile node in area
-                    }
-
-                    Tile* tile = getOrCreateTile(currentTilePos.x, currentTilePos.y, currentTilePos.z);
-                    if (!tile) {
-                        qWarning() << "Map::loadFromOTBM - Failed to get/create tile at" << currentTilePos.x << currentTilePos.y << currentTilePos.z;
-                        reader.leaveNode(); break;
-                    }
-                    if (tileNodeType == OTBM_HOUSETILE) tile->setHouseTile(true);
-                    // tile->setModified(false); // Tile reflects persistent state - This needs to be after attributes/items
-
-
-                    quint8 tileAttrId;
-                    while(reader.nextAttributeId(tileAttrId)) {
-                        quint16 tileAttrDataLen;
-                        if (!(reader.stream() >> tileAttrDataLen)) { /* error */ break; }
-                        QByteArray tileAttrData = reader.readData(tileAttrDataLen);
-                        QDataStream tileValueStream(tileAttrData);
-                        tileValueStream.setByteOrder(QDataStream::LittleEndian);
-
-                        if (tileAttrId == OTBM_ATTR_TILE_FLAGS) {
-                            quint32 flags = 0;
-                            if (tileAttrDataLen == sizeof(quint32)) tileValueStream >> flags; else qWarning("Incorrect TILE_FLAGS length");
-                            tile->setMapFlagsValue(flags);
-                        } else if (tileAttrId == OTBM_ATTR_HOUSEDOORID && tileNodeType == OTBM_HOUSETILE) {
-                            quint8 houseDoorId = 0;
-                            if (tileAttrDataLen == sizeof(quint8)) tileValueStream >> houseDoorId; else qWarning("Incorrect HOUSEDOORID length");
-                            tile->setHouseDoorId(houseDoorId);
-                        } else {
-                             qDebug() << "Map::loadFromOTBM - Skipping TILE/HOUSETILE attribute" << tileAttrId;
-                        }
-                    }
-
-                    quint8 itemNodeType;
-                    while(reader.enterNode(itemNodeType)) {
-                         if (itemNodeType == OTBM_ITEM) {
-                            // Pass client version to item reading if ItemManager or Item needs it
-                            Item* item = reader.readItem(itemManager, this->m_otbmMajorVersion, m_otbItemsMajorVersion, m_otbItemsMinorVersion); // NEW (passing map OTBM version)
-                            // TODO (Task51): If item deserialization is version-dependent, OtbmReader::readItem
-                            // might need to accept version parameters, or Item::unserializeOtbmAttributes
-                            // might need to access the map's version via its parent or a global accessor.
-                            if (item) {
-                                tile->addItem(item);
-                            } else {
-                                qDebug() << "Map::loadFromOTBM - Failed to read item on tile" << currentTilePos.x << currentTilePos.y << currentTilePos.z;
-                            }
-                        } else {
-                            qWarning() << "Map::loadFromOTBM - Unexpected node type" << itemNodeType << "inside TILE, expected OTBM_ITEM. Skipping node.";
-                            // reader.skipNode(); // Placeholder for skipping unknown child nodes
-                        }
-                        if (!reader.leaveNode()) { qWarning() << "Map::loadFromOTBM - Failed to leave item node."; return false; }
-                    }
-                    if (tile) { // After all attributes and items for the tile have been read
-                        tile->setModified(false);
-                    }
-                } else {
-                     qWarning() << "Map::loadFromOTBM - Unexpected node type" << tileNodeType << "inside TILE_AREA, expected OTBM_TILE or OTBM_HOUSETILE. Skipping node.";
-                     // reader.skipNode();
-                }
-                if (!reader.leaveNode()) { qWarning() << "Map::loadFromOTBM - Failed to leave tile node."; return false; }
-            }
-        } else if (nodeType == OTBM_TOWNS) {
-            qDebug() << "Map::loadFromOTBM - Reading OTBM_TOWNS.";
-            quint8 townNodeType;
-            while(reader.enterNode(townNodeType)) {
-                if (townNodeType == OTBM_TOWN) {
-                    quint32 townId;
-                    QString townName;
-                    MapPos templePos;
-                    quint16 tempX, tempY;
-                    quint8 tempZ;
-
-                    if (!(reader.stream() >> townId)) {
-                        qWarning() << "Map::loadFromOTBM - Failed to read town ID.";
-                        reader.leaveNode(); break;
-                    }
-
-                    townName = reader.readString(); // Assuming this method exists or is implemented.
-                    if (reader.stream().status() != QDataStream::Ok) {
-                        qWarning() << "Map::loadFromOTBM - Failed to read town name string.";
-                        reader.leaveNode(); break;
-                    }
-
-                    if (!(reader.stream() >> tempX >> tempY >> tempZ)) {
-                        qWarning() << "Map::loadFromOTBM - Failed to read town temple position.";
-                        reader.leaveNode(); break;
-                    }
-                    templePos.x = tempX;
-                    templePos.y = tempY;
-                    templePos.z = tempZ;
-
-                    Town* newTown = new Town(townId, townName, templePos);
-                    m_towns.append(newTown);
-                    qDebug() << "Loaded Town:" << newTown->getName() << "ID:" << newTown->getId() << "Pos:" << templePos.x << templePos.y << templePos.z;
-
-                } else {
-                    qWarning() << "Map::loadFromOTBM - Unexpected node type" << townNodeType << "inside OTBM_TOWNS.";
-                    // reader.skipNode(); // Placeholder
-                }
-                if (!reader.leaveNode()) { qWarning() << "Map::loadFromOTBM - Failed to leave TOWN node."; return false; }
-            }
-        } else if (nodeType == OTBM_WAYPOINTS) {
-            qDebug() << "Map::loadFromOTBM - Reading OTBM_WAYPOINTS.";
-            quint8 waypointNodeType;
-            while(reader.enterNode(waypointNodeType)) {
-                if (waypointNodeType == OTBM_WAYPOINT) {
-                    QString waypointName;
-                    MapPos waypointPos;
-                    quint16 tempX, tempY;
-                    quint8 tempZ;
-
-                    waypointName = reader.readString(); // Assuming this method exists or is implemented.
-                    if (reader.stream().status() != QDataStream::Ok) {
-                        qWarning() << "Map::loadFromOTBM - Failed to read waypoint name string.";
-                        reader.leaveNode(); break;
-                    }
-
-                    if (!(reader.stream() >> tempX >> tempY >> tempZ)) {
-                        qWarning() << "Map::loadFromOTBM - Failed to read waypoint position.";
-                        reader.leaveNode(); break;
-                    }
-                    waypointPos.x = tempX;
-                    waypointPos.y = tempY;
-                    waypointPos.z = tempZ;
-
-                    Waypoint* newWaypoint = new Waypoint(waypointName, waypointPos);
-                    m_waypoints.append(newWaypoint);
-                    qDebug() << "Loaded Waypoint:" << newWaypoint->getName() << "Pos:" << waypointPos.x << waypointPos.y << waypointPos.z;
-
-                } else {
-                    qWarning() << "Map::loadFromOTBM - Unexpected node type" << waypointNodeType << "inside OTBM_WAYPOINTS.";
-                    // reader.skipNode(); // Placeholder
-                }
-                if (!reader.leaveNode()) { qWarning() << "Map::loadFromOTBM - Failed to leave WAYPOINT node."; return false; }
-            }
-        }
-        else {
-            qWarning() << "Map::loadFromOTBM - Unexpected node type" << nodeType << "inside MAP_DATA. Skipping node.";
-            // reader.skipNode();
-        }
-        if (!reader.leaveNode()) {
-            qWarning() << "Map::loadFromOTBM - Failed to leave node type" << nodeType << "in MAP_DATA.";
-            return false;
-        }
-    }
-
-    if (!reader.leaveNode()) { qWarning() << "Map::loadFromOTBM - Failed to leave MAP_DATA node."; return false; }
-    if (!reader.leaveNode()) { qWarning() << "Map::loadFromOTBM - Failed to leave ROOTV1 node."; return false; }
-
-    // Here, the map dimensions should be finalized based on read data if not fixed.
-    // If map was initialized with 0,0,0, it needs proper sizing now.
-    // For this step, proper dimension handling is deferred.
-    setModified(false); // Map is now in a clean state reflecting the loaded file.
-    qDebug() << "Map::loadFromOTBM - Successfully parsed OTBM data. Map set to unmodified.";
-    emit mapChanged();
-    return true;
+    return mapIO_->loadFromOTBM(stream);
 }
+
+
+
+
+
+
+
 
 
 bool Map::saveToOTBM(QDataStream& stream) const {
-    OtbmWriter writer(stream);
-
-    // Start Root Node
-    writer.beginNode(OTBM_ROOTV1);
-
-    // Write OTBM version attributes for ROOTV1
-    writer.writeAttributeU32(OTBM_RootAttribute::OTBM_ROOT_ATTR_VERSION_MAJOR, m_otbmMajorVersion);
-    writer.writeAttributeU32(OTBM_RootAttribute::OTBM_ROOT_ATTR_VERSION_MINOR, m_otbmMinorVersion);
-    writer.writeAttributeU32(OTBM_RootAttribute::OTBM_ROOT_ATTR_VERSION_BUILD, m_otbmBuildVersion);
-    if (!m_otbmVersionDescription.isEmpty()) {
-        writer.writeAttributeString(OTBM_RootAttribute::OTBM_ROOT_ATTR_VERSION_DESC_STRING, m_otbmVersionDescription);
+    if (!mapIO_) {
+        qWarning() << "Map::saveToOTBM - MapIO not initialized";
+        return false;
     }
-    qDebug() << "Map::saveToOTBM - Wrote OTBM map format version info: Major" << m_otbmMajorVersion
-             << "Minor" << m_otbmMinorVersion << "Build" << m_otbmBuildVersion
-             << "Desc:" << m_otbmVersionDescription;
-
-    // Write map dimensions and OTB item versions as direct properties of the root node
-    writer.writeU16(this->width_); // Map width
-    writer.writeU16(this->height_); // Map height
-    writer.writeU32(this->m_otbItemsMajorVersion); // OTB items major version
-    writer.writeU32(this->m_otbItemsMinorVersion); // OTB items minor version
-
-    qDebug() << "Map::saveToOTBM - Wrote map dimensions: " << this->width_ << "x" << this->height_;
-    qDebug() << "Map::saveToOTBM - Wrote OTB Items Version: Major" << this->m_otbItemsMajorVersion << "Minor" << this->m_otbItemsMinorVersion;
-
-    // TODO (Task51-MapVer): If saving to different OTBM target versions is required,
-    // logic would be needed here to adjust the output structure. For example:
-    // - Omitting nodes like OTBM_WAYPOINTS if target version < 3. (Already handled for waypoints).
-    // - Converting any map-level data to older representations if necessary.
-    // Currently, the map is saved in its native/loaded OTBM version format.
-
-    // Start Map Data Node
-    writer.beginNode(OTBM_MAP_DATA);
-
-    // Write Map Attributes
-    if (!description_.isEmpty()) {
-        writer.writeAttributeString(OTBM_ATTR_DESCRIPTION, description_);
-    }
-    if (!m_externalSpawnFile.isEmpty()) {
-        writer.writeAttributeString(OTBM_ATTR_EXT_SPAWN_FILE, m_externalSpawnFile);
-    }
-    if (!m_externalHouseFile.isEmpty()) {
-        writer.writeAttributeString(OTBM_ATTR_EXT_HOUSE_FILE, m_externalHouseFile);
-    }
-
-    // TODO: Write Item Definition version if stored (major/minor items.otb version)
-    // Example:
-    // writer.writeAttributeU32(OTBM_ATTR_ITEM_MAJOR_VERSION, ItemManager::getMajorVersion());
-    // writer.writeAttributeU32(OTBM_ATTR_ITEM_MINOR_VERSION, ItemManager::getMinorVersion());
-
-    // TODO (Task51): Implement client version specific logic for saving.
-    // If the current map data needs to be converted to an older/specific format
-    // based on a target client version (if that's a feature), do it here.
-    // For now, we save using the map's loaded/current version.
-
-    // Iterate through the map to write TileArea nodes
-    // OTBM typically stores tiles in 256x256 areas per floor.
-    // We need to determine the actual extents of the map to avoid writing empty areas if possible,
-    // but the format expects areas to cover the declared map width/height.
-    // For simplicity, iterate based on current map dimensions, grouped into areas.
-
-    qDebug() << "Map::saveToOTBM - Map dimensions:" << width_ << "x" << height_ << "x" << floors_;
-
-    for (int z = 0; z < floors_; ++z) {
-        for (int areaY = 0; areaY < height_; areaY += 256) {
-            for (int areaX = 0; areaX < width_; areaX += 256) {
-                // Check if this area actually contains any tiles that need saving
-                bool areaHasTiles = false;
-                for (int relY = 0; relY < 256; ++relY) {
-                    if (areaY + relY >= height_) break; // Past map boundary
-                    for (int relX = 0; relX < 256; ++relX) {
-                        if (areaX + relX >= width_) break; // Past map boundary
-                        if (getTile(areaX + relX, areaY + relY, z) != nullptr) {
-                            areaHasTiles = true;
-                            break;
-                        }
-                    }
-                    if (areaHasTiles) break;
-                }
-
-                if (areaHasTiles) {
-                    writer.beginNode(OTBM_TILE_AREA);
-                    writer.writeU16(areaX); // Area base X
-                    writer.writeU16(areaY); // Area base Y
-                    writer.writeByte(z);    // Area base Z (floor)
-
-                    // Iterate tiles within this area
-                    for (int relY = 0; relY < 256; ++relY) {
-                        if (areaY + relY >= height_) break;
-                        for (int relX = 0; relX < 256; ++relX) {
-                            if (areaX + relX >= width_) break;
-
-                            Tile* tile = getTile(areaX + relX, areaY + relY, z);
-                            if (tile) {
-                                // Begin Tile Node (OTBM_TILE or OTBM_HOUSETILE)
-                                writer.beginNode(tile->isHouseTile() ? OTBM_HOUSETILE : OTBM_TILE);
-                                writer.writeByte(static_cast<quint8>(relX)); // Relative X
-                                writer.writeByte(static_cast<quint8>(relY)); // Relative Y
-
-                                // Write Tile Attributes
-                                if (tile->getMapFlags() != 0) { // Only write if not default
-                                    writer.writeAttributeU32(OTBM_ATTR_TILE_FLAGS, static_cast<quint32>(tile->getMapFlags()));
-                                }
-                                if (tile->isHouseTile() && tile->getHouseDoorId() != 0) { // Example for house door ID
-                                     writer.writeAttributeByte(OTBM_ATTR_HOUSEDOORID, tile->getHouseDoorId());
-                                }
-                                // TODO: Other tile-specific attributes (e.g. from a QMap on Tile)
-
-                                // Write Items on Tile
-                                const QList<Item*>& items = tile->getItems();
-                                for (const Item* item : items) {
-                                    if (item) {
-                                       writer.writeItemNode(item, this->m_otbmMajorVersion, m_otbItemsMajorVersion, m_otbItemsMinorVersion); // UPDATED
-                                       // TODO (Task51): If item serialization is version-dependent, OtbmWriter::writeItemNode
-                                       // or Item::serializeOtbmAttributes might need version parameters.
-                                    }
-                                }
-                                writer.endNode(); // End Tile Node
-                            }
-                        }
-                    }
-                    writer.endNode(); // End TileArea Node
-                }
-            }
-        }
-    }
-
-    // TODO: Write other top-level nodes like Spawns, Waypoints, Houses
-    // Example for Spawns:
-    // if (!spawns_.isEmpty()) {
-    //     writer.beginNode(OTBM_SPAWNS);
-    //     for (const Spawn* spawn : spawns_) {
-    //         // spawn->serializeOtbmNode(writer); // Assuming Spawn has such a method
-    //     }
-    //     writer.endNode(); // End Spawns Node
-    // }
-
-    // Write Towns
-    if (!m_towns.isEmpty()) {
-        writer.beginNode(OTBM_TOWNS);
-        for (const Town* town : m_towns) {
-            if (town) {
-                writer.beginNode(OTBM_TOWN);
-                writer.writeU32(town->getId());
-                writer.writeString(town->getName());
-                writer.writeU16(town->getTemplePosition().x);
-                writer.writeU16(town->getTemplePosition().y);
-                writer.writeByte(static_cast<quint8>(town->getTemplePosition().z));
-                writer.endNode(); // End OTBM_TOWN
-            }
-        }
-        writer.endNode(); // End OTBM_TOWNS
-    }
-
-    // Write Waypoints
-    // Assuming m_otbmMajorVersion is 0-indexed from OTBM_ROOT_ATTR_VERSION_MAJOR.
-    // OTBM v1 = 0, v2 = 1, v3 = 2. Waypoints supported from v3 onwards.
-    if (m_otbmMajorVersion >= 2) {
-        if (!m_waypoints.isEmpty()) {
-            writer.beginNode(OTBM_WAYPOINTS);
-            for (const Waypoint* waypoint : m_waypoints) {
-                if (waypoint) {
-                    writer.beginNode(OTBM_WAYPOINT);
-                    writer.writeString(waypoint->getName());
-                    writer.writeU16(waypoint->getPosition().x);
-                    writer.writeU16(waypoint->getPosition().y);
-                    writer.writeByte(static_cast<quint8>(waypoint->getPosition().z));
-                    writer.endNode(); // End OTBM_WAYPOINT
-                }
-            }
-            writer.endNode(); // End OTBM_WAYPOINTS
-        }
-    } else if (!m_waypoints.isEmpty()) {
-        qWarning() << "Map::saveToOTBM - Waypoints exist but are not saved due to OTBM version being less than 3 (actual version index:" << m_otbmMajorVersion << ")";
-    }
-
-    writer.endNode(); // End Map Data Node
-    writer.endNode(); // End Root Node
-
-    if (stream.status() == QDataStream::Ok) {
-        Map* nonConstThis = const_cast<Map*>(this);
-        nonConstThis->setModified(false);
-        qDebug() << "Map::saveToOTBM - Successfully saved OTBM data. Map set to unmodified.";
-    }
-    return stream.status() == QDataStream::Ok;
+    return mapIO_->saveToOTBM(stream);
 }
+
+
 
 // Task 51: XML Serialization Implementation
 bool Map::loadFromXML(const QString& path) {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "Map::loadFromXML - Could not open file for reading:" << path;
+    if (!mapIO_) {
+        qWarning() << "Map::loadFromXML - MapIO not initialized";
         return false;
     }
-
-    QXmlStreamReader xml(&file);
-    clear(); // Clear existing map data
-
-    while (!xml.atEnd() && !xml.hasError()) {
-        QXmlStreamReader::TokenType token = xml.readNext();
-
-        if (token == QXmlStreamReader::StartElement) {
-            if (xml.name() == "map") {
-                // Read map attributes
-                QXmlStreamAttributes attributes = xml.attributes();
-                if (attributes.hasAttribute("width")) {
-                    width_ = attributes.value("width").toInt();
-                }
-                if (attributes.hasAttribute("height")) {
-                    height_ = attributes.value("height").toInt();
-                }
-                if (attributes.hasAttribute("floors")) {
-                    floors_ = attributes.value("floors").toInt();
-                }
-                if (attributes.hasAttribute("description")) {
-                    description_ = attributes.value("description").toString();
-                }
-
-                // Initialize map with new dimensions
-                initialize(width_, height_, floors_, description_);
-
-            } else if (xml.name() == "tile") {
-                // Read tile data
-                QXmlStreamAttributes attributes = xml.attributes();
-                int x = attributes.value("x").toInt();
-                int y = attributes.value("y").toInt();
-                int z = attributes.value("z").toInt();
-
-                Tile* tile = getTile(x, y, z);
-                if (!tile) {
-                    tile = new Tile(x, y, z);
-                    setTile(x, y, z, tile);
-                }
-
-                // Read tile items
-                while (xml.readNextStartElement()) {
-                    if (xml.name() == "item") {
-                        QXmlStreamAttributes itemAttrs = xml.attributes();
-                        quint16 itemId = itemAttrs.value("id").toInt();
-
-                        ItemManager* itemManager = ItemManager::getInstancePtr();
-                        Item* item = itemManager->createItem(itemId);
-                        if (item) {
-                            // Read item attributes
-                            if (itemAttrs.hasAttribute("count")) {
-                                item->setCount(itemAttrs.value("count").toInt());
-                            }
-                            if (itemAttrs.hasAttribute("actionId")) {
-                                item->setActionId(itemAttrs.value("actionId").toInt());
-                            }
-                            if (itemAttrs.hasAttribute("uniqueId")) {
-                                item->setUniqueId(itemAttrs.value("uniqueId").toInt());
-                            }
-                            if (itemAttrs.hasAttribute("text")) {
-                                item->setText(itemAttrs.value("text").toString());
-                            }
-
-                            tile->addItem(item);
-                        }
-                        xml.skipCurrentElement();
-                    } else {
-                        xml.skipCurrentElement();
-                    }
-                }
-            } else if (xml.name() == "spawns") {
-                // Load spawns from XML
-                // Implementation would go here
-                xml.skipCurrentElement();
-            } else if (xml.name() == "houses") {
-                // Load houses from XML
-                // Implementation would go here
-                xml.skipCurrentElement();
-            } else if (xml.name() == "waypoints") {
-                // Load waypoints from XML
-                // Implementation would go here
-                xml.skipCurrentElement();
-            }
-        }
-    }
-
-    if (xml.hasError()) {
-        qWarning() << "Map::loadFromXML - XML parsing error:" << xml.errorString();
-        return false;
-    }
-
-    setModified(false);
-    qDebug() << "Map::loadFromXML - Successfully loaded XML map:" << path;
-    return true;
+    return mapIO_->loadFromXML(path);
 }
+
+bool Map::saveToXML(const QString& path) const {
+    if (!mapIO_) {
+        qWarning() << "Map::saveToXML - MapIO not initialized";
+        return false;
+    }
+    return mapIO_->saveToXML(path);
+}
+
+bool Map::loadFromJSON(const QString& path) {
+    if (!mapIO_) {
+        qWarning() << "Map::loadFromJSON - MapIO not initialized";
+        return false;
+    }
+    return mapIO_->loadFromJSON(path);
+}
+
+bool Map::saveToJSON(const QString& path) const {
+    if (!mapIO_) {
+        qWarning() << "Map::saveToJSON - MapIO not initialized";
+        return false;
+    }
+    return mapIO_->saveToJSON(path);
+}
+
+
 
 MapIterator Map::begin() {
     QWriteLocker locker(&mapLock_);
@@ -1791,170 +1147,105 @@ void Map::invalidateRegion(const QRect& region, int floor) {
     qDebug() << "Map::invalidateRegion: Invalidated region" << region << "on floor" << floor;
 }
 
-// Task 66: Enhanced house management implementation
-void Map::addHouse(House* house) {
-    if (!house) return;
+// Task 66: Enhanced house management implementation - moved to MapEntityManager
 
-    // Check if house already exists
-    for (House* existingHouse : houses_) {
-        if (existingHouse && existingHouse->getId() == house->getId()) {
-            qWarning() << "Map::addHouse: House with ID" << house->getId() << "already exists";
-            return;
-        }
-    }
-
-    houses_.append(house);
-
-    // Connect house signals for automatic map updates
-    connect(house, &House::houseChanged, this, [this, house]() {
-        emit houseDataChanged(house);
-        setModified(true);
-    });
-
-    connect(house, &House::tileAdded, this, [this](const MapPos& position) {
-        emit tileChanged(position.x, position.y, position.z);
-        setModified(true);
-    });
-
-    connect(house, &House::tileRemoved, this, [this](const MapPos& position) {
-        emit tileChanged(position.x, position.y, position.z);
-        setModified(true);
-    });
-
-    emit houseAdded(house);
-    setModified(true);
-    qDebug() << "Map::addHouse: Added house" << house->getName() << "ID:" << house->getId();
-}
-
-void Map::removeHouse(House* house) {
-    if (!house) return;
-
-    int index = houses_.indexOf(house);
-    if (index != -1) {
-        houses_.removeAt(index);
-
-        // Disconnect signals
-        disconnect(house, nullptr, this, nullptr);
-
-        quint32 houseId = house->getId();
-        emit houseRemoved(houseId);
-        setModified(true);
-        qDebug() << "Map::removeHouse: Removed house" << house->getName() << "ID:" << houseId;
-    }
-}
-
-void Map::removeHouse(quint32 houseId) {
-    House* house = getHouse(houseId);
-    if (house) {
-        removeHouse(house);
-    }
-}
-
+// Delegate house methods to entity manager
 House* Map::getHouse(quint32 houseId) const {
-    for (House* house : houses_) {
-        if (house && house->getId() == houseId) {
-            return house;
-        }
+    if (entityManager_) {
+        return entityManager_->getHouse(houseId);
     }
     return nullptr;
 }
 
-void Map::clearHouses() {
-    for (House* house : houses_) {
-        if (house) {
-            disconnect(house, nullptr, this, nullptr);
-            emit houseRemoved(house->getId());
-        }
+void Map::removeHouse(quint32 houseId) {
+    if (entityManager_) {
+        entityManager_->removeHouse(houseId);
+        setModified(true);
+        emit mapChanged();
     }
-    houses_.clear();
-    setModified(true);
-    qDebug() << "Map::clearHouses: Cleared all houses";
+}
+
+void Map::clearHouses() {
+    if (entityManager_) {
+        entityManager_->clearHouses();
+        setModified(true);
+        emit mapChanged();
+    }
 }
 
 quint32 Map::getNextHouseId() const {
-    quint32 maxId = 0;
-    for (House* house : houses_) {
-        if (house && house->getId() > maxId) {
-            maxId = house->getId();
+    if (entityManager_) {
+        quint32 maxId = 0;
+        const QList<House*>& houses = entityManager_->getHouses();
+        for (House* house : houses) {
+            if (house && house->getId() > maxId) {
+                maxId = house->getId();
+            }
         }
+        return maxId + 1;
     }
-    return maxId + 1;
+    return 1;
 }
 
-// Task 66: Enhanced town management implementation
+// Task 66: Enhanced town management implementation - moved to MapEntityManager
+
+// Delegate town methods to entity manager
 void Map::addTown(Town* town) {
-    if (!town) return;
-
-    // Check if town already exists
-    for (Town* existingTown : m_towns) {
-        if (existingTown && existingTown->getId() == town->getId()) {
-            qWarning() << "Map::addTown: Town with ID" << town->getId() << "already exists";
-            return;
-        }
+    if (entityManager_) {
+        entityManager_->addTown(town);
+        setModified(true);
+        emit mapChanged();
     }
-
-    m_towns.append(town);
-    emit townAdded(town);
-    setModified(true);
-    qDebug() << "Map::addTown: Added town" << town->getName() << "ID:" << town->getId();
 }
 
 void Map::removeTown(Town* town) {
-    if (!town) return;
-
-    int index = m_towns.indexOf(town);
-    if (index != -1) {
-        m_towns.removeAt(index);
-
-        quint32 townId = town->getId();
-        emit townRemoved(townId);
+    if (entityManager_) {
+        entityManager_->removeTown(town);
         setModified(true);
-        qDebug() << "Map::removeTown: Removed town" << town->getName() << "ID:" << townId;
+        emit mapChanged();
     }
 }
 
 void Map::removeTown(quint32 townId) {
-    Town* town = getTown(townId);
-    if (town) {
-        removeTown(town);
+    if (entityManager_) {
+        entityManager_->removeTown(townId);
+        setModified(true);
+        emit mapChanged();
     }
 }
 
 Town* Map::getTown(quint32 townId) const {
-    for (Town* town : m_towns) {
-        if (town && town->getId() == townId) {
-            return town;
-        }
+    if (entityManager_) {
+        return entityManager_->getTown(townId);
     }
     return nullptr;
 }
 
 Town* Map::getTown(const QString& townName) const {
-    for (Town* town : m_towns) {
-        if (town && town->getName() == townName) {
-            return town;
-        }
+    if (entityManager_) {
+        return entityManager_->getTown(townName);
     }
     return nullptr;
 }
 
 void Map::clearTowns() {
-    for (Town* town : m_towns) {
-        if (town) {
-            emit townRemoved(town->getId());
-        }
+    if (entityManager_) {
+        entityManager_->clearTowns();
+        setModified(true);
+        emit mapChanged();
     }
-    m_towns.clear();
-    setModified(true);
-    qDebug() << "Map::clearTowns: Cleared all towns";
 }
 
 quint32 Map::getNextTownId() const {
-    quint32 maxId = 0;
-    for (Town* town : m_towns) {
-        if (town && town->getId() > maxId) {
-            maxId = town->getId();
+    if (entityManager_) {
+        quint32 maxId = 0;
+        const QList<Town*>& towns = entityManager_->getTowns();
+        for (Town* town : towns) {
+            if (town && town->getId() > maxId) {
+                maxId = town->getId();
+            }
         }
+        return maxId + 1;
     }
-    return maxId + 1;
+    return 1;
 }

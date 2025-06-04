@@ -47,6 +47,10 @@ signals:
 private:
     QList<Item*> contents_;
     void updateTotalWeight();
+
+    // Container contents serialization helpers (Task 24, Task 55)
+    QString serializeContainerContents() const;
+    bool deserializeContainerContents(const QString& contentsJson);
 };
 
 #endif // CONTAINERITEM_H

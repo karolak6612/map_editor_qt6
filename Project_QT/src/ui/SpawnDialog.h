@@ -25,6 +25,15 @@ public:
     // Method to apply dialog data back to a spawn object
     void applyToSpawn(Spawn* spawn) const;
 
+    // Task 019: Get spawn data without modifying the spawn (for undo integration)
+    struct SpawnData {
+        int radius;
+        int interval;
+        int maxCreatures;
+        QStringList creatureNames;
+    };
+    SpawnData getSpawnData() const;
+
 private slots:
     void onAddCreatureClicked();
     void onRemoveCreatureClicked();

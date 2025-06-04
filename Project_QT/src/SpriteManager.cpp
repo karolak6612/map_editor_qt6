@@ -1,4 +1,5 @@
 #include "SpriteManager.h"
+#include "SpriteFileParser.h"  // Task 011: Extracted file parsing
 #include "ImageSpace.h"
 #include <QFile>
 #include <QDataStream>
@@ -11,6 +12,7 @@ static SpriteManager* g_spriteManagerInstance = nullptr;
 SpriteManager::SpriteManager(QObject* parent)
     : QObject(parent),
       assetsLoaded_(false),
+      fileParser_(new SpriteFileParser(this, this)),
       imageSpace_(new ImageSpace(this)),
       sprSignature_(0),
       sprSpriteCount_(0),
@@ -19,12 +21,17 @@ SpriteManager::SpriteManager(QObject* parent)
       datOutfitCount_(0),
       datEffectCount_(0),
       datMissileCount_(0) {
-    qDebug() << "SpriteManager: Initialized with ImageSpace.";
+    qDebug() << "SpriteManager: Initialized with ImageSpace and SpriteFileParser.";
 }
 
 // Destructor
 SpriteManager::~SpriteManager() {
     unloadAssets();
+
+    // Task 011: Clean up file parser
+    delete fileParser_;
+    fileParser_ = nullptr;
+
     if (g_spriteManagerInstance == this) {
         g_spriteManagerInstance = nullptr;
     }
@@ -91,9 +98,9 @@ bool SpriteManager::loadAssets(const ClientVersionData& clientVersion, QString& 
         return false;
     }
     qDebug() << "SpriteManager: DAT file opened successfully.";
-    if (!parseDatFile(datFile, error, warnings)) { // Pass warnings by reference
+    // Task 011: Delegate to file parser for mandate M6 compliance
+    if (fileParser_ && !fileParser_->parseDatFile(datFile, error, warnings)) {
         datFile.close();
-        // error string is set by parseDatFile or parseDatHeader
         qCritical() << "SpriteManager: Failed to parse DAT file:" << error;
         return false;
     }
@@ -108,9 +115,9 @@ bool SpriteManager::loadAssets(const ClientVersionData& clientVersion, QString& 
         return false;
     }
     qDebug() << "SpriteManager: SPR file opened successfully.";
-    if (!parseSprFile(sprFile, error)) {
+    // Task 011: Delegate to file parser for mandate M6 compliance
+    if (fileParser_ && !fileParser_->parseSprFile(sprFile, error)) {
         sprFile.close();
-        // error string is set by parseSprFile or parseSprHeader
         qCritical() << "SpriteManager: Failed to parse SPR file:" << error;
         return false;
     }
@@ -126,222 +133,15 @@ bool SpriteManager::loadAssets(const ClientVersionData& clientVersion, QString& 
     return true;
 }
 
-// Parse DAT File (Header and Contents Shell)
-bool SpriteManager::parseDatFile(QFile& file, QString& error, QStringList& warnings) {
-    QDataStream stream(&file);
-    stream.setByteOrder(QDataStream::LittleEndian);
+// Parse DAT File - moved to SpriteFileParser for mandate M6 compliance
 
-    if (!parseDatHeader(stream, error)) {
-        return false;
-    }
+// loadDatContents - moved to SpriteFileParser for mandate M6 compliance
 
-    // Stub for loadDatContents for Part 1
-    // qDebug() << "SpriteManager::loadDatContents called, actual content parsing deferred to Part 2.";
-    // In a full implementation, this would loop from 1 to (itemCount + outfitCount + effectCount + missileCount)
-    // and call readDatEntry for each.
-    if (!loadDatContents(stream, error, warnings)) {
-        qCritical() << "SpriteManager: Failed during loadDatContents:" << error;
-        return false;
-    }
+// Parse DAT Header - moved to SpriteFileParser for mandate M6 compliance
 
-    return true;
-}
+// Parse SPR File - moved to SpriteFileParser for mandate M6 compliance
 
-bool SpriteManager::loadDatContents(QDataStream& stream, QString& error, QStringList& warnings) {
-    qDebug() << "SpriteManager: Starting to load DAT contents...";
-    quint32 datEntriesRead = 0;
-
-    // Items (Client IDs typically start from 100)
-    // The DAT file lists items sequentially starting from the first item (often ID 100).
-    for (quint16 i = 0; i < datItemCount_; ++i) {
-        quint32 clientItemId = 100 + i;
-        if (stream.atEnd()) {
-            error = QString("Unexpected end of DAT file while reading item %1 (Client ID: %2). Expected %3 items.")
-                        .arg(i).arg(clientItemId).arg(datItemCount_);
-            return false;
-        }
-        if (!readDatEntry(stream, clientItemId, error, warnings)) {
-            // readDatEntry sets the error, but we add context
-            warnings.append(QString("Error reading DAT entry for item (sequential index %1, clientID %2): %3")
-                                .arg(datEntriesRead).arg(clientItemId).arg(error));
-            // Depending on severity, might choose to continue or stop.
-            // For now, let's try to continue to gather more potential errors.
-        }
-        datEntriesRead++;
-    }
-    qDebug() << "SpriteManager: Finished reading" << datItemCount_ << "item entries.";
-
-    // Outfits (Creatures)
-    // These follow items in the .dat file. Their client-side identification might be more complex
-    // (e.g., not simple sequential IDs, or might overlap with item ID space if not careful).
-    // For RME internal representation, a distinct ID range is often used.
-    // The prompt suggested a placeholder scheme: datItemCount_ + 100 + i
-    // Let's assume a base ID for outfits for now, e.g., 20000, or just use a sequential internal one.
-    // For simplicity in this step, let's use a gameSpriteId that is just a continuation,
-    // but acknowledge this needs proper mapping for a real editor.
-    // Let's use a distinct range for cache key, e.g. outfits start after items using a large offset.
-    // For now, using the sequential approach and the cache key will be this sequential id.
-    // This means getGameSpriteData will need to know how to map game types to these ranges.
-    // This mapping is complex and outside this subtask's scope.
-    // For now, just read sequentially. The gameSpriteId passed to readDatEntry will be this sequential one.
-
-    quint32 outfitStartId = 1; // This is an internal sequential ID for outfits, not client ID
-    for (quint16 i = 0; i < datOutfitCount_; ++i) {
-        // The key for gameSpriteMetadataCache_ needs to be unique across types.
-        // A common way is to use a type prefix or large offset.
-        // E.g. items 100-19999, outfits 20000-29999 etc.
-        // For this generic loader, let's pass the sequential index + type offset as gameSpriteId.
-        // This ID is for caching, specific game logic will map game IDs to these.
-        quint32 cacheKeyForOutfit = 20000 + outfitStartId + i; // Example offset
-        if (stream.atEnd()) {
-            error = QString("Unexpected end of DAT file while reading outfit %1. Expected %2 outfits.")
-                        .arg(i).arg(datOutfitCount_);
-            return false;
-        }
-        if (!readDatEntry(stream, cacheKeyForOutfit, error, warnings)) {
-            warnings.append(QString("Error reading DAT entry for outfit (sequential index %1, cache key %2): %3")
-                                .arg(datEntriesRead).arg(cacheKeyForOutfit).arg(error));
-        }
-        datEntriesRead++;
-    }
-    qDebug() << "SpriteManager: Finished reading" << datOutfitCount_ << "outfit entries.";
-
-    // Effects
-    quint32 effectStartId = 1;
-    for (quint16 i = 0; i < datEffectCount_; ++i) {
-        quint32 cacheKeyForEffect = 30000 + effectStartId + i; // Example offset
-         if (stream.atEnd()) {
-            error = QString("Unexpected end of DAT file while reading effect %1. Expected %2 effects.")
-                        .arg(i).arg(datEffectCount_);
-            return false;
-        }
-        if (!readDatEntry(stream, cacheKeyForEffect, error, warnings)) {
-             warnings.append(QString("Error reading DAT entry for effect (sequential index %1, cache key %2): %3")
-                                .arg(datEntriesRead).arg(cacheKeyForEffect).arg(error));
-        }
-        datEntriesRead++;
-    }
-    qDebug() << "SpriteManager: Finished reading" << datEffectCount_ << "effect entries.";
-
-    // Missiles (Distances)
-    quint32 missileStartId = 1;
-    for (quint16 i = 0; i < datMissileCount_; ++i) {
-        quint32 cacheKeyForMissile = 40000 + missileStartId + i; // Example offset
-        if (stream.atEnd()) {
-            error = QString("Unexpected end of DAT file while reading missile %1. Expected %2 missiles.")
-                        .arg(i).arg(datMissileCount_);
-            return false;
-        }
-        if (!readDatEntry(stream, cacheKeyForMissile, error, warnings)) {
-            warnings.append(QString("Error reading DAT entry for missile (sequential index %1, cache key %2): %3")
-                                .arg(datEntriesRead).arg(cacheKeyForMissile).arg(error));
-        }
-        datEntriesRead++;
-    }
-    qDebug() << "SpriteManager: Finished reading" << datMissileCount_ << "missile entries.";
-    qDebug() << "SpriteManager: Total DAT entries processed:" << datEntriesRead;
-
-    return true;
-}
-
-// Parse DAT Header
-bool SpriteManager::parseDatHeader(QDataStream& stream, QString& error) {
-    stream >> datSignature_;
-    qDebug() << "SpriteManager: DAT Signature read:" << Qt::hex << datSignature_;
-
-    if (versionData_.expectedDatSignature != 0 && datSignature_ != versionData_.expectedDatSignature) {
-        error = QString("DAT file signature mismatch. Expected %1, got %2.")
-                    .arg(versionData_.expectedDatSignature, 0, 16)
-                    .arg(datSignature_, 0, 16);
-        return false;
-    }
-
-    stream >> datItemCount_ >> datOutfitCount_ >> datEffectCount_ >> datMissileCount_;
-    qDebug() << "SpriteManager: DAT Counts - Items:" << datItemCount_
-             << "Outfits:" << datOutfitCount_
-             << "Effects:" << datEffectCount_
-             << "Missiles:" << datMissileCount_;
-
-    // Basic validation
-    if (datItemCount_ == 0 || datItemCount_ > 50000) { // Arbitrary upper limit
-        error = QString("Invalid item count in DAT file: %1").arg(datItemCount_);
-        return false;
-    }
-
-    return true;
-}
-
-// Parse SPR File (Header and Addresses)
-bool SpriteManager::parseSprFile(QFile& file, QString& error) {
-    QDataStream stream(&file);
-    stream.setByteOrder(QDataStream::LittleEndian);
-
-    if (!parseSprHeader(stream, error)) {
-        return false;
-    }
-
-    // Load sprite addresses after header (Task 35 requirement)
-    if (!loadSpriteAddresses(stream, error)) {
-        return false;
-    }
-
-    return true;
-}
-
-// Parse SPR Header
-bool SpriteManager::parseSprHeader(QDataStream& stream, QString& error) {
-    stream >> sprSignature_;
-    qDebug() << "SpriteManager: SPR Signature read:" << Qt::hex << sprSignature_;
-
-    if (versionData_.expectedSprSignature != 0 && sprSignature_ != versionData_.expectedSprSignature) {
-        error = QString("SPR file signature mismatch. Expected %1, got %2.")
-                    .arg(versionData_.expectedSprSignature, 0, 16)
-                    .arg(sprSignature_, 0, 16);
-        return false;
-    }
-
-    if (versionData_.isExtendedSpr) {
-        stream >> sprSpriteCount_;
-    } else {
-        quint16 totalSprites_u16;
-        stream >> totalSprites_u16;
-        sprSpriteCount_ = totalSprites_u16;
-    }
-    qDebug() << "SpriteManager: SPR Sprite Count:" << sprSpriteCount_;
-
-    if (sprSpriteCount_ == 0 || sprSpriteCount_ > 150000) { // Arbitrary upper limit, Tibia 12.x has ~90k
-         error = QString("Invalid sprite count in SPR file: %1").arg(sprSpriteCount_);
-        return false;
-    }
-
-    sprSheetAddresses_.reserve(sprSpriteCount_); // Pre-allocate for efficiency
-    // Sprite IDs are 1-based in typical usage, but addresses are stored per sprite.
-    // The map can use 0 to N-1 or 1 to N. Let's use 1 to N for consistency with game IDs.
-    for (quint32 i = 1; i <= sprSpriteCount_; ++i) {
-        quint32 spriteAddress;
-        stream >> spriteAddress;
-        if (spriteAddress == 0) { // Address 0 indicates an empty sprite (transparent)
-            // Still store it, as it's a valid "empty" sprite reference.
-            // Or, could skip and handle lookups for missing IDs as transparent.
-            // For now, store as is.
-        }
-        sprSheetAddresses_.insert(i, spriteAddress);
-        if (stream.atEnd() && i < sprSpriteCount_) {
-             error = QString("SPR file ended prematurely while reading sprite addresses. Read %1 of %2.").arg(i).arg(sprSpriteCount_);
-             return false;
-        }
-    }
-
-    qDebug() << "SpriteManager: Read" << sprSheetAddresses_.size() << "sprite addresses from SPR header.";
-    if (sprSheetAddresses_.size() != sprSpriteCount_) {
-        // This case should be caught by stream.atEnd() above, but as a safeguard:
-        error = QString("Mismatch between sprite count and addresses read. Count: %1, Addresses: %2")
-                    .arg(sprSpriteCount_).arg(sprSheetAddresses_.size());
-        return false;
-    }
-
-    return true;
-}
+// Parse SPR Header - moved to SpriteFileParser for mandate M6 compliance
 
 // --- Basic Accessors ---
 quint32 SpriteManager::getSpriteCount() const { return sprSpriteCount_; }

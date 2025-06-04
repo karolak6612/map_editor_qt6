@@ -74,6 +74,9 @@ void PlaceWallCommand::undo() {
     }
     // If !tilePreviouslyExisted_ and !tile, nothing to do.
 
+    // Ensure map is marked as modified
+    map_->setModified(true);
+
     map_->requestWallUpdate(tilePos_);
     map_->requestWallUpdate(tilePos_ + QPointF(0, -1)); // N
     map_->requestWallUpdate(tilePos_ + QPointF(0, 1));  // S
@@ -117,6 +120,9 @@ void PlaceWallCommand::redo() {
         // If newWallItemId_ is 0, clearWalls() already did the job.
         qDebug() << "PlaceWallCommand: Redone - Cleared walls at" << tilePos_ << "(newWallItemId was 0).";
     }
+
+    // Ensure map is marked as modified
+    map_->setModified(true);
 
     map_->requestWallUpdate(tilePos_);
     map_->requestWallUpdate(tilePos_ + QPointF(0, -1)); // N

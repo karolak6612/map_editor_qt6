@@ -2,8 +2,10 @@
 // This file contains the remaining helper methods that couldn't fit in the main file
 
 #include "BrushManager.h"
+#include "DoorBrush.h"  // For DoorType enum
 #include <QDebug>
 #include <QMetaObject>
+#include <QColor>       // For QColor class
 
 // Internal helper methods implementation
 
@@ -94,26 +96,7 @@ void BrushManager::initializeDefaultParameters() {
     qDebug() << "BrushManager: Initialized default parameters for" << defaultBrushParameters_.size() << "brush types";
 }
 
-void BrushManager::updateCurrentBrushProperties(const QVariantMap& properties) {
-    if (!currentBrush_) return;
-    
-    // Update brush properties using Qt's property system
-    for (auto it = properties.begin(); it != properties.end(); ++it) {
-        const QString& propertyName = it.key();
-        const QVariant& propertyValue = it.value();
-        
-        // Try to set the property on the brush object
-        if (currentBrush_->metaObject()->indexOfProperty(propertyName.toUtf8().constData()) != -1) {
-            currentBrush_->setProperty(propertyName.toUtf8().constData(), propertyValue);
-            qDebug() << "BrushManager: Set property" << propertyName << "to" << propertyValue << "on brush" << currentBrush_->name();
-        } else {
-            qDebug() << "BrushManager: Property" << propertyName << "not found on brush" << currentBrush_->name();
-        }
-    }
-    
-    // Emit properties changed signal
-    emit brushPropertiesChanged(currentBrush_);
-}
+// updateCurrentBrushProperties method removed from here - it's implemented in BrushManager.cpp
 
 QString BrushManager::generateBrushName(Brush::Type type, const QVariantMap& parameters) const {
     QString baseName;

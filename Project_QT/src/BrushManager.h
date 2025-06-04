@@ -9,10 +9,10 @@
 #include <QVariant>
 #include <memory>
 #include "Brush.h"
+#include "ItemManager.h" // For ItemTypes_t
 
 // Forward declarations
 class Item;
-class ItemType;
 class Tile;
 class Map;
 class BrushPersistence; // Task 81: Brush persistence system
@@ -50,7 +50,7 @@ public:
 
     // Brush state update methods (Task 33 requirement)
     void updateFloodFillTargetItems(const QList<Item*>& targetItems);
-    void updateCurrentBrushTargetType(const ItemType& targetType);
+    void updateCurrentBrushTargetType(const ItemTypes_t& targetType);
     void setLastSelectedTilesForPaste(const QList<Tile*>& tilesToDrawOn);
     void updateBrushSize(int newSize);
     void updateBrushShape(Brush::BrushShape newShape);
@@ -198,6 +198,9 @@ private:
     // Brush factory registration
     void registerBrushFactories();
     bool isValidBrushType(Brush::Type type) const;
+
+    // Task 81: Brush persistence initialization
+    void initializeBrushPersistence();
 };
 
 #endif // BRUSHMANAGER_H

@@ -8,6 +8,7 @@
 #include <QFont>
 #include <QTimer>
 #include <QColor>
+#include "../MapPos.h"  // For MapPos struct definition
 #include "../Map.h"
 
 // Forward declarations

@@ -84,9 +84,19 @@ void MapTileItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* optio
             painter->drawRect(boundingRect());
             painter->restore();
         }
+
+        // Task 012: Draw locked tile overlay if needed
+        if (tile_->isLocked() && finalOptions.showLockedTiles) {
+            drawLockedTileOverlay(painter, boundingRect(), finalOptions.lockedTileOverlayColor);
+        }
     } else {
         // Direct rendering - cache will be updated by updateCacheIfNeeded
         tile_->draw(painter, boundingRect(), finalOptions);
+
+        // Task 012: Draw locked tile overlay for direct rendering
+        if (tile_->isLocked() && finalOptions.showLockedTiles) {
+            drawLockedTileOverlay(painter, boundingRect(), finalOptions.lockedTileOverlayColor);
+        }
     }
 }
 
@@ -131,7 +141,9 @@ void MapTileItem::setDrawingOptions(const DrawingOptions& options) {
         drawingOptions_.showCreatures != options.showCreatures ||
         drawingOptions_.showSpawns != options.showSpawns ||
         drawingOptions_.showTileFlags != options.showTileFlags ||
-        drawingOptions_.highlightSelectedTile != options.highlightSelectedTile /* etc. */) {
+        drawingOptions_.highlightSelectedTile != options.highlightSelectedTile ||
+        drawingOptions_.showLockedTiles != options.showLockedTiles ||  // Task 012
+        drawingOptions_.lockedTileOverlayColor != options.lockedTileOverlayColor /* etc. */) {
         needsUpdate = true;
     }
     drawingOptions_ = options;
@@ -210,6 +222,51 @@ void MapTileItem::drawNullTilePlaceholder(QPainter* painter, const QRectF& rect)
         QRectF textRect = rect.adjusted(2, 2, -2, -2);
         painter->drawText(textRect, Qt::AlignCenter | Qt::TextWordWrap, "NULL\nTILE");
     }
+
+    painter->restore();
+}
+
+// Task 012: Draw locked tile overlay
+void MapTileItem::drawLockedTileOverlay(QPainter* painter, const QRectF& rect, const QColor& overlayColor) const
+{
+    if (!painter) return;
+
+    painter->save();
+
+    // Draw semi-transparent overlay
+    QColor fillColor = overlayColor.isValid() ? overlayColor : QColor(255, 0, 0, 80); // Default red with transparency
+    painter->fillRect(rect, fillColor);
+
+    // Draw lock icon or pattern
+    QPen lockPen(Qt::white, 2);
+    painter->setPen(lockPen);
+
+    // Draw a simple lock icon in the center
+    QRectF iconRect = rect.adjusted(rect.width() * 0.3, rect.height() * 0.3,
+                                   -rect.width() * 0.3, -rect.height() * 0.3);
+
+    if (iconRect.width() > 8 && iconRect.height() > 8) {
+        // Draw lock body (rectangle)
+        QRectF lockBody = iconRect.adjusted(iconRect.width() * 0.2, iconRect.height() * 0.4,
+                                           -iconRect.width() * 0.2, 0);
+        painter->fillRect(lockBody, Qt::white);
+
+        // Draw lock shackle (arc)
+        QRectF shackleRect = iconRect.adjusted(iconRect.width() * 0.25, 0,
+                                              -iconRect.width() * 0.25, -iconRect.height() * 0.4);
+        painter->setBrush(Qt::NoBrush);
+        painter->drawArc(shackleRect, 0, 180 * 16); // 180 degrees in 1/16th degree units
+    } else {
+        // For very small tiles, just draw a cross pattern
+        painter->drawLine(rect.topLeft(), rect.bottomRight());
+        painter->drawLine(rect.topRight(), rect.bottomLeft());
+    }
+
+    // Draw border to make overlay more visible
+    QPen borderPen(overlayColor.isValid() ? overlayColor.darker(150) : Qt::darkRed, 1);
+    painter->setPen(borderPen);
+    painter->setBrush(Qt::NoBrush);
+    painter->drawRect(rect);
 
     painter->restore();
 }

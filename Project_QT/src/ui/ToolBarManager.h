@@ -7,7 +7,7 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QActionGroup>
-#include "MenuBar.h"
+#include "MenuBarActionIDs.h"  // FIXED: Use correct header name
 
 // Forward declarations
 class MainWindow;

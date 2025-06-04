@@ -323,6 +323,9 @@ private:
     Map* map_;
     QList<TileLockStateChangeEvent> lockHistory_;
     bool historyEnabled_;
+
+    // Cache of locked tile positions for performance
+    QSet<MapPos> lockedTiles_;
     
     void recordLockStateChange(const MapPos& position, bool wasLocked, bool isLocked, const QString& reason);
     void emitLockStateChanged(const MapPos& position, bool isLocked, const QString& reason);

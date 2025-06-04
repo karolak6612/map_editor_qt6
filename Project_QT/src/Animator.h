@@ -4,12 +4,7 @@
 #include <QObject>
 #include <QVector>
 #include <QElapsedTimer> // For time-based updates
-
-// Enum for animation direction, similar to original
-enum class AnimationDirection {
-    Forward,
-    Backward
-};
+#include "Sprite.h" // For AnimationDirection enum
 
 class Animator : public QObject {
     Q_OBJECT
@@ -79,7 +74,7 @@ private:
     qint64 m_timeToNextFrame = 0; // Time remaining for the current frame in ms
     qint64 m_totalAnimationTimeNonAsync = 0; // Total duration for one full loop (non-async)
 
-    AnimationDirection m_direction = AnimationDirection::Forward;
+    AnimationDirection m_direction = ANIMATION_FORWARD;
     bool m_isComplete = false;
 
     // For async animations, last_time might be tracked differently or by the caller.

@@ -1,0 +1,153 @@
+<CompilationReport project="MapEditorQt6" configuration="Debug">
+  <FailedCompilation unit="CMakeFiles/MapEditorQt6.dir/src/BrushPersistence.cpp.obj">
+    <SourceFile path="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\BrushPersistence.cpp"/>
+    <Error line="200" code="C2451">
+      <Message>a conditional expression of type 'void' is not valid</Message>
+      <Note>Expressions of type void cannot be converted to other types</Note>
+    </Error>
+  </FailedCompilation>
+
+  <FailedCompilation unit="CMakeFiles/MapEditorQt6.dir/src/DeselectCommand.cpp.obj">
+    <SourceFile path="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\DeselectCommand.cpp"/>
+    <Error line="9" code="C2039">
+      <Message>'getSelectedPositions': is not a member of 'Map'</Message>
+      <Note referringTo="Map" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\Map.h" declarationLine="58">see declaration of 'Map'</Note>
+    </Error>
+    <Error line="25" code="C2039">
+      <Message>'deselectPosition': is not a member of 'Map'</Message>
+      <Note referringTo="Map" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\Map.h" declarationLine="58">see declaration of 'Map'</Note>
+    </Error>
+    <Error line="38" code="C2039">
+      <Message>'clearSelection': is not a member of 'Map'</Message>
+      <Note referringTo="Map" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\Map.h" declarationLine="58">see declaration of 'Map'</Note>
+    </Error>
+    <Error line="40" code="C2039">
+      <Message>'selectPosition': is not a member of 'Map'</Message>
+      <Note referringTo="Map" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\Map.h" declarationLine="58">see declaration of 'Map'</Note>
+    </Error>
+  </FailedCompilation>
+
+  <FailedCompilation unit="CMakeFiles/MapEditorQt6.dir/src/CreatureSpriteManager.cpp.obj">
+    <SourceFile path="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\CreatureSpriteManager.cpp"/>
+    <HeaderFileIssue path="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\CreatureSpriteManager.h">
+      <Error line="17" code="C2079">
+        <Message>'CreatureBrush::m_outfit' uses undefined struct 'Outfit'</Message>
+      </Error>
+      <Error line="19" code="C2027">
+        <Message>use of undefined type 'Outfit'</Message>
+        <Note referringTo="Outfit" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\GameSprite.h" declarationLine="14">see declaration of 'Outfit'</Note>
+      </Error>
+      <Error line="19" code="C2439">
+        <Message>'CreatureBrush::m_outfit': member could not be initialized</Message>
+        <Note referringTo="CreatureBrush::m_outfit" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\CreatureSpriteManager.h" declarationLine="17">see declaration of 'CreatureBrush::m_outfit'</Note>
+      </Error>
+      <Error line="22" code="C2440">
+        <Message>'return': cannot convert from 'const int' to 'const Outfit &'</Message> <!-- & becomes & -->
+        <Note>Reason: cannot convert from 'const int' to 'const Outfit'</Note>
+        <Note>use of undefined type 'Outfit'</Note>
+        <Note referringTo="Outfit" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\GameSprite.h" declarationLine="14">see declaration of 'Outfit'</Note>
+      </Error>
+    </HeaderFileIssue>
+    <Error line="27" code="C2027">
+      <Message>use of undefined type 'Outfit'</Message>
+      <Note referringTo="Outfit" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\GameSprite.h" declarationLine="14">see declaration of 'Outfit'</Note>
+    </Error>
+    <Error line="27" code="C2672">
+      <Message>'QString::arg': no matching overloaded function found</Message>
+      <!-- Multiple notes for C2672 indicate potential overloads -->
+      <Note overloadOption="std::enable_if<sizeof...(Args)>=2&&std::conjunction_v<std::conjunction<std::negation<QtPrivate::treat_as_integral_arg<remove_cv<Args>::type>>,std::is_convertible<Args,QAnyStringView>>...>,QString>::type QString::arg(Args &&...) const"
+            declarationFile="C:\Qt\6.9.1\msvc2022_64\include\QtCore/qstring.h" declarationLine="357"/>
+      <Note overloadOption="QString QString::arg(const T &,int,QChar) const"
+            declarationFile="C:\Qt\6.9.1\msvc2022_64\include\QtCore/qstring.h" declarationLine="337"/>
+      <Note overloadOption="QString QString::arg(T,int,char,int,QChar) const"
+            declarationFile="C:\Qt\6.9.1\msvc2022_64\include\QtCore/qstring.h" declarationLine="332"/>
+      <Note overloadOption="QString QString::arg(T,int,int,QChar) const"
+            declarationFile="C:\Qt\6.9.1\msvc2022_64\include\QtCore/qstring.h" declarationLine="317"/>
+    </Error>
+    <Error line="28" code="C2027">
+      <Message>use of undefined type 'Outfit'</Message>
+      <Note referringTo="Outfit" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\GameSprite.h" declarationLine="14">see declaration of 'Outfit'</Note>
+    </Error>
+    <Error line="29" code="C2027">
+      <Message>use of undefined type 'Outfit'</Message>
+      <Note referringTo="Outfit" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\GameSprite.h" declarationLine="14">see declaration of 'Outfit'</Note>
+    </Error>
+    <Error line="30" code="C2027">
+      <Message>use of undefined type 'Outfit'</Message>
+      <Note referringTo="Outfit" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\GameSprite.h" declarationLine="14">see declaration of 'Outfit'</Note>
+    </Error>
+    <Error line="36" code="C2079">
+      <Message>'default_outfit' uses undefined struct 'Outfit'</Message>
+    </Error>
+    <Error line="38" code="C2665">
+      <Message>'CreatureSpriteManager::getSpritePixmap': no overloaded function could convert all the argument types</Message>
+      <Note potentialMatch="QPixmap CreatureSpriteManager::getSpritePixmap(int,const Outfit &,int,int)"
+            declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\CreatureSpriteManager.h" declarationLine="33"/>
+      <Note issue="'QPixmap CreatureSpriteManager::getSpritePixmap(int,const Outfit &,int,int)': cannot convert argument 2 from 'int' to 'const Outfit &'" />
+      <Note>Reason: cannot convert from 'int' to 'const Outfit'</Note>
+      <Note>use of undefined type 'Outfit'</Note>
+      <Note referringTo="Outfit" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\GameSprite.h" declarationLine="14">see declaration of 'Outfit'</Note>
+      <Note>while trying to match the argument list '(int, int, int, int)'</Note>
+    </Error>
+    <Error line="62" code="C2027">
+      <Message>use of undefined type 'Outfit'</Message>
+      <Note referringTo="Outfit" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\GameSprite.h" declarationLine="14">see declaration of 'Outfit'</Note>
+    </Error>
+    <Error line="64" code="C2027" occurrences="4"> <!-- Grouped repeated errors on the same line for brevity -->
+      <Message>use of undefined type 'Outfit'</Message>
+      <Note referringTo="Outfit" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\GameSprite.h" declarationLine="14">see declaration of 'Outfit'</Note>
+    </Error>
+    <Error line="75" code="C2079">
+      <Message>'default_outfit' uses undefined struct 'Outfit'</Message>
+    </Error>
+    <Error line="77" code="C2665">
+      <Message>'CreatureSpriteManager::createSpritePixmap': no overloaded function could convert all the argument types</Message>
+      <Note potentialMatch="QPixmap CreatureSpriteManager::createSpritePixmap(int,const Outfit &,int,int)"
+            declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\CreatureSpriteManager.h" declarationLine="42"/>
+      <Note issue="'QPixmap CreatureSpriteManager::createSpritePixmap(int,const Outfit &,int,int)': cannot convert argument 2 from 'int' to 'const Outfit &'" />
+      <Note>Reason: cannot convert from 'int' to 'const Outfit'</Note>
+      <Note>use of undefined type 'Outfit'</Note>
+      <Note referringTo="Outfit" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\GameSprite.h" declarationLine="14">see declaration of 'Outfit'</Note>
+      <Note>while trying to match the argument list '(int, int, int, int)'</Note>
+    </Error>
+    <Error line="91" code="C2659" occurrences="2">
+      <Message>'=': function as left operand</Message>
+    </Error>
+  </FailedCompilation>
+
+  <FailedCompilation unit="CMakeFiles/MapEditorQt6.dir/src/DoodadBrush.cpp.obj">
+    <SourceFile path="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\DoodadBrush.cpp"/>
+    <Error line="57" code="C2838">
+      <Message>'DOODAD_BRUSH': illegal qualified name in member declaration</Message>
+    </Error>
+    <Error line="57" code="C2065">
+      <Message>'DOODAD_BRUSH': undeclared identifier</Message>
+    </Error>
+    <Error line="73" code="C2838">
+      <Message>'SQUARE': illegal qualified name in member declaration</Message>
+    </Error>
+    <Error line="73" code="C2065">
+      <Message>'SQUARE': undeclared identifier</Message>
+    </Error>
+  </FailedCompilation>
+
+  <FailedCompilation unit="CMakeFiles/MapEditorQt6.dir/src/DoorBrush.cpp.obj">
+    <SourceFile path="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\DoorBrush.cpp"/>
+    <Error line="131" code="C2665">
+      <Message>'Map::getTile': no overloaded function could convert all the argument types</Message>
+      <Note potentialMatch="Tile *Map::getTile(const MapPos &) const"
+            declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\Map.h" declarationLine="95"/>
+      <Note issue="'Tile *Map::getTile(const MapPos &) const': cannot convert argument 1 from 'const QPointF' to 'const MapPos &'" />
+      <Note>Reason: cannot convert from 'const QPointF' to 'const MapPos'</Note>
+      <Note>No user-defined-conversion operator available that can perform this conversion, or the operator cannot be called</Note>
+      <Note>while trying to match the argument list '(const QPointF)'</Note>
+    </Error>
+    <Error line="138" code="C2039">
+      <Message>'getItems': is not a member of 'Tile'</Message>
+      <Note referringTo="Tile" declarationFile="C:\Users\karol\Documents\CURSOR TEST\map_editor_qt6\Project_QT\test build\TEST\src\Tile.h" declarationLine="22">see declaration of 'Tile'</Note>
+    </Error>
+    <Error line="138" code="C2530">
+      <Message>'items': references must be initialized</Message>
+    </Error>
+  </FailedCompilation>
+</CompilationReport>

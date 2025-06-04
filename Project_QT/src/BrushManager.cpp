@@ -6,6 +6,14 @@
 #include <QStandardPaths> // Task 81: Default directories
 #include <QDir> // Task 81: Directory operations
 #include "BrushPersistence.h" // Task 81: Brush persistence system
+#include "Item.h" // For Item class
+#include "Tile.h" // For Tile class
+#include "ItemManager.h" // For ItemTypes_t
+
+// Register types with Qt's meta-object system for QVariant::fromValue
+Q_DECLARE_METATYPE(QList<Item*>)
+Q_DECLARE_METATYPE(QList<Tile*>)
+Q_DECLARE_METATYPE(ItemTypes_t)
 
 // Include all brush types for factory creation
 #include "GroundBrush.h"
@@ -46,6 +54,33 @@ BrushManager::BrushManager(QObject *parent)
 
     // Task 81: Initialize brush persistence system
     initializeBrushPersistence();
+}
+
+// Task 81: Initialize brush persistence system
+void BrushManager::initializeBrushPersistence() {
+    if (!brushPersistence_) {
+        brushPersistence_ = new BrushPersistence(this, this);
+
+        // Connect persistence signals
+        connect(brushPersistence_, &BrushPersistence::brushSaved,
+                this, &BrushManager::brushSaved);
+        connect(brushPersistence_, &BrushPersistence::brushLoaded,
+                this, &BrushManager::brushLoaded);
+        connect(brushPersistence_, &BrushPersistence::errorOccurred,
+                this, &BrushManager::onBrushPersistenceError);
+
+        qDebug() << "BrushManager: Brush persistence system initialized";
+    }
+
+    // Initialize auto-save timer
+    if (autoSaveEnabled_ && !autoSaveTimer_) {
+        autoSaveTimer_ = new QTimer(this);
+        autoSaveTimer_->setInterval(autoSaveInterval_ * 60 * 1000); // Convert minutes to milliseconds
+        connect(autoSaveTimer_, &QTimer::timeout, this, &BrushManager::onAutoSaveTimer);
+        autoSaveTimer_->start();
+
+        qDebug() << "BrushManager: Auto-save timer initialized with interval:" << autoSaveInterval_ << "minutes";
+    }
 }
 
 BrushManager::~BrushManager() {
@@ -267,9 +302,15 @@ Brush* BrushManager::createBrushInternal(Brush::Type type, const QVariantMap& pa
         case Brush::Type::Spawn:
             brush = new SpawnBrush(this);
             break;
-        case Brush::Type::Flag:
-            brush = new FlagBrush(this);
+        case Brush::Type::Flag: {
+            quint32 flagValue = mergedParams.value("flagValue", 0).toUInt();
+            if (flagValue == 0) {
+                qWarning() << "Creating FlagBrush without a specific flag! Using default ProtectionZone flag.";
+                flagValue = 1; // Default to ProtectionZone flag
+            }
+            brush = new FlagBrush(flagValue, this);
             break;
+        }
         case Brush::Type::Eraser:
             brush = new EraserBrush(this);
             break;
@@ -302,7 +343,7 @@ void BrushManager::updateFloodFillTargetItems(const QList<Item*>& targetItems) {
     qDebug() << "BrushManager: Updated flood fill target items, count:" << targetItems.size();
 }
 
-void BrushManager::updateCurrentBrushTargetType(const ItemType& targetType) {
+void BrushManager::updateCurrentBrushTargetType(const ItemTypes_t& targetType) {
     setBrushContext("targetType", QVariant::fromValue(targetType));
 
     if (currentBrush_) {
@@ -496,15 +537,15 @@ QString BrushManager::getSelectedItemInfo() const {
     }
 
     QString info = QString("Item: %1 (ID: %2)")
-                   .arg(selectedItem_->getName())
-                   .arg(selectedItem_->getID());
+                   .arg(selectedItem_->name())
+                   .arg(selectedItem_->getServerId());
 
-    if (selectedItem_->getActionID() > 0) {
-        info += QString(" [AID: %1]").arg(selectedItem_->getActionID());
+    if (selectedItem_->getActionId() > 0) {
+        info += QString(" [AID: %1]").arg(selectedItem_->getActionId());
     }
 
-    if (selectedItem_->getUniqueID() > 0) {
-        info += QString(" [UID: %1]").arg(selectedItem_->getUniqueID());
+    if (selectedItem_->getUniqueId() > 0) {
+        info += QString(" [UID: %1]").arg(selectedItem_->getUniqueId());
     }
 
     return info;
@@ -520,7 +561,55 @@ void BrushManager::setDrawingMode(const QString& modeName, const QString& descri
     }
 }
 
-#include "BrushManager.moc"
+// Task 33: Update current brush properties implementation
+void BrushManager::updateCurrentBrushProperties(const QVariantMap& properties) {
+    if (!currentBrush_) {
+        qWarning() << "BrushManager::updateCurrentBrushProperties: No current brush to update";
+        return;
+    }
+
+    // Apply properties to the current brush
+    for (auto it = properties.begin(); it != properties.end(); ++it) {
+        const QString& key = it.key();
+        const QVariant& value = it.value();
+
+        // Handle common brush properties
+        if (key == "size" && value.canConvert<int>()) {
+            // TODO: Add setSize method to base Brush class or use dynamic_cast to specific brush types
+            // currentBrush_->setSize(value.toInt());
+            qDebug() << "BrushManager: setSize not implemented in base Brush class";
+        } else if (key == "shape" && value.canConvert<int>()) {
+            // TODO: Add setShape method to base Brush class or use dynamic_cast to specific brush types
+            // currentBrush_->setShape(static_cast<Brush::BrushShape>(value.toInt()));
+            qDebug() << "BrushManager: setShape not implemented in base Brush class";
+        } else if (key == "targetItems" && value.canConvert<QList<Item*>>()) {
+            // Handle flood fill target items if brush supports it
+            auto targetItems = value.value<QList<Item*>>();
+            // TODO: Add supportsFloodFill and setFloodFillTargetItems methods to base Brush class
+            // if (currentBrush_->supportsFloodFill()) {
+            //     currentBrush_->setFloodFillTargetItems(targetItems);
+            // }
+            qDebug() << "BrushManager: Flood fill methods not implemented in base Brush class";
+        } else if (key == "targetType" && value.canConvert<ItemTypes_t>()) {
+            // Handle target type if brush supports it
+            auto targetType = value.value<ItemTypes_t>();
+            // TODO: Add setTargetType method to base Brush class
+            // currentBrush_->setTargetType(targetType);
+            qDebug() << "BrushManager: setTargetType not implemented in base Brush class";
+        } else if (key == "selectedTiles" && value.canConvert<QList<Tile*>>()) {
+            // Handle selected tiles for paste operations
+            auto selectedTiles = value.value<QList<Tile*>>();
+            // TODO: Add setSelectedTiles method to base Brush class
+            // currentBrush_->setSelectedTiles(selectedTiles);
+            qDebug() << "BrushManager: setSelectedTiles not implemented in base Brush class";
+        } else {
+            // Let the brush handle custom properties via Qt's property system
+            currentBrush_->setProperty(key.toUtf8().constData(), value);
+        }
+    }
+
+    qDebug() << "BrushManager: Updated current brush properties, count:" << properties.size();
+}
 
 // Include helper methods implementation
 #include "BrushManagerHelpers.cpp"

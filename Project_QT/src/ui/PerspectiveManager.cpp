@@ -188,4 +188,4 @@ void PerspectiveManager::applyPerspective(const QByteArray& perspectiveData)
     }
 }
 
-#include "PerspectiveManager.moc"
+

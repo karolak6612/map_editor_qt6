@@ -368,4 +368,4 @@ void StatusBarManager::updateToolbarState(const QString& toolName, bool active)
     }
 }
 
-#include "StatusBarManager.moc"
+

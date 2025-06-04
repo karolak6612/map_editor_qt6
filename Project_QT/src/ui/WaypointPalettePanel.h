@@ -176,7 +176,7 @@ public:
     // Dialog modes
     enum EditMode {
         CreateMode,    // Creating new waypoint
-        EditMode,      // Editing existing waypoint
+        ModifyMode,    // Editing existing waypoint (renamed to avoid conflict with enum name)
         ViewMode       // View-only mode
     };
     

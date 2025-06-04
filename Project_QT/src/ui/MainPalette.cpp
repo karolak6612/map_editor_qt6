@@ -1242,4 +1242,4 @@ void BrushToolPanel::onToolChanged() {
     emit toolSelected(selectedTool_);
 }
 
-#include "MainPalette.moc"
+

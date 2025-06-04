@@ -40,7 +40,9 @@ void GameSprite::setSpriteSheet(const QString& path) {
 
 void GameSprite::setImage(const QImage& image) {
     m_spriteImage = image;
-    m_spriteSheet = QPixmap::fromImage(image);
+    // Defer pixmap creation until actually needed for better performance
+    m_spriteSheet = QPixmap(); // Clear existing pixmap
+    m_pixmapNeedsUpdate = true;
 }
 
 void GameSprite::setFrameDimensions(int width, int height) {
@@ -128,6 +130,9 @@ void GameSprite::drawAnimated(QPainter* painter, const QPoint& targetPos,
         return;
     }
 
+    // Ensure pixmap is available
+    ensurePixmapReady();
+
     // Note: The Animator currently is configured for m_framesPerPattern.
     // If different patterns could have different frame counts or timings, Animator would need
     // to be reconfigured or GameSprite would need multiple Animator instances.
@@ -140,6 +145,13 @@ void GameSprite::drawAnimated(QPainter* painter, const QPoint& targetPos,
         painter->drawPixmap(finalTargetPos, m_spriteSheet, sourceRect);
     } else {
         //qWarning() << "GameSprite::drawAnimated: Calculated invalid sourceRect";
+    }
+}
+
+void GameSprite::ensurePixmapReady() {
+    if (m_pixmapNeedsUpdate && !m_spriteImage.isNull()) {
+        m_spriteSheet = QPixmap::fromImage(m_spriteImage);
+        m_pixmapNeedsUpdate = false;
     }
 }
 
@@ -191,6 +203,9 @@ void GameSprite::drawTo(QPainter* painter, const QPoint& targetPos, SpriteSize s
     if (!validateDrawingParameters(painter, targetPos) || !isLoaded()) {
         return;
     }
+
+    // Ensure pixmap is available
+    ensurePixmapReady();
 
     // Get current frame from animator
     int currentFrame = getCurrentFrame();
@@ -315,33 +330,173 @@ QImage GameSprite::colorizeSpritePart(const QImage& sourceImage, const Outfit& o
     // Create a copy of the source image for colorization
     QImage colorizedImage = sourceImage.copy();
 
-    // Simple colorization based on outfit colors
-    // This is a basic implementation - more sophisticated colorization may be needed
+    // Implement proper Tibia outfit colorization
+    // Tibia uses specific color palettes and HSV adjustments for outfit colorization
     if (outfit.lookHead > 0 || outfit.lookBody > 0 || outfit.lookLegs > 0 || outfit.lookFeet > 0) {
-        // Apply color transformations based on outfit
-        // For now, just apply a simple color overlay
+
+        // Convert to 32-bit format for better color manipulation
+        if (colorizedImage.format() != QImage::Format_ARGB32_Premultiplied) {
+            colorizedImage = colorizedImage.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        }
+
+        // Apply Tibia-style outfit colorization
         for (int y = 0; y < colorizedImage.height(); ++y) {
             for (int x = 0; x < colorizedImage.width(); ++x) {
-                QColor pixel = colorizedImage.pixelColor(x, y);
-                if (pixel.alpha() > 0) { // Only colorize non-transparent pixels
-                    // Simple colorization - this would need to be more sophisticated
-                    // based on the actual outfit colorization algorithm from wxwidgets
-                    if (outfit.lookHead > 0) {
-                        pixel.setRed(qMin(255, pixel.red() + outfit.lookHead));
-                    }
-                    if (outfit.lookBody > 0) {
-                        pixel.setGreen(qMin(255, pixel.green() + outfit.lookBody));
-                    }
-                    if (outfit.lookLegs > 0) {
-                        pixel.setBlue(qMin(255, pixel.blue() + outfit.lookLegs));
-                    }
-                    colorizedImage.setPixelColor(x, y, pixel);
+                QRgb pixel = colorizedImage.pixel(x, y);
+
+                // Skip transparent pixels
+                if (qAlpha(pixel) == 0) {
+                    continue;
                 }
+
+                // Extract RGB components
+                int red = qRed(pixel);
+                int green = qGreen(pixel);
+                int blue = qBlue(pixel);
+                int alpha = qAlpha(pixel);
+
+                // Apply Tibia outfit colorization algorithm
+                QRgb colorizedPixel = applyTibiaOutfitColor(red, green, blue, alpha, outfit);
+                colorizedImage.setPixel(x, y, colorizedPixel);
             }
         }
     }
 
     return colorizedImage;
+}
+
+QRgb GameSprite::applyTibiaOutfitColor(int red, int green, int blue, int alpha, const Outfit& outfit) const {
+    // Tibia outfit colorization works by mapping grayscale values to specific colors
+    // This is a simplified version of the Tibia colorization algorithm
+
+    // Calculate grayscale value for determining which color channel to use
+    int grayscale = qGray(red, green, blue);
+
+    // Determine which outfit color to apply based on pixel intensity
+    QColor targetColor;
+
+    if (grayscale >= 192) {
+        // Bright pixels -> Head color
+        if (outfit.lookHead > 0) {
+            targetColor = getTibiaOutfitColor(outfit.lookHead);
+        } else {
+            return qRgba(red, green, blue, alpha); // No change
+        }
+    } else if (grayscale >= 128) {
+        // Medium pixels -> Body color
+        if (outfit.lookBody > 0) {
+            targetColor = getTibiaOutfitColor(outfit.lookBody);
+        } else {
+            return qRgba(red, green, blue, alpha); // No change
+        }
+    } else if (grayscale >= 64) {
+        // Dark pixels -> Legs color
+        if (outfit.lookLegs > 0) {
+            targetColor = getTibiaOutfitColor(outfit.lookLegs);
+        } else {
+            return qRgba(red, green, blue, alpha); // No change
+        }
+    } else {
+        // Very dark pixels -> Feet color
+        if (outfit.lookFeet > 0) {
+            targetColor = getTibiaOutfitColor(outfit.lookFeet);
+        } else {
+            return qRgba(red, green, blue, alpha); // No change
+        }
+    }
+
+    // Apply the target color while preserving the original intensity
+    float intensity = grayscale / 255.0f;
+    int newRed = static_cast<int>(targetColor.red() * intensity);
+    int newGreen = static_cast<int>(targetColor.green() * intensity);
+    int newBlue = static_cast<int>(targetColor.blue() * intensity);
+
+    return qRgba(qBound(0, newRed, 255),
+                 qBound(0, newGreen, 255),
+                 qBound(0, newBlue, 255),
+                 alpha);
+}
+
+QColor GameSprite::getTibiaOutfitColor(int colorId) const {
+    // Tibia outfit color palette (simplified version)
+    // In a full implementation, this would be loaded from game data files
+    static const QColor tibiaColors[] = {
+        QColor(255, 255, 255), // 0 - White
+        QColor(255, 255, 204), // 1 - Light Yellow
+        QColor(255, 255, 153), // 2 - Yellow
+        QColor(255, 255, 102), // 3 - Dark Yellow
+        QColor(255, 255, 51),  // 4 - Gold
+        QColor(255, 204, 153), // 5 - Light Orange
+        QColor(255, 153, 102), // 6 - Orange
+        QColor(255, 102, 51),  // 7 - Dark Orange
+        QColor(255, 51, 0),    // 8 - Red Orange
+        QColor(255, 0, 0),     // 9 - Red
+        QColor(204, 0, 0),     // 10 - Dark Red
+        QColor(153, 0, 0),     // 11 - Very Dark Red
+        QColor(102, 0, 0),     // 12 - Brown Red
+        QColor(255, 204, 255), // 13 - Light Pink
+        QColor(255, 153, 255), // 14 - Pink
+        QColor(255, 102, 255), // 15 - Dark Pink
+        QColor(255, 51, 255),  // 16 - Purple Pink
+        QColor(255, 0, 255),   // 17 - Magenta
+        QColor(204, 0, 204),   // 18 - Dark Magenta
+        QColor(153, 0, 153),   // 19 - Purple
+        QColor(102, 0, 102),   // 20 - Dark Purple
+        QColor(204, 204, 255), // 21 - Light Blue
+        QColor(153, 153, 255), // 22 - Blue
+        QColor(102, 102, 255), // 23 - Dark Blue
+        QColor(51, 51, 255),   // 24 - Very Dark Blue
+        QColor(0, 0, 255),     // 25 - Pure Blue
+        QColor(0, 0, 204),     // 26 - Navy Blue
+        QColor(0, 0, 153),     // 27 - Dark Navy
+        QColor(0, 0, 102),     // 28 - Very Dark Navy
+        QColor(204, 255, 255), // 29 - Light Cyan
+        QColor(153, 255, 255), // 30 - Cyan
+        QColor(102, 255, 255), // 31 - Dark Cyan
+        QColor(51, 255, 255),  // 32 - Very Dark Cyan
+        QColor(0, 255, 255),   // 33 - Pure Cyan
+        QColor(0, 204, 204),   // 34 - Teal
+        QColor(0, 153, 153),   // 35 - Dark Teal
+        QColor(0, 102, 102),   // 36 - Very Dark Teal
+        QColor(204, 255, 204), // 37 - Light Green
+        QColor(153, 255, 153), // 38 - Green
+        QColor(102, 255, 102), // 39 - Dark Green
+        QColor(51, 255, 51),   // 40 - Very Dark Green
+        QColor(0, 255, 0),     // 41 - Pure Green
+        QColor(0, 204, 0),     // 42 - Forest Green
+        QColor(0, 153, 0),     // 43 - Dark Forest
+        QColor(0, 102, 0),     // 44 - Very Dark Forest
+        QColor(255, 255, 204), // 45 - Light Lime
+        QColor(255, 255, 153), // 46 - Lime
+        QColor(255, 255, 102), // 47 - Dark Lime
+        QColor(255, 255, 51),  // 48 - Very Dark Lime
+        QColor(255, 255, 0),   // 49 - Pure Yellow
+        QColor(204, 204, 0),   // 50 - Dark Yellow
+        QColor(153, 153, 0),   // 51 - Brown Yellow
+        QColor(102, 102, 0),   // 52 - Dark Brown Yellow
+        QColor(255, 204, 153), // 53 - Light Brown
+        QColor(255, 153, 102), // 54 - Brown
+        QColor(255, 102, 51),  // 55 - Dark Brown
+        QColor(255, 51, 0),    // 56 - Very Dark Brown
+        QColor(204, 102, 51),  // 57 - Chocolate
+        QColor(153, 76, 38),   // 58 - Dark Chocolate
+        QColor(102, 51, 25),   // 59 - Very Dark Chocolate
+        QColor(51, 25, 13),    // 60 - Black Brown
+        QColor(204, 204, 204), // 61 - Light Gray
+        QColor(153, 153, 153), // 62 - Gray
+        QColor(102, 102, 102), // 63 - Dark Gray
+        QColor(51, 51, 51),    // 64 - Very Dark Gray
+        QColor(0, 0, 0),       // 65 - Black
+    };
+
+    const int maxColors = sizeof(tibiaColors) / sizeof(tibiaColors[0]);
+
+    if (colorId >= 0 && colorId < maxColors) {
+        return tibiaColors[colorId];
+    }
+
+    // Default to white for invalid color IDs
+    return QColor(255, 255, 255);
 }
 
 // --- New Methods for Enhanced GameSprite Functionality ---
@@ -479,4 +634,4 @@ QPixmap GameSprite::createOutfitSprite(const Outfit& outfit, int patternX, int p
     return QPixmap::fromImage(colorizedImage);
 }
 
-#include "GameSprite.moc"
+

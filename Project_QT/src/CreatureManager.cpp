@@ -7,24 +7,43 @@
 // Static instance
 CreatureManager* CreatureManager::s_instance = nullptr;
 
-CreatureManager::CreatureManager() : QObject(nullptr), loaded_(false) {
+CreatureManager::CreatureManager(QObject* parent) : QObject(parent), loaded_(false) {
     // Private constructor for singleton
 }
 
 CreatureManager::~CreatureManager() {
     clear();
+    // Clear static instance pointer when destroyed
+    if (s_instance == this) {
+        s_instance = nullptr;
+    }
 }
 
 CreatureManager& CreatureManager::getInstance() {
     if (!s_instance) {
-        s_instance = new CreatureManager();
+        // Parent to QApplication for automatic cleanup
+        QObject* appParent = QCoreApplication::instance();
+        s_instance = new CreatureManager(appParent);
+
+        // Store reference in QApplication for easy access
+        if (appParent) {
+            appParent->setProperty("CreatureManager", QVariant::fromValue(s_instance));
+        }
     }
     return *s_instance;
 }
 
 void CreatureManager::destroyInstance() {
-    delete s_instance;
-    s_instance = nullptr;
+    if (s_instance) {
+        // Remove from QApplication properties
+        QObject* appParent = QCoreApplication::instance();
+        if (appParent) {
+            appParent->setProperty("CreatureManager", QVariant());
+        }
+
+        delete s_instance;
+        s_instance = nullptr;
+    }
 }
 
 bool CreatureManager::hasCreature(int id) const {
@@ -233,7 +252,7 @@ bool CreatureManager::saveToXML(const QString& filePath) const {
     return true;
 }
 
-bool CreatureManager::loadCreaturesFromXml(const QString& filePath, bool standard, QString& error, QStringList& warnings) {
+bool CreatureManager::loadCreaturesFromXml(const QString& filePath, QString& error, QStringList& warnings, bool standard) {
     // Clear existing data
     clear();
 
@@ -362,6 +381,22 @@ bool CreatureManager::loadCreaturesFromXml(const QString& filePath, bool standar
     return true;
 }
 
+bool CreatureManager::loadCreaturesFromXml(const QString& filePath, bool standard) {
+    QString error;
+    QStringList warnings;
+    bool result = loadCreaturesFromXml(filePath, error, warnings, standard);
+
+    if (!result) {
+        qWarning() << "CreatureManager::loadCreaturesFromXml failed:" << error;
+    }
+
+    if (!warnings.isEmpty()) {
+        qWarning() << "CreatureManager::loadCreaturesFromXml warnings:" << warnings.join("; ");
+    }
+
+    return result;
+}
+
 // --- OT XML Import Support ---
 
 bool CreatureManager::importXMLFromOT(const QString& filePath, QString& error, QStringList& warnings) {
@@ -446,4 +481,20 @@ bool CreatureManager::importXMLFromOT(const QString& filePath, QString& error, Q
 
     error = QString("Failed to add creature: %1").arg(name);
     return false;
+}
+
+bool CreatureManager::importXMLFromOT(const QString& filePath) {
+    QString error;
+    QStringList warnings;
+    bool result = importXMLFromOT(filePath, error, warnings);
+
+    if (!result) {
+        qWarning() << "CreatureManager::importXMLFromOT failed:" << error;
+    }
+
+    if (!warnings.isEmpty()) {
+        qWarning() << "CreatureManager::importXMLFromOT warnings:" << warnings.join("; ");
+    }
+
+    return result;
 }

@@ -1,18 +1,19 @@
 #include "MainWindow.h"
+#include "MenuBuilder.h"  // Task 011: Extracted menu building logic
 #include <QMenuBar>
 #include <QMenu>
 #include <QAction>
 #include <QKeySequence>
 #include <QDebug>
 #include <QMap>
-#include <QApplication> 
-#include <QToolBar>     
-#include <QIcon>        
-#include <QActionGroup> 
-#include <QSpinBox>     
-#include <QComboBox>    
-#include <QLabel>       
-#include <QPushButton>  
+#include <QApplication>
+#include <QToolBar>
+#include <QIcon>
+#include <QActionGroup>
+#include <QSpinBox>
+#include <QComboBox>
+#include <QLabel>
+#include <QPushButton>
 #include <QDockWidget> // Added for QDockWidget
 #include <QStatusBar>  // Added for QStatusBar
 #include <QVBoxLayout> // Added for QVBoxLayout in dockable views
@@ -72,6 +73,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
     // Initialize settings and border system
     settingsManager_ = SettingsManager::getInstance();
     borderSystem_ = BorderSystem::getInstance();
+
+    // Task 011: Initialize menu builder for mandate M6 compliance
+    menuBuilder_ = new MenuBuilder(this, this);
 
     // Initialize menu action handler
     menuActionHandler_ = new MenuActionHandler(this, this);
@@ -134,6 +138,9 @@ MainWindow::~MainWindow() {
     delete mapView_;
     mapView_ = nullptr;
 
+    delete menuBuilder_;
+    menuBuilder_ = nullptr;
+
     delete menuActionHandler_;
     menuActionHandler_ = nullptr;
 
@@ -151,21 +158,42 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::setupMenuBar() {
-    menuBar_ = menuBar(); 
-    menuBar_->addMenu(createFileMenu());
-    menuBar_->addMenu(createEditMenu());
-    menuBar_->addMenu(createEditorMenu()); 
-    menuBar_->addMenu(createSearchMenu());
-    menuBar_->addMenu(createMapMenu());
-    menuBar_->addMenu(createSelectionMenu());
-    menuBar_->addMenu(createViewMenu());   
-    menuBar_->addMenu(createShowMenu());   
-    menuBar_->addMenu(createNavigateMenu());
-    menuBar_->addMenu(createWindowMenu());
-    menuBar_->addMenu(createExperimentalMenu());
-    menuBar_->addMenu(createAboutMenu()); 
-    menuBar_->addMenu(createServerMenu());
-    menuBar_->addMenu(createIdlerMenu());
+    menuBar_ = menuBar();
+
+    // Task 011: Use MenuBuilder for mandate M6 compliance
+    if (menuBuilder_) {
+        menuBar_->addMenu(menuBuilder_->createFileMenu());
+        menuBar_->addMenu(menuBuilder_->createEditMenu());
+        menuBar_->addMenu(menuBuilder_->createEditorMenu());
+        menuBar_->addMenu(menuBuilder_->createSearchMenu());
+        menuBar_->addMenu(menuBuilder_->createMapMenu());
+        menuBar_->addMenu(menuBuilder_->createSelectionMenu());
+        menuBar_->addMenu(menuBuilder_->createViewMenu());
+        menuBar_->addMenu(menuBuilder_->createShowMenu());
+        menuBar_->addMenu(menuBuilder_->createNavigateMenu());
+        menuBar_->addMenu(menuBuilder_->createWindowMenu());
+        menuBar_->addMenu(menuBuilder_->createExperimentalMenu());
+        menuBar_->addMenu(menuBuilder_->createAboutMenu());
+        menuBar_->addMenu(menuBuilder_->createServerMenu());
+        menuBar_->addMenu(menuBuilder_->createIdlerMenu());
+
+        // Copy actions from MenuBuilder for backward compatibility
+        actions_ = menuBuilder_->getActions();
+
+        // Set up action references for backward compatibility
+        newAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::NEW);
+        openAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::OPEN);
+        saveAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::SAVE);
+        saveAsAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::SAVE_AS);
+        undoAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::UNDO);
+        redoAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::REDO);
+        cutAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::CUT);
+        copyAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::COPY);
+        pasteAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::PASTE);
+        viewPaletteDockAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::VIEW_PALETTE_DOCK);
+        viewMinimapDockAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::VIEW_MINIMAP_DOCK);
+        viewPropertiesDockAction_ = menuBuilder_->getAction(MenuBuilder::MenuBar::VIEW_PROPERTIES_DOCK);
+    }
 
     // Add Test Action for TilePropertyEditor to Experimental Menu
     QMenu* experimentalMenu = nullptr;
@@ -346,24 +374,36 @@ void MainWindow::setupStatusBar() {
 
 
 QAction* MainWindow::createAction(const QString& text, const QString& objectName, const QIcon& icon, const QString& shortcut, const QString& statusTip, bool checkable, bool checked, bool connectToGenericHandler) {
+    // Task 011: Delegate to MenuBuilder for mandate M6 compliance
+    if (menuBuilder_) {
+        return menuBuilder_->createAction(text, objectName, icon, shortcut, statusTip, checkable, checked, connectToGenericHandler);
+    }
+
+    // Fallback implementation if MenuBuilder is not available
     QAction *action = new QAction(tr(text.toStdString().c_str()), this);
     action->setObjectName(objectName);
-    action->setIcon(icon); // Set the icon
+    action->setIcon(icon);
     if (!shortcut.isEmpty()) {
         action->setShortcut(QKeySequence::fromString(tr(shortcut.toStdString().c_str())));
     }
     action->setStatusTip(tr(statusTip.toStdString().c_str()));
     action->setCheckable(checkable);
     action->setChecked(checked);
-    if (connectToGenericHandler) { // Conditional connection
+    if (connectToGenericHandler) {
         connect(action, &QAction::triggered, this, &MainWindow::onMenuActionTriggered);
     }
     return action;
 }
 
 QAction* MainWindow::createActionWithId(MenuBar::ActionID actionId, const QString& text, const QIcon& icon, const QString& shortcut, const QString& statusTip, bool checkable, bool checked) {
+    // Task 011: Delegate to MenuBuilder for mandate M6 compliance
+    if (menuBuilder_) {
+        return menuBuilder_->createActionWithId(static_cast<MenuBuilder::MenuBar::ActionID>(actionId), text, icon, shortcut, statusTip, checkable, checked);
+    }
+
+    // Fallback implementation if MenuBuilder is not available
     QAction *action = new QAction(tr(text.toStdString().c_str()), this);
-    action->setObjectName(QString("ACTION_%1").arg(static_cast<int>(actionId))); // Set object name based on ID
+    action->setObjectName(QString("ACTION_%1").arg(static_cast<int>(actionId)));
     action->setIcon(icon);
     if (!shortcut.isEmpty()) {
         action->setShortcut(QKeySequence::fromString(tr(shortcut.toStdString().c_str())));
@@ -372,10 +412,8 @@ QAction* MainWindow::createActionWithId(MenuBar::ActionID actionId, const QStrin
     action->setCheckable(checkable);
     action->setChecked(checked);
 
-    // Store action in map for easy access
     actions_[actionId] = action;
 
-    // Connect to centralized action handler
     connect(action, &QAction::triggered, [this, actionId]() {
         onActionTriggered(actionId);
     });
@@ -387,287 +425,33 @@ QAction* MainWindow::getAction(MenuBar::ActionID actionId) const {
     return actions_.value(actionId, nullptr);
 }
 
-QMenu* MainWindow::createFileMenu() {
-    QMenu *fileMenu = new QMenu(tr("&File"), this);
-    // Use ActionID system for main file actions
-    newAction_ = createActionWithId(MenuBar::NEW, "&New...", QIcon::fromTheme("document-new"), "Ctrl+N", "Create a new map.");
-    fileMenu->addAction(newAction_);
-    openAction_ = createActionWithId(MenuBar::OPEN, "&Open...", QIcon::fromTheme("document-open"), "Ctrl+O", "Open another map.");
-    fileMenu->addAction(openAction_);
-    saveAction_ = createActionWithId(MenuBar::SAVE, "&Save", QIcon::fromTheme("document-save"), "Ctrl+S", "Save the current map.");
-    fileMenu->addAction(saveAction_);
-    saveAsAction_ = createActionWithId(MenuBar::SAVE_AS, "Save &As...", QIcon::fromTheme("document-save-as"), "Ctrl+Shift+S", "Save the current map as a new file.");
-    fileMenu->addAction(saveAsAction_);
-    fileMenu->addAction(createActionWithId(MenuBar::GENERATE_MAP, "&Generate Map", QIcon(), "Ctrl+Shift+G", "Generate a new map."));
-    fileMenu->addAction(createActionWithId(MenuBar::CLOSE, "&Close", QIcon::fromTheme("window-close"), "Ctrl+W", "Closes the currently open map."));
-    fileMenu->addSeparator();
-    QMenu *importMenu = fileMenu->addMenu(tr("&Import"));
+// createFileMenu moved to MenuBuilder for mandate M6 compliance
 
-    // Use ActionID system for import/export actions
-    importMenu->addAction(createActionWithId(MenuBar::IMPORT_MAP, "Import &Map...", QIcon::fromTheme("document-import"), "", "Import map data from another map file"));
-    importMenu->addAction(createActionWithId(MenuBar::IMPORT_MONSTERS, "Import &Monsters/NPC...", QIcon::fromTheme("document-import"), "", "Import either a monsters.xml file or a specific monster/NPC."));
-    importMenu->addAction(createActionWithId(MenuBar::IMPORT_MINIMAP, "Import M&inimap...", QIcon::fromTheme("document-import"), "", "Import minimap data from an image file."));
+// createEditMenu moved to MenuBuilder for mandate M6 compliance
 
-    QMenu *exportMenu = fileMenu->addMenu(tr("&Export"));
-    exportMenu->addAction(createActionWithId(MenuBar::EXPORT_MINIMAP, "Export &Minimap...", QIcon::fromTheme("document-export"), "", "Export minimap to an image file"));
-    exportMenu->addAction(createActionWithId(MenuBar::EXPORT_TILESETS, "Export &Tilesets...", QIcon::fromTheme("document-export"), "", "Export tilesets to an xml file."));
-    fileMenu->addSeparator();
-    fileMenu->addAction(createActionWithId(MenuBar::RELOAD_DATA, "&Reload Data", QIcon::fromTheme("view-refresh"), "F5", "Reloads all data files."));
-    fileMenu->addSeparator();
+// createEditorMenu moved to MenuBuilder for mandate M6 compliance
 
-    // Recent files submenu (placeholder for now)
-    QMenu *recentFilesMenu = fileMenu->addMenu(tr("Recent &Files"));
-    recentFilesMenu->setObjectName(QStringLiteral("RECENT_FILES"));
-    QAction* placeholderRecent = recentFilesMenu->addAction(tr("(No recent files)"));
-    placeholderRecent->setEnabled(false);
+// createSearchMenu moved to MenuBuilder for mandate M6 compliance
 
-    fileMenu->addSeparator();
-    fileMenu->addAction(createActionWithId(MenuBar::PREFERENCES, "&Preferences...", QIcon::fromTheme("preferences-system"), "", "Configure the map editor."));
-    fileMenu->addSeparator();
-    fileMenu->addAction(createActionWithId(MenuBar::EXIT, "E&xit", QIcon::fromTheme("application-exit"), "Ctrl+Q", "Close the editor."));
-    return fileMenu;
-}
+// createMapMenu moved to MenuBuilder for mandate M6 compliance
 
-QMenu* MainWindow::createEditMenu() {
-    QMenu *editMenu = new QMenu(tr("&Edit"), this);
-    // Use ActionID system for main edit actions
-    undoAction_ = createActionWithId(MenuBar::UNDO, "&Undo", QIcon::fromTheme("edit-undo"), "Ctrl+Z", "Undo last action.");
-    editMenu->addAction(undoAction_);
-    redoAction_ = createActionWithId(MenuBar::REDO, "&Redo", QIcon::fromTheme("edit-redo"), "Ctrl+Y", "Redo last undid action.");
-    editMenu->addAction(redoAction_);
-    editMenu->addSeparator();
-    // Find and Replace actions (matching wxWidgets structure)
-    editMenu->addAction(createActionWithId(MenuBar::FIND_ITEM, "&Find Item...", QIcon::fromTheme("edit-find"), "Ctrl+F", "Find all instances of an item type on the map."));
-    editMenu->addAction(createActionWithId(MenuBar::FIND_CREATURE, "Find &Creature...", QIcon::fromTheme("edit-find"), "Ctrl+Shift+C", "Find all instances of a creature on the map."));
-    editMenu->addAction(createActionWithId(MenuBar::REPLACE_ITEMS, "&Replace Items...", QIcon::fromTheme("edit-find-replace"), "Ctrl+H", "Replaces all occurrences of one item with another."));
-    editMenu->addAction(createActionWithId(MenuBar::REFRESH_ITEMS, "Refresh Items", QIcon::fromTheme("view-refresh"), "", "Refresh items to fix flags"));
-    editMenu->addSeparator();
-    QMenu *borderOptionsMenu = editMenu->addMenu(tr("&Border Options"));
-    borderOptionsMenu->addAction(createAction("Border &Automagic", "AUTOMAGIC", QIcon(), QKeySequence("A"), "Turns on all automatic border functions.", true));
-    borderOptionsMenu->addSeparator();
-    borderOptionsMenu->addAction(createAction("&Borderize Selection", "BORDERIZE_SELECTION", QIcon(), QKeySequence("Ctrl+B"), "Creates automatic borders in the entire selected area."));
-    borderOptionsMenu->addAction(createAction("Borderize &Map", "BORDERIZE_MAP", QIcon(), "", "Reborders the entire map."));
-    borderOptionsMenu->addAction(createAction("&Randomize Selection", "RANDOMIZE_SELECTION", QIcon(), "", "Randomizes the ground tiles of the selected area."));
-    borderOptionsMenu->addAction(createAction("Randomize M&ap", "RANDOMIZE_MAP", QIcon(), "", "Randomizes all tiles of the entire map."));
-    QMenu *otherOptionsMenu = editMenu->addMenu(tr("&Other Options"));
-    otherOptionsMenu->addAction(createAction("Remove all &Unreachable Tiles...", "MAP_REMOVE_UNREACHABLE_TILES", QIcon(), "", "Removes all tiles that cannot be reached (or seen) by the player from the map."));
-    otherOptionsMenu->addAction(createAction("&Clear Invalid Houses", "CLEAR_INVALID_HOUSES", QIcon(), "", "Clears house tiles not belonging to any house."));
-    otherOptionsMenu->addAction(createAction("Clear &Modified State", "CLEAR_MODIFIED_STATE", QIcon(), "", "Clears the modified state from all tiles."));
-    otherOptionsMenu->addSeparator();
+// createSelectionMenu moved to MenuBuilder for mandate M6 compliance
 
-    // Task7: Add Ground Validation dialog to Other Options menu
-    QAction* groundValidationAction = new QAction(tr("&Ground Validation..."), this);
-    groundValidationAction->setObjectName("GROUND_VALIDATION_ACTION");
-    groundValidationAction->setStatusTip(tr("Validate and fix ground tile issues"));
-    connect(groundValidationAction, &QAction::triggered, this, &MainWindow::onShowGroundValidationDialog);
-    otherOptionsMenu->addAction(groundValidationAction);
-    editMenu->addSeparator();
-    // Use ActionID system for clipboard actions
-    cutAction_ = createActionWithId(MenuBar::CUT, "Cu&t", QIcon::fromTheme("edit-cut"), "Ctrl+X", "Cut a part of the map.");
-    editMenu->addAction(cutAction_);
-    copyAction_ = createActionWithId(MenuBar::COPY, "&Copy", QIcon::fromTheme("edit-copy"), "Ctrl+C", "Copy a part of the map.");
-    editMenu->addAction(copyAction_);
-    pasteAction_ = createActionWithId(MenuBar::PASTE, "&Paste", QIcon::fromTheme("edit-paste"), "Ctrl+V", "Paste a part of the map.");
-    editMenu->addAction(pasteAction_);
-    editMenu->addSeparator();
+// createViewMenu moved to MenuBuilder for mandate M6 compliance
 
-    QAction* replaceItemsAction = new QAction(tr("Find/Replace Items..."), this);
-    replaceItemsAction->setObjectName("REPLACE_ITEMS_DIALOG_ACTION");
-    replaceItemsAction->setIcon(QIcon::fromTheme("edit-find-replace")); // Standard icon
-    replaceItemsAction->setStatusTip(tr("Open the Find and Replace Items dialog."));
-    // replaceItemsAction->setShortcut(QKeySequence(tr("Ctrl+Shift+R"))); // Optional shortcut
-    connect(replaceItemsAction, &QAction::triggered, this, &MainWindow::onShowReplaceItemsDialog);
-    editMenu->addAction(replaceItemsAction);
+// createShowMenu moved to MenuBuilder for mandate M6 compliance
 
-    return editMenu;
-}
+// createNavigateMenu moved to MenuBuilder for mandate M6 compliance
 
-QMenu* MainWindow::createEditorMenu() {
-    QMenu *editorMenu = new QMenu(tr("Edito&r"), this);
-    editorMenu->addAction(createAction("&New View", "NEW_VIEW", QIcon::fromTheme("window-new"), QKeySequence("Ctrl+Shift+N"), "Creates a new view of the current map.")); // Explicit string to avoid conflict if QKeySequence::New used elsewhere for "New Window"
-    editorMenu->addAction(createAction("New &Detached View", "NEW_DETACHED_VIEW", QIcon::fromTheme("window-new"), QKeySequence("Ctrl+Shift+D"), "Creates a new detached view of the current map that can be moved to another monitor."));
-    editorMenu->addAction(createAction("Enter &Fullscreen", "TOGGLE_FULLSCREEN", QIcon::fromTheme("view-fullscreen"), QKeySequence::FullScreen, "Changes between fullscreen mode and windowed mode.", true));
-    editorMenu->addAction(createAction("Take &Screenshot", "TAKE_SCREENSHOT", QIcon::fromTheme("applets-screenshooter"), QKeySequence("F10"), "Saves the current view to the disk."));
-    editorMenu->addSeparator();
-    QMenu *zoomMenu = editorMenu->addMenu(tr("&Zoom"));
-    QAction* zoomInAction = createActionWithId(MenuBar::ZOOM_IN, "Zoom &In", QIcon::fromTheme("zoom-in"), "Ctrl+=", "Increase the zoom.");
-    zoomMenu->addAction(zoomInAction);
-    QAction* zoomOutAction = createActionWithId(MenuBar::ZOOM_OUT, "Zoom &Out", QIcon::fromTheme("zoom-out"), "Ctrl+-", "Decrease the zoom.");
-    zoomMenu->addAction(zoomOutAction);
-    QAction* zoomNormalAction = createActionWithId(MenuBar::ZOOM_NORMAL, "Zoom &Normal", QIcon::fromTheme("zoom-original"), "Ctrl+0", "Normal zoom(100%).");
-    zoomMenu->addAction(zoomNormalAction);
-    return editorMenu;
-}
+// createWindowMenu moved to MenuBuilder for mandate M6 compliance
 
-QMenu* MainWindow::createSearchMenu() {
-    QMenu* menu = new QMenu(tr("&Search"), this);
-    menu->addAction(createAction("&Find Item...", "FIND_ITEM", QIcon::fromTheme("edit-find"), QKeySequence::Find, "Find all instances of an item type the map."));
-    menu->addAction(createAction("Find &Creature...", "FIND_CREATURE", QIcon::fromTheme("edit-find"), QKeySequence("Ctrl+Shift+C"), "Find all instances of a creature on the map."));
-    menu->addSeparator();
-    menu->addAction(createAction("Find &Zones", "SEARCH_ON_MAP_ZONES", QIcon::fromTheme("edit-find"), "", "Find all zones on map."));
-    menu->addAction(createAction("Find &Unique", "SEARCH_ON_MAP_UNIQUE", QIcon::fromTheme("edit-find"), QKeySequence("L"), "Find all items with an unique ID on map."));
-    menu->addAction(createAction("Find &Action", "SEARCH_ON_MAP_ACTION", QIcon::fromTheme("edit-find"), "", "Find all items with an action ID on map."));
-    menu->addAction(createAction("Find &Container", "SEARCH_ON_MAP_CONTAINER", QIcon::fromTheme("edit-find"), "", "Find all containers on map."));
-    menu->addAction(createAction("Find &Writeable", "SEARCH_ON_MAP_WRITEABLE", QIcon::fromTheme("edit-find"), "", "Find all writeable items on map."));
-    menu->addSeparator();
-    menu->addAction(createAction("Find &Everything", "SEARCH_ON_MAP_EVERYTHING", QIcon::fromTheme("edit-find"), "", "Find all unique/action/text/container items."));
-    return menu;
-}
+// createExperimentalMenu moved to MenuBuilder for mandate M6 compliance
 
-QMenu* MainWindow::createMapMenu() {
-    QMenu* menu = new QMenu(tr("&Map"), this);
-    menu->addAction(createAction("Edit &Towns", "EDIT_TOWNS", QIcon::fromTheme("applications-office"), QKeySequence("Ctrl+T"), "Edit towns."));
-    menu->addSeparator();
-    menu->addAction(createAction("&Cleanup...", "MAP_CLEANUP", QIcon::fromTheme("process-stop"), "", "Removes all items that do not exist in the OTB file (red tiles the server can't load)."));
-    menu->addAction(createAction("&Properties...", "MAP_PROPERTIES", QIcon::fromTheme("document-properties"), QKeySequence("Ctrl+P"), "Show and change the map properties.")); // No standard QKeySequence::Properties
-    menu->addAction(createAction("S&tatistics", "MAP_STATISTICS", QIcon::fromTheme("utilities-log"), QKeySequence("F8"), "Show map statistics."));
-    return menu;
-}
+// createAboutMenu moved to MenuBuilder for mandate M6 compliance
 
-QMenu* MainWindow::createSelectionMenu() {
-    QMenu* menu = new QMenu(tr("S&election"), this);
-    menu->addAction(createAction("&Replace Items on Selection", "REPLACE_ON_SELECTION_ITEMS", QIcon::fromTheme("edit-find-replace"), "", "Replace items on selected area."));
-    menu->addAction(createAction("&Find Item on Selection", "SEARCH_ON_SELECTION_ITEM", QIcon::fromTheme("edit-find"), "", "Find items on selected area."));
-    menu->addAction(createAction("&Remove Item on Selection", "REMOVE_ON_SELECTION_ITEM", QIcon::fromTheme("edit-delete"), "", "Remove item on selected area."));
-    menu->addSeparator();
-    QMenu *findOnSelectionMenu = menu->addMenu(tr("Find on Selection"));
-    findOnSelectionMenu->addAction(createAction("Find &Everything", "SEARCH_ON_SELECTION_EVERYTHING", QIcon::fromTheme("edit-find"), "", "Find all unique/action/text/container items."));
-    findOnSelectionMenu->addSeparator();
-    findOnSelectionMenu->addAction(createAction("Find &Zones", "SEARCH_ON_SELECTION_ZONES", QIcon::fromTheme("edit-find"), "", "Find all zones on selected area."));
-    findOnSelectionMenu->addAction(createAction("Find &Unique", "SEARCH_ON_SELECTION_UNIQUE", QIcon::fromTheme("edit-find"), "", "Find all items with an unique ID on selected area."));
-    findOnSelectionMenu->addAction(createAction("Find &Action", "SEARCH_ON_SELECTION_ACTION", QIcon::fromTheme("edit-find"), "", "Find all items with an action ID on selected area."));
-    findOnSelectionMenu->addAction(createAction("Find &Container", "SEARCH_ON_SELECTION_CONTAINER", QIcon::fromTheme("edit-find"), "", "Find all containers on selected area."));
-    findOnSelectionMenu->addAction(createAction("Find &Writeable", "SEARCH_ON_SELECTION_WRITEABLE", QIcon::fromTheme("edit-find"), "", "Find all writeable items on selected area."));
-    menu->addSeparator();
-    QMenu *selectionModeMenu = menu->addMenu(tr("Selection &Mode"));
-    QActionGroup* selectionModeGroup = new QActionGroup(this);
-    selectionModeGroup->setExclusive(true);
-    QAction* compensateAction = createAction("&Compensate Selection", "SELECT_MODE_COMPENSATE", QIcon(), "", "Compensate for floor difference when selecting.", true); // No specific icon
-    selectionModeMenu->addAction(compensateAction);
-    selectionModeGroup->addAction(compensateAction);
-    selectionModeMenu->addSeparator();
-    QAction* currentFloorAction = createAction("&Current Floor", "SELECT_MODE_CURRENT", QIcon(), "", "Select only current floor.", true);
-    selectionModeMenu->addAction(currentFloorAction);
-    selectionModeGroup->addAction(currentFloorAction);
-    currentFloorAction->setChecked(true); 
-    QAction* lowerFloorsAction = createAction("&Lower Floors", "SELECT_MODE_LOWER", QIcon(), "", "Select all lower floors.", true);
-    selectionModeMenu->addAction(lowerFloorsAction);
-    selectionModeGroup->addAction(lowerFloorsAction);
-    QAction* visibleFloorsAction = createAction("&Visible Floors", "SELECT_MODE_VISIBLE", QIcon(), "", "Select only visible floors.", true);
-    selectionModeMenu->addAction(visibleFloorsAction);
-    selectionModeGroup->addAction(visibleFloorsAction);
-    menu->addSeparator();
-    menu->addAction(createAction("&Borderize Selection", "BORDERIZE_SELECTION", QIcon(), QKeySequence("Ctrl+B"), "Creates automatic borders in the entire selected area.")); // Re-uses from Edit Menu
-    menu->addAction(createAction("&Randomize Selection", "RANDOMIZE_SELECTION", QIcon(), "", "Randomizes the ground tiles of the selected area.")); // Re-uses from Edit Menu
-    return menu;
-}
+// createServerMenu moved to MenuBuilder for mandate M6 compliance
 
-QMenu* MainWindow::createViewMenu() { 
-    QMenu *viewMenu = new QMenu(tr("&View"), this);
-    viewMenu->addAction(createAction("Show &all Floors", "SHOW_ALL_FLOORS", QIcon::fromTheme("visibility-show-all"), QKeySequence("Ctrl+W"), "If not checked other floors are hidden.", true, true)); // Ctrl+W was also Close in File menu, this might be an issue. Keeping as is per current code.
-    viewMenu->addAction(createAction("Show as &Minimap", "SHOW_AS_MINIMAP", QIcon::fromTheme("view-preview"), QKeySequence("Shift+E"), "Show only the tile minimap colors.", true));
-    viewMenu->addSeparator();
-    return viewMenu;
-}
-
-QMenu* MainWindow::createShowMenu() {
-    QMenu *showMenu = new QMenu(tr("Sho&w"), this); 
-    showMenu->addAction(createAction("Show A&nimation", "SHOW_PREVIEW", QIcon::fromTheme("media-playback-start"), QKeySequence("N"), "Show item animations.", true, true));
-    showMenu->addAction(createAction("Show &Light", "SHOW_LIGHTS", QIcon::fromTheme("weather-clear-night"), QKeySequence("H"), "Show lights.", true, true));
-    return showMenu;
-}
-
-QMenu* MainWindow::createNavigateMenu() {
-    QMenu* menu = new QMenu(tr("&Navigate"), this);
-    // Use ActionID system for navigation actions
-    menu->addAction(createActionWithId(MenuBar::GOTO_PREVIOUS_POSITION, "Go to &Previous Position", QIcon::fromTheme("go-previous"), "P", "Go to the previous screen center position."));
-    menu->addAction(createActionWithId(MenuBar::GOTO_POSITION, "&Go to Position...", QIcon::fromTheme("go-jump"), "Ctrl+G", "Navigate to a specific map position"));
-    menu->addSeparator();
-
-    // Floor submenu with ActionID system
-    QMenu *floorMenu = menu->addMenu(tr("&Floor"));
-    QActionGroup* floorGroup = new QActionGroup(this);
-    floorGroup->setExclusive(true);
-    for (int i = 0; i <= 15; ++i) {
-        MenuBar::ActionID floorActionId = static_cast<MenuBar::ActionID>(static_cast<int>(MenuBar::FLOOR_0) + i);
-        QString shortcut = (i <= 9) ? QString::number(i) : ""; // Shortcuts 0-9 for floors 0-9
-        QAction* floorAction = createActionWithId(floorActionId, QString("Floor %1").arg(i), QIcon(), shortcut, QString("Switch to floor %1").arg(i), true);
-        floorMenu->addAction(floorAction);
-        floorGroup->addAction(floorAction);
-        if (i == 7) floorAction->setChecked(true); // Ground floor default
-    }
-    return menu;
-}
-
-QMenu* MainWindow::createWindowMenu() { 
-    QMenu* menu = new QMenu(tr("&Window"), this);
-
-    viewPaletteDockAction_ = createActionWithId(MenuBar::VIEW_PALETTE_DOCK, "Palette Panel", QIcon(), "", "Show or hide the Palette panel", true, true);
-    menu->addAction(viewPaletteDockAction_);
-    viewMinimapDockAction_ = createActionWithId(MenuBar::VIEW_MINIMAP_DOCK, "Minimap Panel", QIcon(), "", "Show or hide the Minimap panel", true, true);
-    menu->addAction(viewMinimapDockAction_);
-    viewPropertiesDockAction_ = createActionWithId(MenuBar::VIEW_PROPERTIES_DOCK, "Properties Panel", QIcon(), "", "Show or hide the Properties panel", true, true);
-    menu->addAction(viewPropertiesDockAction_);
-    menu->addSeparator();
-    menu->addAction(createActionWithId(MenuBar::NEW_PALETTE, "&New Palette", QIcon::fromTheme("document-new"), "Ctrl+Shift+P", "Creates a new palette."));
-    menu->addAction(createActionWithId(MenuBar::DESTROY_PALETTE, "&Destroy Palette", QIcon::fromTheme("window-close"), "", "Destroy the current palette window"));
-    menu->addSeparator();
-
-    // Dockable views
-    menu->addAction(createActionWithId(MenuBar::NEW_DOCKABLE_VIEW, "New &Dockable View", QIcon::fromTheme("view-split-left-right"), "", "Create a new dockable map view"));
-    menu->addAction(createActionWithId(MenuBar::CLOSE_DOCKABLE_VIEWS, "&Close Dockable Views", QIcon::fromTheme("window-close"), "", "Close all dockable map views"));
-    menu->addSeparator();
-
-    QMenu *paletteMenu = menu->addMenu(tr("&Palette"));
-    paletteMenu->addAction(createAction("&Terrain", "SELECT_TERRAIN", QIcon(), QKeySequence("T"), "Select the Terrain palette."));
-    paletteMenu->addAction(createAction("&Doodad", "SELECT_DOODAD", QIcon(), QKeySequence("D"), "Select the Doodad palette."));
-    menu->addSeparator(); 
-
-    QMenu *toolbarsMenu = menu->addMenu(tr("&Toolbars"));
-    toolbarsMenu->addAction(createActionWithId(MenuBar::VIEW_TOOLBARS_BRUSHES, "&Brushes", QIcon(), "", "Show or hide the Brushes toolbar", true, true));
-    toolbarsMenu->addAction(createActionWithId(MenuBar::VIEW_TOOLBARS_POSITION, "&Position", QIcon(), "", "Show or hide the Position toolbar", true, true));
-    toolbarsMenu->addAction(createActionWithId(MenuBar::VIEW_TOOLBARS_SIZES, "&Sizes", QIcon(), "", "Show or hide the Sizes toolbar", true, true));
-    toolbarsMenu->addAction(createActionWithId(MenuBar::VIEW_TOOLBARS_STANDARD, "&Standard", QIcon(), "", "Show or hide the Standard toolbar", true, true));
-    menu->addSeparator();
-
-    // Perspective management
-    QMenu* perspectiveMenu = menu->addMenu(tr("&Perspective"));
-    perspectiveMenu->addAction(createActionWithId(MenuBar::SAVE_PERSPECTIVE, "&Save Perspective", QIcon::fromTheme("document-save"), "", "Save the current layout perspective"));
-    perspectiveMenu->addAction(createActionWithId(MenuBar::LOAD_PERSPECTIVE, "&Load Perspective", QIcon::fromTheme("document-open"), "", "Load the saved layout perspective"));
-    perspectiveMenu->addAction(createActionWithId(MenuBar::RESET_PERSPECTIVE, "&Reset Perspective", QIcon::fromTheme("view-restore"), "", "Reset layout to default perspective"));
-
-    return menu;
-}
-
-QMenu* MainWindow::createExperimentalMenu() {
-    QMenu* menu = new QMenu(tr("E&xperimental"), this);
-    menu->addAction(createAction("&Fog in light view", "EXPERIMENTAL_FOG", QIcon(), "", "Apply fog filter to light effect.", true));
-    return menu;
-}
-
-QMenu* MainWindow::createAboutMenu() {
-    QMenu* menu = new QMenu(tr("A&bout"), this);
-    // Use ActionID system for About menu
-    menu->addAction(createActionWithId(MenuBar::EXTENSIONS, "E&xtensions...", QIcon::fromTheme("system-extensions"), "F2", "Manage editor extensions"));
-    menu->addAction(createActionWithId(MenuBar::GOTO_WEBSITE, "&Goto Website", QIcon::fromTheme("web-browser"), "F3", "Visit the project website"));
-    menu->addAction(createActionWithId(MenuBar::SHOW_HOTKEYS, "&Hotkeys", QIcon::fromTheme("help-keyboard-shortcuts"), "F6", "Show keyboard shortcuts"));
-    menu->addSeparator();
-    menu->addAction(createActionWithId(MenuBar::ABOUT, "&About...", QIcon::fromTheme("help-about"), "F1", "About this application"));
-    return menu;
-}
-
-QMenu* MainWindow::createServerMenu() {
-    QMenu* menu = new QMenu(tr("Se&rver"), this);
-    menu->addAction(createAction("&Host Server", "ID_MENU_SERVER_HOST", QIcon::fromTheme("network-server"), "", "Host a new server for collaborative mapping"));
-    menu->addAction(createAction("&Connect to Server", "ID_MENU_SERVER_CONNECT", QIcon::fromTheme("network-wired"), "", "Connect to an existing map server"));
-    return menu;
-}
-
-QMenu* MainWindow::createIdlerMenu() {
-    QMenu* menu = new QMenu(tr("&Idler"), this);
-    menu->addAction(createAction("&Hotkeys", "SHOW_HOTKEYS", QIcon::fromTheme("help-keyboard-shortcuts"), QKeySequence("F6"), "Hotkeys"));
-    return menu;
-}
+// createIdlerMenu moved to MenuBuilder for mandate M6 compliance
 
 
 

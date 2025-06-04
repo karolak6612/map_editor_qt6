@@ -295,4 +295,4 @@ void Selection::setCompensatedSelect(bool enabled) {
     compensatedSelect_ = enabled;
 }
 
-#include "Selection.moc"
+

@@ -9,6 +9,7 @@
 #include <QPainter>
 #include <QApplication>
 #include <QStandardPaths>
+#include <algorithm>
 
 // Initialize static instance to nullptr for singleton
 // Note: Proper singleton often involves more complex static initialization,
@@ -318,7 +319,7 @@ void ResourceManager::enforceMemoryLimits() {
         // Find least recently used items
         QList<QPair<qint64, QString>> accessTimes;
         for (auto it = resourceInfo_.begin(); it != resourceInfo_.end(); ++it) {
-            accessTimes.append(qMakePair(it.value().lastAccessed, it.key()));
+            accessTimes.append(std::make_pair(it.value().lastAccessed, it.key()));
         }
 
         // Sort by access time (oldest first)
@@ -396,4 +397,4 @@ void ResourceManager::cleanupUnusedResources(int maxUnusedTime) {
     }
 }
 
-#include "ResourceManager.moc"
+

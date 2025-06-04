@@ -3,7 +3,7 @@
 
 #include <QObject>
 #include <QStringList>
-#include "Map.h" // For MapPos
+#include "MapPos.h" // Direct include for MapPos typedef
 
 class Spawn : public QObject {
     Q_OBJECT

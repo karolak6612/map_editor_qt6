@@ -562,4 +562,4 @@ bool TileLockActions::hasUnlockedTilesInSelection() const
     return false;
 }
 
-#include "TileLockActions.moc"
+

@@ -100,10 +100,14 @@ public:
     QImage getSpritePart(int frameIndex, int patternX, int patternY, int patternZ, int layer, int width = 0, int height = 0) const;
     QImage colorizeSpritePart(const QImage& sourceImage, const Outfit& outfit) const;
 
+    // Tibia outfit colorization helpers
+    QRgb applyTibiaOutfitColor(int red, int green, int blue, int alpha, const Outfit& outfit) const;
+    QColor getTibiaOutfitColor(int colorId) const;
+
     // --- Compatibility members for CreatureSpriteManager ---
     QVector<QImage> sprite_parts; // For compatibility with existing code
-    int width = 1;     // Number of sprite images horizontally
-    int height = 1;    // Number of sprite images vertically
+    int m_sprite_width = 1;     // Number of sprite images horizontally
+    int m_sprite_height = 1;    // Number of sprite images vertically
     int layers = 1;    // Number of layers
     int frames = 1;    // Number of animation frames
     int pattern_x = 1; // Number of pattern variations X
@@ -120,6 +124,9 @@ protected:
     // Helper methods for outfit rendering
     QString generateOutfitCacheKey(const Outfit& outfit, int patternX, int patternY, int patternZ, int layer) const;
     QPixmap createOutfitSprite(const Outfit& outfit, int patternX, int patternY, int patternZ, int layer) const;
+
+    // Performance optimization helpers
+    void ensurePixmapReady(); // Lazy pixmap creation for performance
 
 private:
     QPixmap m_spriteSheet;
@@ -146,6 +153,9 @@ private:
     // Sprite caching and cleanup
     mutable QMap<QString, QPixmap> m_outfitCache; // Cache for outfit-colorized sprites
     qint64 m_lastAccessTime = 0; // For cleanup management
+
+    // Performance optimization
+    bool m_pixmapNeedsUpdate = false; // Track if pixmap needs to be recreated from image
 };
 
 #endif // QT_GAMESPRITE_H

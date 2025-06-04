@@ -5,6 +5,8 @@
 #include <QMap>
 #include <QString>
 #include <QStringList>
+#include <QCoreApplication>
+#include <QVariant>
 #include "CreatureProperties.h"
 
 class CreatureManager : public QObject {
@@ -18,8 +20,10 @@ public:
     ~CreatureManager();
 
     // Core loading and access methods
-    bool loadCreaturesFromXml(const QString& filePath, bool standard = true, QString& error = QString(), QStringList& warnings = QStringList());
-    bool importXMLFromOT(const QString& filePath, QString& error = QString(), QStringList& warnings = QStringList());
+    bool loadCreaturesFromXml(const QString& filePath, QString& error, QStringList& warnings, bool standard = true);
+    bool loadCreaturesFromXml(const QString& filePath, bool standard = true);
+    bool importXMLFromOT(const QString& filePath, QString& error, QStringList& warnings);
+    bool importXMLFromOT(const QString& filePath);
     bool saveToXML(const QString& filePath) const;
 
     CreatureProperties getCreatureProperties(int id) const;
@@ -50,7 +54,7 @@ signals:
 
 private:
     // Private constructor for singleton
-    CreatureManager();
+    explicit CreatureManager(QObject* parent = nullptr);
     CreatureManager(const CreatureManager&) = delete;
     CreatureManager& operator=(const CreatureManager&) = delete;
 

@@ -86,6 +86,9 @@ void PlaceDecorationCommand::undo() {
          qDebug() << "PlaceDecorationCommand: Undone - Removed now-empty tile at" << tilePos_;
     }
 
+    // Ensure map is marked as modified
+    map_->setModified(true);
+
     // No border/wall update typically needed for simple decorations unless they affect it.
 }
 
@@ -135,5 +138,9 @@ void PlaceDecorationCommand::redo() {
     } else {
         qWarning() << "PlaceDecorationCommand::redo(): Could not create decoration item for ID" << decorationItemId_;
     }
+
+    // Ensure map is marked as modified
+    map_->setModified(true);
+
     // No border/wall update typically needed for simple decorations.
 }

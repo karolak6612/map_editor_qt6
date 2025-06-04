@@ -6,14 +6,29 @@ SettingsManager* SettingsManager::instance_ = nullptr;
 
 SettingsManager* SettingsManager::getInstance() {
     if (!instance_) {
-        instance_ = new SettingsManager();
+        // Parent to QApplication for automatic cleanup
+        QObject* appParent = QCoreApplication::instance();
+        instance_ = new SettingsManager(appParent);
+
+        // Store reference in QApplication for easy access
+        if (appParent) {
+            appParent->setProperty("SettingsManager", QVariant::fromValue(instance_));
+        }
     }
     return instance_;
 }
 
 void SettingsManager::destroyInstance() {
-    delete instance_;
-    instance_ = nullptr;
+    if (instance_) {
+        // Remove from QApplication properties
+        QObject* appParent = QCoreApplication::instance();
+        if (appParent) {
+            appParent->setProperty("SettingsManager", QVariant());
+        }
+
+        delete instance_;
+        instance_ = nullptr;
+    }
 }
 
 SettingsManager::SettingsManager(QObject* parent)
@@ -28,6 +43,10 @@ SettingsManager::SettingsManager(QObject* parent)
 
 SettingsManager::~SettingsManager() {
     saveSettings();
+    // Clear static instance pointer when destroyed
+    if (instance_ == this) {
+        instance_ = nullptr;
+    }
 }
 
 void SettingsManager::initializeSettings() {
@@ -187,4 +206,4 @@ void SettingsManager::emitAutomagicChanged() {
     emit automagicSettingsChanged();
 }
 
-#include "SettingsManager.moc"
+

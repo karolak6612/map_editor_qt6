@@ -11,6 +11,13 @@
 #include <QMutex>
 #include <QElapsedTimer>
 
+// Forward declarations to resolve circular dependencies
+class QtBinaryNode;
+class QtNodeFileReadHandle;
+class QtNodeFileWriteHandle;
+class QtMemoryNodeFileReadHandle;
+class QtMemoryNodeFileWriteHandle;
+
 /**
  * @brief Qt-based BinaryFile I/O replacement for Task 84
  * 
@@ -249,7 +256,7 @@ public:
     void close() override;
     
     // Cache management
-    bool renewCache();
+    virtual bool renewCache();
     void clearCache();
     qint64 getCacheSize() const { return cacheSize_; }
     void setCacheSize(qint64 size);
@@ -305,10 +312,10 @@ public:
     // File operations
     bool open(const QString& fileName, const QString& identifier);
     void close() override;
-    bool flush();
+    virtual bool flush();
 
 private:
-    void renewCache();
+    virtual void renewCache();
     void writeBytes(const QByteArray& data);
     void writeEscapedByte(quint8 byte);
     bool writeNodeHeader(quint8 nodeType, qint32 nodeSize);

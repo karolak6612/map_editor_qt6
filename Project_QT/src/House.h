@@ -194,7 +194,7 @@ public:
     bool canBeDeleted() const;
 
     // Utility
-    QString getDescription() const;
+    // QString getDescription() const; // Duplicate declaration removed - already declared at line 118
     quint32 memsize() const;
     QVariantMap getStatistics() const;
 

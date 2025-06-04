@@ -111,7 +111,7 @@ struct RenderingConfig {
     bool enableAntialiasing = true;
     bool enableSmoothing = true;
     bool enableHighQualityRendering = false;
-    QPainter::RenderHint renderHints = QPainter::Antialiasing | QPainter::SmoothPixmapTransform;
+    QPainter::RenderHints renderHints = QPainter::Antialiasing | QPainter::SmoothPixmapTransform;
     
     // Optimization settings
     bool enableFrustumCulling = true;
@@ -193,8 +193,8 @@ public:
     double getLastFrameTime() const { return statistics_.lastFrameTime; }
     
     // Quality and performance settings
-    void setRenderQuality(QPainter::RenderHint hints);
-    QPainter::RenderHint getRenderQuality() const { return config_.renderHints; }
+    void setRenderQuality(QPainter::RenderHints hints);
+    QPainter::RenderHints getRenderQuality() const { return config_.renderHints; }
     void setAntialiasing(bool enabled);
     void setSmoothing(bool enabled);
     void setHighQualityRendering(bool enabled);

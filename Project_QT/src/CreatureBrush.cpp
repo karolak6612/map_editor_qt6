@@ -1,4 +1,9 @@
 #include "CreatureBrush.h"
+#include "Map.h"
+#include "Tile.h"
+#include "Creature.h"
+#include "PlaceCreatureCommand.h"
+#include "RemoveCreatureCommand.h"
 #include <QDebug>
 #include <QMouseEvent>
 #include <QUndoCommand>
@@ -67,30 +72,53 @@ QUndoCommand* CreatureBrush::applyBrush(Map* map, const QPointF& tilePos, QObjec
         return nullptr;
     }
 
-    int x = qFloor(tilePos.x());
-    int y = qFloor(tilePos.y());
-    int z = qFloor(tilePos.z());
+    // Create and return a proper undo command for creature placement
+    PlaceCreatureCommand* command = new PlaceCreatureCommand(
+        map,
+        tilePos,
+        creatureId_,
+        QString("Creature %1").arg(creatureId_),
+        parentCommand
+    );
 
-    Tile* tile = map->getTile(x, y, z);
-    if (!tile) {
-        tile = new Tile(x, y, z);
-        map->setTile(x, y, z, tile);
-    }
-
-    // Task 53: Implement creature placement logic
-    draw(map, tile, nullptr);
-
-    qDebug() << "CreatureBrush::applyBrush placed creature" << creatureId_ << "at" << tilePos;
-    return nullptr; // TODO: Return proper undo command
+    qDebug() << "CreatureBrush::applyBrush creating PlaceCreatureCommand for creature" << creatureId_ << "at" << tilePos;
+    return command;
 }
 
 QUndoCommand* CreatureBrush::removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
-    Q_UNUSED(map)
-    Q_UNUSED(tilePos)
-    Q_UNUSED(drawingContext)
-    Q_UNUSED(parentCommand)
-    qDebug() << "CreatureBrush::removeBrush at" << tilePos << "creatureId:" << creatureId_ << "(stub implementation)";
-    return nullptr; // TODO: Implement creature removal command
+    Q_UNUSED(drawingContext);
+
+    if (!map) {
+        return nullptr;
+    }
+
+    // Check if there's a tile at this position
+    int x = static_cast<int>(tilePos.x());
+    int y = static_cast<int>(tilePos.y());
+    int z = map->getCurrentFloor();
+    Tile* tile = map->getTile(x, y, z);
+    if (!tile) {
+        qDebug() << "CreatureBrush::removeBrush - No tile found at" << tilePos;
+        return nullptr;
+    }
+
+    // Check if there are any creatures to remove
+    const QList<Creature*>& creatures = tile->getCreatures();
+    if (creatures.isEmpty()) {
+        qDebug() << "CreatureBrush::removeBrush - No creatures found at" << tilePos;
+        return nullptr;
+    }
+
+    // Create and return a proper undo command for creature removal
+    RemoveCreatureCommand* command = new RemoveCreatureCommand(
+        map,
+        tilePos,
+        nullptr, // Will find first creature automatically
+        parentCommand
+    );
+
+    qDebug() << "CreatureBrush::removeBrush creating RemoveCreatureCommand at" << tilePos;
+    return command;
 }
 
 // Mouse event handlers with proper signatures
@@ -200,7 +228,7 @@ void CreatureBrush::draw(Map* map, Tile* tile, void* parameter) {
 
     // Create new creature
     Creature* creature = new Creature();
-    creature->setId(creatureId_);
+    creature->setLookType(creatureId_);  // Use lookType instead of setId
     creature->setName(QString("Creature %1").arg(creatureId_));
 
     // Add creature to tile

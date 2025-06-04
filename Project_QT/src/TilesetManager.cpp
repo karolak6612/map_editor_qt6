@@ -12,6 +12,7 @@
 #include <QMutexLocker>
 #include <QIcon>
 #include <QColor>
+#include <QRegularExpression>
 
 // TilesetCategory implementation
 TilesetCategory::TilesetCategory(const QString& name, TilesetCategoryType type)
@@ -592,22 +593,26 @@ QColor getCategoryColor(TilesetCategoryType type) {
 }
 
 bool isValidTilesetName(const QString& name) {
-    return !name.isEmpty() && !name.contains(QRegExp("[<>:\"/\\|?*]"));
+    static const QRegularExpression invalidChars("[<>:\"/\\\\|?*]");
+    return !name.isEmpty() && !name.contains(invalidChars);
 }
 
 bool isValidCategoryName(const QString& name) {
-    return !name.isEmpty() && !name.contains(QRegExp("[<>:\"/\\|?*]"));
+    static const QRegularExpression invalidChars("[<>:\"/\\\\|?*]");
+    return !name.isEmpty() && !name.contains(invalidChars);
 }
 
 QString sanitizeTilesetName(const QString& name) {
+    static const QRegularExpression invalidChars("[<>:\"/\\\\|?*]");
     QString sanitized = name;
-    sanitized.remove(QRegExp("[<>:\"/\\|?*]"));
+    sanitized.remove(invalidChars);
     return sanitized.trimmed();
 }
 
 QString sanitizeCategoryName(const QString& name) {
+    static const QRegularExpression invalidChars("[<>:\"/\\\\|?*]");
     QString sanitized = name;
-    sanitized.remove(QRegExp("[<>:\"/\\|?*]"));
+    sanitized.remove(invalidChars);
     return sanitized.trimmed();
 }
 

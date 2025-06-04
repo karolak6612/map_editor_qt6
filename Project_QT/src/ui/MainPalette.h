@@ -24,13 +24,13 @@
 #include "TilesetManager.h"
 #include "BrushManager.h"
 #include "ItemManager.h"
+#include "BrushSizePanel.h"  // Include the proper BrushSizePanel class
 
 // Forward declarations
 class Map;
 class Brush;
 class TilesetCategory;
 class ItemButton;
-class BrushSizePanel;
 class BrushToolPanel;
 
 // Task 70: Main palette widget for tileset-based item/brush selection
@@ -237,48 +237,7 @@ private:
     QListWidgetItem* selectedItem_;
 };
 
-// Task 70: Tool panel for brush size and shape controls
-class BrushSizePanel : public QWidget {
-    Q_OBJECT
-
-public:
-    explicit BrushSizePanel(QWidget* parent = nullptr);
-    ~BrushSizePanel() override;
-
-    // Size and shape management
-    void setBrushSize(int size);
-    int getBrushSize() const;
-    void setBrushShape(int shape); // 0=Square, 1=Circle, 2=Custom
-    int getBrushShape() const;
-    
-    // Toolbar integration
-    void setToolbarIconSize(bool large);
-
-signals:
-    void brushSizeChanged(int size);
-    void brushShapeChanged(int shape);
-
-private slots:
-    void onSizeChanged(int size);
-    void onShapeChanged();
-
-private:
-    void setupUI();
-    void connectSignals();
-    void updateSizeDisplay();
-    
-    QHBoxLayout* layout_;
-    QLabel* sizeLabel_;
-    QSpinBox* sizeSpinBox_;
-    QButtonGroup* shapeGroup_;
-    QPushButton* squareButton_;
-    QPushButton* circleButton_;
-    QPushButton* customButton_;
-    
-    int brushSize_;
-    int brushShape_;
-    bool largeIcons_;
-};
+// BrushSizePanel is now included from BrushSizePanel.h
 
 // Task 70: Tool panel for brush tool selection
 class BrushToolPanel : public QWidget {

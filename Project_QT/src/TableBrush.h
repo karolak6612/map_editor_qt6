@@ -42,22 +42,37 @@ struct QtTableNode {
 };
 
 class TableBrush : public Brush {
+    Q_OBJECT
 public:
     TableBrush();
+    explicit TableBrush(QObject* parent = nullptr);
     virtual ~TableBrush();
 
+    // Pure virtual methods from Brush base class
+    Type type() const override { return Type::Table; }
+    int getBrushSize() const override { return 1; }
+    BrushShape getBrushShape() const override { return BrushShape::Square; }
+    int getLookID() const override;
+
+    // Mouse interaction methods
+    QUndoCommand* mousePressEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) override;
+    QUndoCommand* mouseMoveEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) override;
+    QUndoCommand* mouseReleaseEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) override;
+    void cancel() override;
+
+    // Core brush action interface
+    bool canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr) const override;
+    QUndoCommand* applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) override;
+    QUndoCommand* removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) override;
+
     // Virtual methods from Brush base class
-    bool load(const QDomElement& element, QString& warnings) override;
+    bool load(const QDomElement& element, QStringList& warnings) override;
     void draw(Map* map, Tile* tile, void* parameter = nullptr) override;
     void undraw(Map* map, Tile* tile) override;
     bool canDraw(Map* map, const QPoint& position) const override; // Assuming QPoint for Qt position
 
-    QString getName() const override;
+    QString name() const override;
     void setName(const QString& newName) override;
-
-    // For preview in UI, might be an ID or direct pixmap
-    int getLookID() const override; // Returning an ID for now
-    // QPixmap getLookPixmap() const; // Alternative for direct sprite preview
 
     bool needBorders() const override; // Typically true for brushes affecting neighbors
 

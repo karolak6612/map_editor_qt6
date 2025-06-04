@@ -4,11 +4,13 @@
 #include <QPushButton>
 #include <QPixmap>
 #include <QIcon>
+#include "Sprite.h"  // FIXED: Include Sprite.h for SpriteSize enum
 
 // Forward declarations
 class QPaintEvent;
 class QPainter;
 class Sprite;
+#include "SpriteManager.h" // For SpriteManager::getInstance()
 
 // Enums matching original DCButton functionality
 enum SpriteButtonType {
@@ -16,11 +18,7 @@ enum SpriteButtonType {
     SPRITE_BTN_TOGGLE
 };
 
-enum SpriteRenderSize {
-    SPRITE_SIZE_16x16,
-    SPRITE_SIZE_32x32,
-    SPRITE_SIZE_64x64
-};
+// FIXED: Removed SpriteRenderSize enum - using SpriteSize from Sprite.h instead
 
 class SpriteButton : public QPushButton {
     Q_OBJECT
@@ -28,7 +26,7 @@ class SpriteButton : public QPushButton {
 public:
     // Constructors matching original DCButton functionality
     explicit SpriteButton(QWidget *parent = nullptr);
-    explicit SpriteButton(QWidget* parent, SpriteButtonType type, SpriteRenderSize size, int spriteId = 0);
+    explicit SpriteButton(QWidget* parent, SpriteButtonType type, SpriteSize size, int spriteId = 0);  // FIXED: Use SpriteSize instead of SpriteRenderSize
     explicit SpriteButton(const QPixmap& pixmap, QWidget *parent = nullptr);
     explicit SpriteButton(const QIcon& icon, const QString& text, QWidget *parent = nullptr);
     ~SpriteButton() override;
@@ -48,7 +46,7 @@ public:
 
     // Button type and size
     SpriteButtonType buttonType() const { return buttonType_; }
-    SpriteRenderSize renderSize() const { return renderSize_; }
+    SpriteSize renderSize() const { return renderSize_; }  // FIXED: Use SpriteSize instead of SpriteRenderSize
 
     // Size management
     QSize sizeHint() const override;
@@ -64,12 +62,12 @@ private slots:
 private:
     // Core properties
     SpriteButtonType buttonType_;
-    SpriteRenderSize renderSize_;
+    SpriteSize renderSize_;  // FIXED: Use SpriteSize instead of SpriteRenderSize
     bool toggleState_;
 
     // Sprite rendering
-    Sprite* sprite_;
-    Sprite* overlay_;
+    Sprite* sprite_; // FIXED: Uncommented - still needed for direct sprite rendering
+    Sprite* overlay_; // Still needed for overlay drawing
     QPixmap currentPixmap_;
     int spriteId_;
 
@@ -82,7 +80,7 @@ private:
     void drawButtonFrame(QPainter& painter, const QRect& rect, bool pressed);
     void drawSprite(QPainter& painter, const QRect& rect);
     void drawOverlay(QPainter& painter, const QRect& rect);
-    QSize getSizeForRenderSize(SpriteRenderSize size) const;
+    QSize getSizeForRenderSize(SpriteSize size) const;  // FIXED: Use SpriteSize instead of SpriteRenderSize
 };
 
 #endif // QT_SPRITEBUTTON_H

@@ -43,7 +43,7 @@ void BrushDrawCommand::redo() {
         const QPointF& tile = affectedTiles_[i];
         
         // Apply brush effect to tile
-        brush_->draw(map_, tile.toPoint(), false);
+        brush_->applyBrush(map_, tile, nullptr);
         qDebug() << "BrushDrawCommand::redo: Drawing on tile" << tile;
     }
 }
@@ -77,7 +77,7 @@ void BrushEraseCommand::redo() {
     
     // Erase from tiles
     for (const QPointF& tile : affectedTiles_) {
-        brush_->undraw(map_, tile.toPoint());
+        brush_->removeBrush(map_, tile, nullptr);
         qDebug() << "BrushEraseCommand::redo: Erasing from tile" << tile;
     }
 }
@@ -167,8 +167,8 @@ QUndoCommand* BrushInteractionController::executeBrushAction(Brush* brush, const
     
     if (command) {
         if (currentBatchCommand_) {
-            // Add to current batch
-            command->setParent(currentBatchCommand_);
+            // Command is already parented to currentBatchCommand_ in createDrawCommand/createEraseCommand
+            // No need to set parent here as it's set in constructor
         } else {
             // Execute immediately
             if (undoStack_) {
@@ -208,8 +208,8 @@ QUndoCommand* BrushInteractionController::executeBrushArea(Brush* brush, const Q
     
     if (command) {
         if (currentBatchCommand_) {
-            // Add to current batch
-            command->setParent(currentBatchCommand_);
+            // Command is already parented to currentBatchCommand_ in createDrawCommand/createEraseCommand
+            // No need to set parent here as it's set in constructor
         } else {
             // Execute immediately
             if (undoStack_) {
@@ -467,14 +467,16 @@ QUndoCommand* BrushInteractionController::createDrawCommand(Brush* brush, const 
     if (!brush || tiles.isEmpty()) return nullptr;
 
     return new BrushDrawCommand(brush, map_, tiles,
-                               QString("Draw with %1").arg(brush->name()));
+                               QString("Draw with %1").arg(brush->name()),
+                               currentBatchCommand_);
 }
 
 QUndoCommand* BrushInteractionController::createEraseCommand(Brush* brush, const QList<QPointF>& tiles) {
     if (!brush || tiles.isEmpty()) return nullptr;
 
     return new BrushEraseCommand(brush, map_, tiles,
-                                QString("Erase with %1").arg(brush->name()));
+                                QString("Erase with %1").arg(brush->name()),
+                                currentBatchCommand_);
 }
 
 void BrushInteractionController::updateMapDisplay(const QRectF& area) {

@@ -1,7 +1,13 @@
 #include "DoorBrush.h"
+#include "Map.h"
+#include "Tile.h"
+#include "Item.h"
+#include "PlaceDoorCommand.h"  // This includes both PlaceDoorCommand and RemoveDoorCommand
+#include "MapView.h"           // For MapView* parameter in mouse events
 #include <QDebug>
 #include <QMouseEvent>
 #include <QUndoCommand>
+#include <QUndoStack>
 
 DoorBrush::DoorBrush(DoorType doorType, QObject *parent) : Brush(parent), doorType_(doorType) {
 }
@@ -84,21 +90,75 @@ bool DoorBrush::canDraw(Map* map, const QPointF& tilePos, QObject* drawingContex
 }
 
 QUndoCommand* DoorBrush::applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
-    Q_UNUSED(map)
-    Q_UNUSED(tilePos)
-    Q_UNUSED(drawingContext)
-    Q_UNUSED(parentCommand)
-    qDebug() << "DoorBrush::applyBrush at" << tilePos << "doorType:" << static_cast<int>(doorType_) << "(stub implementation)";
-    return nullptr; // TODO: Implement actual door placement command
+    Q_UNUSED(drawingContext);
+
+    if (!map || !canDraw(map, tilePos, drawingContext)) {
+        return nullptr;
+    }
+
+    // Get door item ID based on door type
+    quint16 doorItemId = getDoorItemId();
+    if (doorItemId == 0) {
+        qWarning() << "DoorBrush::applyBrush: No door item ID configured for door type" << static_cast<int>(doorType_);
+        return nullptr;
+    }
+
+    // Convert DoorBrush::DoorType to PlaceDoorCommand::DoorType
+    PlaceDoorCommand::DoorType commandDoorType = static_cast<PlaceDoorCommand::DoorType>(doorType_);
+
+    // Create and return door placement command
+    PlaceDoorCommand* command = new PlaceDoorCommand(
+        map,
+        tilePos,
+        doorItemId,
+        commandDoorType,
+        0, // doorId - could be configured later
+        parentCommand
+    );
+
+    qDebug() << "DoorBrush::applyBrush creating PlaceDoorCommand for door type" << static_cast<int>(doorType_) << "at" << tilePos;
+    return command;
 }
 
 QUndoCommand* DoorBrush::removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
-    Q_UNUSED(map)
-    Q_UNUSED(tilePos)
-    Q_UNUSED(drawingContext)
-    Q_UNUSED(parentCommand)
-    qDebug() << "DoorBrush::removeBrush at" << tilePos << "doorType:" << static_cast<int>(doorType_) << "(stub implementation)";
-    return nullptr; // TODO: Implement door removal command
+    Q_UNUSED(drawingContext);
+
+    if (!map) {
+        return nullptr;
+    }
+
+    // Check if there's a tile at this position
+    Tile* tile = map->getTile(tilePos);
+    if (!tile) {
+        qDebug() << "DoorBrush::removeBrush - No tile found at" << tilePos;
+        return nullptr;
+    }
+
+    // Check if there are any doors to remove
+    const QVector<Item*>& items = tile->getItems();
+    Item* doorToRemove = nullptr;
+    for (Item* item : items) {
+        if (item && item->isDoor()) {
+            doorToRemove = item;
+            break;
+        }
+    }
+
+    if (!doorToRemove) {
+        qDebug() << "DoorBrush::removeBrush - No doors found at" << tilePos;
+        return nullptr;
+    }
+
+    // Create and return door removal command
+    RemoveDoorCommand* command = new RemoveDoorCommand(
+        map,
+        tilePos,
+        doorToRemove,
+        parentCommand
+    );
+
+    qDebug() << "DoorBrush::removeBrush creating RemoveDoorCommand at" << tilePos;
+    return command;
 }
 
 // Mouse event handlers with proper signatures
@@ -184,6 +244,31 @@ DoorType DoorBrush::getDoorType() const {
 void DoorBrush::setDoorType(DoorType doorType) {
     doorType_ = doorType;
     qDebug() << "DoorBrush::setDoorType to" << static_cast<int>(doorType);
+}
+
+quint16 DoorBrush::getDoorItemId() const {
+    // Map door types to item IDs (these would typically come from item database)
+    // These are placeholder values - in a real implementation, these would be loaded from data files
+    switch (doorType_) {
+        case DoorType::Normal:
+            return 1209; // Normal door item ID
+        case DoorType::Locked:
+            return 1210; // Locked door item ID
+        case DoorType::Magic:
+            return 1211; // Magic door item ID
+        case DoorType::Quest:
+            return 1212; // Quest door item ID
+        case DoorType::Hatch:
+            return 1213; // Hatch item ID
+        case DoorType::Archway:
+            return 1214; // Archway item ID
+        case DoorType::NormalAlt:
+            return 1215; // Alternative normal door item ID
+        case DoorType::Window:
+            return 1216; // Window item ID
+        default:
+            return 1209; // Default to normal door
+    }
 }
 
 // Static utility method (matching wxWidgets)

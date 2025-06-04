@@ -7,7 +7,7 @@
 #include <QString>
 #include <QVariant>
 #include <functional>
-#include "Map.h"
+#include "MapPos.h"
 #include "Tile.h"
 #include "Item.h"
 #include "ItemManager.h"

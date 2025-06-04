@@ -2,6 +2,7 @@
 #define QT_CARPETBRUSH_H
 
 #include "Brush.h"
+#include "AutoBorder.h"  // For BorderType enum
 #include <QString>
 #include <QList>
 #include <QVector>
@@ -33,17 +34,34 @@ struct QtCarpetNode {
 };
 
 class CarpetBrush : public Brush {
+    Q_OBJECT
 public:
     CarpetBrush();
+    explicit CarpetBrush(QObject* parent = nullptr);
     virtual ~CarpetBrush();
 
+    // Pure virtual methods from Brush base class
+    Type type() const override { return Type::Carpet; }
+    int getBrushSize() const override { return 1; }
+    BrushShape getBrushShape() const override { return BrushShape::Square; }
+
+    // Mouse interaction methods
+    QUndoCommand* mousePressEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) override;
+    QUndoCommand* mouseMoveEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) override;
+    QUndoCommand* mouseReleaseEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand = nullptr) override;
+    void cancel() override;
+
+    // Core brush action interface
+    bool canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr) const override;
+    QUndoCommand* applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) override;
+    QUndoCommand* removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) override;
+
     // Virtual methods from Brush base class
-    bool load(const QDomElement& element, QString& warnings) override;
+    bool load(const QDomElement& element, QStringList& warnings) override;
     void draw(Map* map, Tile* tile, void* parameter = nullptr) override;
     void undraw(Map* map, Tile* tile) override;
-    bool canDraw(Map* map, const QPoint& position) const override;
 
-    QString getName() const override;
+    QString name() const override;
     void setName(const QString& newName) override;
 
     int getLookID() const override;

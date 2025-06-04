@@ -10,6 +10,8 @@
 #include <QList>
 #include <QUndoCommand>
 #include <QUndoStack>
+#include <QMap>
+#include <QVariant>
 
 class Brush;
 class Map;

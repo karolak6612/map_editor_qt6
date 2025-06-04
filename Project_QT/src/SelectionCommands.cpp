@@ -335,19 +335,149 @@ void PasteSelectionCommand::undo() {
 }
 
 void PasteSelectionCommand::storeTileData() {
-    // This will be implemented to store affected tiles before pasting
-    // For now, we'll implement a basic version
-    qDebug() << "PasteSelectionCommand::storeTileData - storing affected tiles";
+    if (!map_ || !clipboardManager_) {
+        return;
+    }
+
+    const ClipboardData& clipboardData = clipboardManager_->getClipboardData();
+    const QList<ClipboardTileData>& tilesData = clipboardData.getTilesData();
+
+    // Calculate affected positions based on target position and clipboard data
+    affectedPositions_.clear();
+    originalTiles_.clear();
+
+    for (const ClipboardTileData& tileData : tilesData) {
+        MapPos targetPos(
+            targetPosition_.x + tileData.relativePosition.x,
+            targetPosition_.y + tileData.relativePosition.y,
+            targetPosition_.z + tileData.relativePosition.z
+        );
+
+        affectedPositions_.insert(targetPos);
+
+        // Store original tile data for undo
+        Tile* originalTile = map_->getTile(targetPos);
+        if (originalTile) {
+            // Create deep copy of the tile
+            originalTiles_[targetPos] = originalTile->deepCopy();
+        } else {
+            // Mark position as having no original tile
+            originalTiles_[targetPos] = nullptr;
+        }
+    }
+
+    qDebug() << "PasteSelectionCommand::storeTileData - stored" << affectedPositions_.size() << "affected positions";
 }
 
 void PasteSelectionCommand::restoreTileData() {
-    // This will restore the original tiles
-    qDebug() << "PasteSelectionCommand::restoreTileData - restoring original tiles";
+    if (!map_) {
+        return;
+    }
+
+    // Restore original tiles
+    for (auto it = originalTiles_.begin(); it != originalTiles_.end(); ++it) {
+        const MapPos& pos = it.key();
+        Tile* originalTile = it.value();
+
+        if (originalTile) {
+            // Restore the original tile
+            map_->setTile(pos, originalTile->deepCopy());
+        } else {
+            // Remove tile that was created during paste
+            map_->removeTile(pos);
+        }
+    }
+
+    // Ensure map is marked as modified
+    map_->setModified(true);
+
+    qDebug() << "PasteSelectionCommand::restoreTileData - restored" << originalTiles_.size() << "tiles";
 }
 
 void PasteSelectionCommand::applyPasteData() {
-    // This will apply the clipboard data to the map
-    qDebug() << "PasteSelectionCommand::applyPasteData - applying paste data";
+    if (!map_ || !clipboardManager_) {
+        return;
+    }
+
+    const ClipboardData& clipboardData = clipboardManager_->getClipboardData();
+    const QList<ClipboardTileData>& tilesData = clipboardData.getTilesData();
+
+    tileCount_ = 0;
+    itemCount_ = 0;
+
+    for (const ClipboardTileData& tileData : tilesData) {
+        MapPos targetPos(
+            targetPosition_.x + tileData.relativePosition.x,
+            targetPosition_.y + tileData.relativePosition.y,
+            targetPosition_.z + tileData.relativePosition.z
+        );
+
+        // Get or create target tile
+        Tile* targetTile = map_->getTile(targetPos);
+        bool tileCreated = false;
+
+        if (!targetTile) {
+            targetTile = map_->getOrCreateTile(targetPos);
+            tileCreated = true;
+        }
+
+        if (!targetTile) {
+            qWarning() << "PasteSelectionCommand::applyPasteData - Could not create tile at" << targetPos;
+            continue;
+        }
+
+        // Apply paste mode
+        if (pasteMode_ == REPLACE_MODE && !tileCreated) {
+            // Clear existing tile content
+            targetTile->clear();
+        }
+
+        // Apply ground item
+        if (tileData.hasGround) {
+            Item* groundItem = new Item(tileData.ground.id);
+            if (groundItem) {
+                targetTile->setGround(groundItem);
+                itemCount_++;
+            }
+        }
+
+        // Apply items
+        for (const ClipboardItemData& itemData : tileData.items) {
+            Item* item = new Item(itemData.id);
+            if (item) {
+                if (itemData.countOrSubType > 0) {
+                    item->setCount(itemData.countOrSubType);
+                }
+                targetTile->addItem(item);
+                itemCount_++;
+            }
+        }
+
+        // Apply creature
+        if (tileData.hasCreature) {
+            // Create creature (simplified - would need CreatureManager in full implementation)
+            // For now, just log that a creature should be created
+            qDebug() << "PasteSelectionCommand: Would create creature" << tileData.creature.name << "at" << targetPos;
+        }
+
+        // Apply spawn
+        if (tileData.hasSpawn) {
+            // Create spawn (simplified - would need SpawnManager in full implementation)
+            qDebug() << "PasteSelectionCommand: Would create spawn at" << targetPos;
+        }
+
+        // Apply tile flags
+        if (tileData.tileFlags != 0) {
+            targetTile->setFlags(tileData.tileFlags);
+        }
+
+        tileCount_++;
+    }
+
+    // Ensure map is marked as modified
+    map_->setModified(true);
+
+    qDebug() << "PasteSelectionCommand::applyPasteData - applied" << tileCount_ << "tiles with" << itemCount_ << "items";
 }
 
 void PasteSelectionCommand::updateSelection() {

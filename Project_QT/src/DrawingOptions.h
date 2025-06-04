@@ -1,6 +1,8 @@
 #ifndef DRAWINGOPTIONS_H
 #define DRAWINGOPTIONS_H
 
+#include <QColor>
+
 // No external includes needed for these simple types,
 // unless a very specific type from another header was used (not the case here).
 
@@ -63,6 +65,10 @@ struct DrawingOptions {
     bool experimentalFog = false; // Experimental fog effect (EXPERIMENTAL_FOG)
     bool extHouseShader = false; // Extended house shader (EXT_HOUSE_SHADER)
 
+    // Task 012: Tile locking visualization
+    bool showLockedTiles = false; // Show locked tile overlays
+    QColor lockedTileOverlayColor = QColor(255, 0, 0, 80); // Default red with transparency
+
     // Zoom thresholds
     float itemDisplayZoomThreshold = 10.0f; // Hide items above this zoom
     float groundOnlyZoomThreshold = 20.0f; // Show only ground above this zoom
@@ -106,6 +112,10 @@ struct DrawingOptions {
         showOnlyColors = false;
         alwaysShowZones = false;
         ingame = false;
+
+        // Task 012: Tile locking visualization
+        showLockedTiles = false;
+        lockedTileOverlayColor = QColor(255, 0, 0, 80);
 
         // Zoom thresholds
         itemDisplayZoomThreshold = 10.0f;

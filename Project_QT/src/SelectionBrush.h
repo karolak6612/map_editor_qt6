@@ -3,6 +3,7 @@
 
 #include "Brush.h"
 #include "Position.h"
+#include "MapPos.h"
 #include <QObject>
 #include <QSet>
 #include <QPointF>
@@ -50,10 +51,10 @@ public:
     ~SelectionBrush() override;
 
     // Brush interface implementation
-    QString getName() const override;
-    QString getDescription() const override;
-    QIcon getIcon() const override;
-    BrushType getType() const override;
+    QString name() const override;  // Fixed method name to match base class
+    // QString getDescription() const override;  // Not part of base Brush interface
+    // QIcon getIcon() const override;  // Not part of base Brush interface
+    Type type() const override;  // Fixed method name and return type to match base class
     
     bool canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr) const override;
     QUndoCommand* applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext = nullptr, QUndoCommand* parentCommand = nullptr) override;
@@ -66,6 +67,8 @@ public:
     // Selection operations
     void selectSingle(Map* map, const MapPos& position, bool addToSelection = false);
     void selectRectangle(Map* map, const MapPos& startPos, const MapPos& endPos, bool addToSelection = false);
+    void selectPolygon(Map* map, const QList<MapPos>& polygonPoints, bool addToSelection = false);
+    void selectLasso(Map* map, const QList<MapPos>& lassoPath, bool addToSelection = false);
     void clearSelection();
 
     // Clipboard operations

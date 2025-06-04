@@ -13,8 +13,10 @@
 #include <QMap>
 #include <QSet>
 
+// Include Brush.h for Brush::Type access
+#include "Brush.h"
+
 // Forward declarations
-class Brush;
 class BrushManager;
 class QIODevice;
 

@@ -2,7 +2,7 @@
 #define TELEPORTITEM_H
 
 #include "Item.h"
-#include "Map.h" // For MapPos
+#include "MapPos.h" // Direct include for MapPos typedef
 
 class TeleportItem : public Item {
     Q_OBJECT

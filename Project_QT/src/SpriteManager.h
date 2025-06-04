@@ -10,10 +10,13 @@
 #include <QPair>
 #include <QSharedPointer>
 #include <QPoint> // For GameSpriteData::drawOffset
+#include <QDataStream>
+#include <QDebug>
 
 // Forward declarations
 class QFile;
 class ImageSpace;
+class SpriteFileParser;  // Task 011: Extracted file parsing
 
 // --- Enums from wxwidgets/client_version.h ---
 enum class DatFormat {
@@ -27,7 +30,7 @@ enum class DatFormat {
     Format_1050, // DAT_FORMAT_1050 (unused in wx RME for DatFormat enum, but good for completeness)
     Format_1057  // DAT_FORMAT_1057
 };
-// Q_ENUM(DatFormat) // Add if SpriteManager becomes QObject and this needs meta-type system
+// Q_ENUM(DatFormat) // Removed - Q_ENUM can only be used inside Q_OBJECT/Q_GADGET classes
 
 enum class SpriteDatFlags : quint32 {
     None = 0,
@@ -67,7 +70,7 @@ enum class SpriteDatFlags : quint32 {
     Look = 1U << 31 // Ensure unsigned for bit 31
 };
 Q_DECLARE_FLAGS(SpriteDatFlagValues, SpriteDatFlags)
-// Q_FLAG(SpriteDatFlags) // Add if SpriteManager becomes QObject
+// Q_FLAG(SpriteDatFlags) // Removed - Q_FLAG can only be used inside Q_OBJECT/Q_GADGET classes
 
 // --- ClientVersionData Struct ---
 struct ClientVersionData {
@@ -225,20 +228,22 @@ public:
     quint16 getClientIdLightLevel(quint16 clientId) const;
     quint16 getClientIdMinimapColor(quint16 clientId) const;
 
-    // Helper to declare Q_ENUMs if they are moved inside SpriteManager
-    // static void declareQtEnums();
+    // Debug helpers
+    void dumpSpriteInfo(quint32 spriteId) const;
+    void validateSpriteData(quint32 spriteId) const;
+
+signals:
+    void assetsLoaded();
+    void assetsUnloaded();
+    void spriteDataChanged(quint32 spriteId);
+    void errorOccurred(const QString& error);
+
+private slots:
+    void onFileParserError(const QString& error);
+    void onImageSpaceError(const QString& error);
 
 private:
-    // SPR file parsing (Task 35 requirement)
-    bool parseSprFile(QFile& file, QString& error);
-    bool parseSprHeader(QDataStream& stream, QString& error);
-    bool loadSpriteAddresses(QDataStream& stream, QString& error);
-
-    // DAT file parsing (Task 35 requirement)
-    bool parseDatFile(QFile& file, QString& error, QStringList& warnings);
-    bool parseDatHeader(QDataStream& stream, QString& error);
-    bool loadDatContents(QDataStream& stream, QString& error, QStringList& warnings);
-    bool readDatEntry(QDataStream& stream, quint32 gameSpriteId, QString& error, QStringList& warnings);
+    // Task 011: File parsing moved to SpriteFileParser for mandate M6 compliance
 
     // Sprite data processing (Task 35 requirement)
     QByteArray readRawSpriteData(quint32 actualSprId, QString& error);
@@ -253,6 +258,9 @@ private:
 
     ClientVersionData versionData_;
     bool assetsLoaded_ = false;
+
+    // Task 011: File parser for mandate M6 compliance
+    SpriteFileParser* fileParser_;
 
     // ImageSpace for intermediate sprite storage (Task 35 requirement)
     ImageSpace* imageSpace_;
@@ -277,11 +285,12 @@ private:
     QMap<quint16, CoreItemProperties> coreItemPropertiesMap_;  // Client ID -> Core Properties
     QMap<quint32, quint16> spriteIdToClientId_;               // Sprite ID -> Client ID
     QMap<quint16, QList<quint32>> clientIdToSpriteIds_;       // Client ID -> List of Sprite IDs
+
+    // Static instance
+    static SpriteManager* instance_;
 };
 
-// Needed if DatFormat and SpriteDatFlags are Q_ENUM/Q_FLAG'd within SpriteManager
-// Q_DECLARE_METATYPE(SpriteManager::DatFormat)
-// Q_DECLARE_METATYPE(SpriteManager::SpriteDatFlags)
-
+Q_DECLARE_METATYPE(DatFormat)
+Q_DECLARE_METATYPE(SpriteDatFlags)
 
 #endif // SPRITEMANAGER_H

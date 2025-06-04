@@ -5,6 +5,8 @@
 #include <QString>
 #include <QPointF>
 #include <QMouseEvent> // For event details if needed by brushes
+#include <QDomElement> // For load method
+#include <QStringList> // For warnings parameter
 
 // Forward declarations
 class MapView;
@@ -17,21 +19,16 @@ class QUndoCommand; // Added
 class Map;          // Added
 class QUndoStack;   // Added
 
-// Define BrushShape enum here or in a common types header
-enum class BrushShape {
-    Square,
-    Circle
-    // Add other shapes like Line, Custom etc. if needed
-};
-// Q_ENUM(BrushShape) // Moved inside class if Brush is QObject
+// Task 016: Removed duplicate BrushShape enum definition outside class
 
 class Brush : public QObject {
     Q_OBJECT
 public:
-    // Make enums part of the class and use Q_ENUM if Brush is QObject
-    enum class BrushShape { // Re-declared inside class for Q_ENUM
+    // Task 016: Single BrushShape enum definition inside class with Q_ENUM
+    enum class BrushShape {
         Square,
         Circle
+        // Add other shapes like Line, Custom etc. if needed
     };
     Q_ENUM(BrushShape)
 
@@ -54,7 +51,8 @@ public:
         Waypoint,
         Flag,
         Eraser,
-        Pixel
+        Pixel,
+        GroundBorderTool
         // TODO: Add any other brush types from wxwidgets/brush_enums.h
     };
     Q_ENUM(Type)
@@ -182,11 +180,6 @@ public:
     virtual void resetBrushState();
 
     // Shared properties and accessors
-    bool isVisibleInPalette() const { return isVisibleInPalette_; }
-    void setVisibleInPalette(bool visible) { isVisibleInPalette_ = visible; }
-
-    bool usesCollection() const { return usesCollection_; }
-    void setUsesCollection(bool uses) { usesCollection_ = uses; }
 
     // Add other common properties or methods if identified
 

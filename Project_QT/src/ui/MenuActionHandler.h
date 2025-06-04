@@ -3,7 +3,7 @@
 
 #include <QObject>
 #include <QAction>
-#include "MenuBar.h"
+#include "MenuBarActionIDs.h"  // Fixed: Use correct header name
 
 // Forward declarations
 class MainWindow;

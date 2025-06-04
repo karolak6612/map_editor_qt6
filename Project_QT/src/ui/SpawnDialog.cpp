@@ -126,6 +126,23 @@ void SpawnDialog::applyToSpawn(Spawn* spawn) const {
     // Note: Spawn position is typically not edited here as it's part of its placement on the map.
 }
 
+// Task 019: Get spawn data without modifying the spawn (for undo integration)
+SpawnDialog::SpawnData SpawnDialog::getSpawnData() const {
+    SpawnData data;
+    data.radius = radiusSpinBox_->value();
+    data.interval = intervalSpinBox_->value();
+    data.maxCreatures = maxCreaturesSpinBox_->value();
+
+    for (int i = 0; i < creatureListWidget_->count(); ++i) {
+        QListWidgetItem* item = creatureListWidget_->item(i);
+        if (item) {
+            data.creatureNames << item->text();
+        }
+    }
+
+    return data;
+}
+
 void SpawnDialog::onAddCreatureClicked() {
     QString creatureName = addCreatureLineEdit_->text().trimmed();
     if (!creatureName.isEmpty()) {

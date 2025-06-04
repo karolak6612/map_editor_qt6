@@ -529,7 +529,7 @@ void WaypointPalettePanel::showEditDialog(Waypoint* waypoint) {
     }
 
     editDialog_->setWaypoint(waypoint);
-    editDialog_->setEditMode(EditWaypointDialog::EditMode);
+    editDialog_->setEditMode(EditWaypointDialog::ModifyMode);
 
     if (editDialog_->exec() == QDialog::Accepted) {
         refreshWaypointList();
@@ -564,7 +564,7 @@ EditWaypointDialog::EditWaypointDialog(QWidget* parent)
     : QDialog(parent),
       waypoint_(nullptr),
       originalWaypoint_(nullptr),
-      editMode_(EditMode),
+      editMode_(ModifyMode),
       dataChanged_(false) {
 
     setWindowTitle("Edit Waypoint");
@@ -724,7 +724,7 @@ void EditWaypointDialog::setEditMode(EditMode mode) {
         case CreateMode:
             setWindowTitle("Create Waypoint");
             break;
-        case EditMode:
+        case ModifyMode:
             setWindowTitle("Edit Waypoint");
             break;
         case ViewMode:

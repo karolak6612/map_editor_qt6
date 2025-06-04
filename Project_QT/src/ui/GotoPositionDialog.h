@@ -2,25 +2,12 @@
 #define GOTOPOSITIONDIALOG_H
 
 #include <QDialog>
+#include "Position.h"  // Use the proper Position class
 
 // Forward declarations
 class QTextEdit;
 class QLabel;
 class QDialogButtonBox;
-
-struct Position {
-    int x = 0;
-    int y = 0;
-    int z = 0;
-    
-    Position() = default;
-    Position(int x, int y, int z) : x(x), y(y), z(z) {}
-    
-    bool isValid() const {
-        // Basic validation - could be enhanced based on map constraints
-        return x >= 0 && y >= 0 && z >= 0 && z <= 15;
-    }
-};
 
 class GotoPositionDialog : public QDialog {
     Q_OBJECT

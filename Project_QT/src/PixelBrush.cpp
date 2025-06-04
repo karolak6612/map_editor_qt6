@@ -7,7 +7,9 @@
 #include <QUndoStack> // For QUndoCommand context
 #include <QDebug>
 
-PixelBrush::PixelBrush(QObject *parent) : Brush(parent) {}
+PixelBrush::PixelBrush(QObject *parent) : Brush(parent), drawColor_(Qt::black) {}
+
+PixelBrush::PixelBrush(const QColor& color, QObject *parent) : Brush(parent), drawColor_(color) {}
 
 PixelBrush::~PixelBrush() {}
 
@@ -25,6 +27,10 @@ BrushShape PixelBrush::getBrushShape() const {
 
 Brush::Type PixelBrush::type() const {
     return Brush::Type::Pixel;
+}
+
+int PixelBrush::getLookID() const {
+    return 0; // Pixel brush doesn't have a specific look ID
 }
 
 bool PixelBrush::canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext) const {

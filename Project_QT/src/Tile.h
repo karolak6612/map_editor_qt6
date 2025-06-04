@@ -185,7 +185,11 @@ public:
 
     void draw(QPainter* painter, const QRectF& targetScreenRect, const DrawingOptions& options) const;
 
+    // Z-ordering debugging
+    QStringList getItemZOrderDebugInfo() const;
+
     QList<Item*> getWallItems() const;
+    bool hasWall() const;
     void clearWalls();
     void addWallItemById(quint16 wallItemId);
     void removeGround();
@@ -196,6 +200,9 @@ signals:
     void visualChanged(int x, int y, int z); 
 
 private:
+    // Z-ordering helper method
+    void insertItemInZOrder(Item* item);
+
     int x_, y_, z_;
 
     Item* ground_ = nullptr;

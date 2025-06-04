@@ -365,4 +365,4 @@ void TileRenderer::applyColorModulation(QPainter* painter, const DrawingOptions&
     }
 }
 
-#include "TileRenderer.moc"
+

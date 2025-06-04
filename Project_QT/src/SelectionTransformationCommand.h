@@ -195,6 +195,18 @@ private:
     
     // Initialize transformation maps
     static void initializeTransformationMaps();
+    static void loadTransformationsFromItemManager(ItemManager* itemManager);
+    static void addCommonItemTransformations();
+    static void buildReverseMappings();
+
+    // Helper methods for specific item types
+    static void addDirectionalItemTransformations(quint16 itemId, const ItemProperties& props);
+    static void addFurnitureTransformations(quint16 itemId, const ItemProperties& props);
+    static quint16 findDirectionalVariant(quint16 itemId, const ItemProperties& props);
+    static void addDoorRotationChain(quint16 itemId, const ItemProperties& props);
+    static void addTableRotations(quint16 itemId, const ItemProperties& props);
+    static void addCarpetTransformations(quint16 itemId, const ItemProperties& props);
+
     static bool mapsInitialized_;
 };
 

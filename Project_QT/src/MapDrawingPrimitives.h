@@ -9,8 +9,10 @@
 #include <QBrush>
 #include <QVector>
 
+// Task 016: Include Brush.h for Brush::BrushShape enum
+#include "Brush.h"
+
 // Forward declarations
-class Brush;
 class Map;
 class MapPos;
 
@@ -83,13 +85,7 @@ struct DrawingOptions {
     int floorOffset = 8; // Pixels per floor level
 };
 
-/**
- * @brief Brush shape enumeration
- */
-enum class BrushShape {
-    Square,
-    Circle
-};
+// Task 016: Removed duplicate BrushShape enum - now using Brush::BrushShape
 
 /**
  * @brief Brush validity state
@@ -138,8 +134,8 @@ public:
     void drawSelectionBorder(QPainter* painter, const QRectF& rect, int currentFloor = 0);
     
     // Brush preview drawing
-    void drawBrushPreview(QPainter* painter, const QPointF& centerPos, Brush* brush, 
-                         int brushSize, BrushShape shape, BrushValidity validity, 
+    void drawBrushPreview(QPainter* painter, const QPointF& centerPos, Brush* brush,
+                         int brushSize, Brush::BrushShape shape, BrushValidity validity,
                          int currentFloor = 0);
     void drawSquareBrushPreview(QPainter* painter, const QPointF& centerPos, int brushSize, 
                                const QColor& color, int currentFloor = 0);
@@ -149,8 +145,8 @@ public:
                       BrushValidity validity, int currentFloor = 0);
     
     // Drag drawing preview
-    void drawDragPreview(QPainter* painter, const QRectF& dragArea, Brush* brush, 
-                        BrushShape shape, int currentFloor = 0);
+    void drawDragPreview(QPainter* painter, const QRectF& dragArea, Brush* brush,
+                        Brush::BrushShape shape, int currentFloor = 0);
     void drawRectangleDragPreview(QPainter* painter, const QRectF& dragArea, 
                                  const QColor& color, int currentFloor = 0);
     void drawCircleDragPreview(QPainter* painter, const QRectF& dragArea, 
@@ -192,7 +188,7 @@ public:
     void drawSelectionBounds(QPainter* painter, const QRectF& bounds, int currentFloor = 0);
     void drawSelectionHandles(QPainter* painter, const QRectF& bounds, int currentFloor = 0);
     void drawDragPreviewAdvanced(QPainter* painter, const QRectF& area, Brush* brush,
-                                BrushShape shape, qreal opacity, int currentFloor = 0);
+                                Brush::BrushShape shape, qreal opacity, int currentFloor = 0);
     
     // Utility methods
     QColor getBrushColor(Brush* brush, BrushValidity validity = BrushValidity::Neutral) const;
@@ -238,8 +234,8 @@ public:
     void setShowGrid(bool show) { showGrid_ = show; }
     
     // Brush preview state
-    void setBrushPreviewState(const QPointF& position, Brush* brush, int size, 
-                             BrushShape shape, BrushValidity validity);
+    void setBrushPreviewState(const QPointF& position, Brush* brush, int size,
+                             Brush::BrushShape shape, BrushValidity validity);
     void clearBrushPreview();
     
     // Selection state
@@ -248,7 +244,7 @@ public:
     void clearSelection();
     
     // Drag state
-    void setDragArea(const QRectF& area, Brush* brush, BrushShape shape);
+    void setDragArea(const QRectF& area, Brush* brush, Brush::BrushShape shape);
     void clearDragArea();
     
     // Main rendering method
@@ -266,7 +262,7 @@ private:
     QPointF brushPreviewPos_;
     Brush* brushPreviewBrush_ = nullptr;
     int brushPreviewSize_ = 1;
-    BrushShape brushPreviewShape_ = BrushShape::Square;
+    Brush::BrushShape brushPreviewShape_ = Brush::BrushShape::Square;
     BrushValidity brushPreviewValidity_ = BrushValidity::Neutral;
     bool hasBrushPreview_ = false;
     
@@ -278,7 +274,7 @@ private:
     // Drag state
     QRectF dragArea_;
     Brush* dragBrush_ = nullptr;
-    BrushShape dragShape_ = BrushShape::Square;
+    Brush::BrushShape dragShape_ = Brush::BrushShape::Square;
     bool hasDragArea_ = false;
 };
 

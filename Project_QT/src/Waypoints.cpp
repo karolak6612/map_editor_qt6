@@ -194,4 +194,4 @@ void Waypoints::updateTileWaypointCount(Waypoint* waypoint, bool increment) {
     }
 }
 
-#include "Waypoints.moc"
+

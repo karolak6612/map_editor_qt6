@@ -71,6 +71,7 @@ private:
     // Helper methods
     void syncSelectionWithTile();
     void updateCacheIfNeeded() const;
+    void drawLockedTileOverlay(QPainter* painter, const QRectF& rect, const QColor& overlayColor) const; // Task 012
 };
 
 #endif // MAPTILEITEM_H

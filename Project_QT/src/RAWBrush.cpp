@@ -1,4 +1,8 @@
 #include "RAWBrush.h"
+#include "Map.h"
+#include "Tile.h"
+#include "Item.h"
+#include "PlaceItemCommand.h"
 #include <QDebug>
 #include <QMouseEvent>
 #include <QUndoCommand>
@@ -61,21 +65,52 @@ bool RAWBrush::canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext
 }
 
 QUndoCommand* RAWBrush::applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
-    Q_UNUSED(map)
-    Q_UNUSED(tilePos)
-    Q_UNUSED(drawingContext)
-    Q_UNUSED(parentCommand)
-    qDebug() << "RAWBrush::applyBrush at" << tilePos << "itemId:" << itemId_ << "(stub implementation)";
-    return nullptr; // TODO: Implement actual item placement command
+    Q_UNUSED(drawingContext);
+
+    if (!map || itemId_ == 0) {
+        qDebug() << "RAWBrush::applyBrush - Invalid map or itemId:" << itemId_;
+        return nullptr;
+    }
+
+    // Create and return item placement command
+    PlaceItemCommand* command = new PlaceItemCommand(
+        map,
+        tilePos,
+        itemId_,
+        1, // count
+        parentCommand
+    );
+
+    qDebug() << "RAWBrush::applyBrush creating PlaceItemCommand for item" << itemId_ << "at" << tilePos;
+    return command;
 }
 
 QUndoCommand* RAWBrush::removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
-    Q_UNUSED(map)
-    Q_UNUSED(tilePos)
-    Q_UNUSED(drawingContext)
-    Q_UNUSED(parentCommand)
-    qDebug() << "RAWBrush::removeBrush at" << tilePos << "itemId:" << itemId_ << "(stub implementation)";
-    return nullptr; // TODO: Implement item removal command
+    Q_UNUSED(drawingContext);
+
+    if (!map) {
+        return nullptr;
+    }
+
+    // Check if there's a tile at this position
+    Tile* tile = map->getTile(tilePos);
+    if (!tile) {
+        qDebug() << "RAWBrush::removeBrush - No tile found at" << tilePos;
+        return nullptr;
+    }
+
+    // Create and return item removal command
+    // If itemId_ is set, remove that specific item type, otherwise remove any item
+    RemoveItemCommand* command = new RemoveItemCommand(
+        map,
+        tilePos,
+        itemId_, // 0 means remove any item, specific ID means remove that type
+        nullptr, // Let the command find the item
+        parentCommand
+    );
+
+    qDebug() << "RAWBrush::removeBrush creating RemoveItemCommand for item" << itemId_ << "at" << tilePos;
+    return command;
 }
 
 // Mouse event handlers with proper signatures

@@ -4,9 +4,11 @@
 #include <QMainWindow>
 #include <QPointF> // Required for QPointF parameter
 #include <QMap> // For QMap<ActionID, QAction*>
+#include "../MapPos.h" // For MapPos struct definition
 #include "MenuBarActionIDs.h" // For MenuBar::ActionID enum
 
 // Forward declarations
+class MenuBuilder;             // Forward declaration for menu builder
 class QMenuBar;
 class QMenu;
 class QAction;
@@ -25,7 +27,6 @@ class AutomagicSettingsDialog; // Forward declaration
 class ClipboardData;           // Forward declaration for clipboard
 class Map;                     // Already forward declared in Map.h, but good practice if Map.h isn't fully included here
 class Selection;               // Already forward declared in Selection.h, but good practice
-class MapPos;                  // Required for updateMouseMapCoordinates if Map.h doesn't bring it transitively
 class SettingsManager;         // Forward declaration for settings management
 class BorderSystem;            // Forward declaration for border system
 class MenuActionHandler;       // Forward declaration for menu action handler
@@ -215,8 +216,7 @@ private:
     QAction* createAction(const QString& text, const QString& objectName, const QIcon& icon = QIcon(), const QString& shortcut = "", const QString& statusTip = "", bool checkable = false, bool checked = false, bool connectToGenericHandler = true);
     QAction* createActionWithId(MenuBar::ActionID actionId, const QString& text, const QIcon& icon = QIcon(), const QString& shortcut = "", const QString& statusTip = "", bool checkable = false, bool checked = false);
 
-    // Helper method to get action by ID
-    QAction* getAction(MenuBar::ActionID actionId) const;
+    // Helper method to get action by ID - already declared in public section
 
     // Toolbar state management methods
     void updateToolbarStates();
@@ -234,21 +234,7 @@ private:
     void loadPerspective();
     void resetPerspective();
 
-    // Menu creation helpers
-    QMenu* createFileMenu();
-    QMenu* createEditMenu();
-    QMenu* createEditorMenu(); 
-    QMenu* createSearchMenu(); 
-    QMenu* createMapMenu();
-    QMenu* createSelectionMenu();
-    QMenu* createViewMenu();   
-    QMenu* createShowMenu();   
-    QMenu* createNavigateMenu();
-    QMenu* createWindowMenu();
-    QMenu* createExperimentalMenu();
-    QMenu* createAboutMenu(); 
-    QMenu* createServerMenu(); 
-    QMenu* createIdlerMenu();  
+    // Menu creation helpers (moved to MenuBuilder for mandate M6 compliance)
 
     // Toolbar creation helpers
     QToolBar* createStandardToolBar();   
@@ -329,13 +315,14 @@ private:
     // Core map components
     Map* map_;
     Selection* selection_;
-    ClipboardData* internalClipboard_;
+    // internalClipboard_ already declared above with initialization
     MapView* mapView_;
 
     // Task 77: Brush management
     BrushManager* brushManager_;
 
     // Refactored managers for better organization
+    MenuBuilder* menuBuilder_;             // Task 011: Extracted menu building logic
     MenuActionHandler* menuActionHandler_;
     StatusBarManager* statusBarManager_;
     ToolBarManager* toolBarManager_;

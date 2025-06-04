@@ -1,9 +1,12 @@
 #include "GroundBrush.h"
-#include "Map.h"            // For Map* type hint, though not directly used in stubs
-#include "QUndoCommand.h"   // For QUndoCommand* return type
+#include "Map.h"                    // For Map* type hint, though not directly used in stubs
+#include "SetGroundItemCommand.h"   // For SetGroundItemCommand class
+#include "MapView.h"                // For MapView* parameter in mouse events
+#include <QUndoCommand>             // For QUndoCommand* return type
+#include <QUndoStack>               // For QUndoStack* parameter in mouse events
 #include <QDebug>
-#include <QMouseEvent>      // For event->buttons() and QMouseEvent type
-#include <QObject>          // For tr()
+#include <QMouseEvent>              // For event->buttons() and QMouseEvent type
+#include <QObject>                  // For tr()
 
 // Constructor
 GroundBrush::GroundBrush(QObject *parent)
@@ -24,7 +27,7 @@ GroundBrush::GroundBrush(quint16 groundItemId, QObject *parent)
       useSoloOptionalBorder_(false),
       isReRandomizable_(false) {
     setSpecificName(QString("Ground %1").arg(groundItemId));
-    setLookID(groundItemId);
+    // Task 016: Don't call setLookID() - currentGroundItemId_ is now the primary storage
     qDebug() << "GroundBrush: Created with ground item ID" << groundItemId << "name:" << specificName();
 }
 
@@ -60,8 +63,6 @@ bool GroundBrush::canDraw(Map* map, const QPointF& tilePos, QObject* drawingCont
 
     return true;
 }
-
-#include "SetGroundItemCommand.h" // Added include
 
 QUndoCommand* GroundBrush::applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
     Q_UNUSED(drawingContext); // Not used in this basic implementation
@@ -125,6 +126,11 @@ void GroundBrush::setCurrentGroundItemId(quint16 itemId) {
 
 quint16 GroundBrush::getCurrentGroundItemId() const {
     return currentGroundItemId_;
+}
+
+// Task 016: Override getLookID to use currentGroundItemId_ as primary storage
+int GroundBrush::getLookID() const {
+    return static_cast<int>(currentGroundItemId_);
 }
 
 // Optional border support (Task 38 requirement)
@@ -255,7 +261,7 @@ bool GroundBrush::load(const QDomElement& element, QStringList& warnings) {
     quint16 groundId = element.attribute("groundId", "0").toUShort(&ok);
     if (ok && groundId > 0) {
         setCurrentGroundItemId(groundId);
-        setLookID(groundId);
+        // Task 016: Don't call setLookID() - currentGroundItemId_ is now the primary storage
         setSpecificName(QString("Ground %1").arg(groundId));
     }
 

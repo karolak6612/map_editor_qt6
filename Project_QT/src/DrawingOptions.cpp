@@ -192,6 +192,8 @@ bool DrawingOptions::operator==(const DrawingOptions& other) const {
            showAllFloors == other.showAllFloors &&
            experimentalFog == other.experimentalFog &&
            extHouseShader == other.extHouseShader &&
+           showLockedTiles == other.showLockedTiles &&  // Task 012
+           lockedTileOverlayColor == other.lockedTileOverlayColor &&  // Task 012
            itemDisplayZoomThreshold == other.itemDisplayZoomThreshold &&
            groundOnlyZoomThreshold == other.groundOnlyZoomThreshold &&
            animationZoomThreshold == other.animationZoomThreshold &&

@@ -19,11 +19,38 @@ ClipboardManager::~ClipboardManager() {
 
 // Singleton access
 ClipboardManager* ClipboardManager::instance() {
+    if (!instance_) {
+        // Parent to QApplication for automatic cleanup
+        QObject* appParent = QCoreApplication::instance();
+        instance_ = new ClipboardManager(appParent);
+
+        // Store reference in QApplication for easy access
+        if (appParent) {
+            appParent->setProperty("ClipboardManager", QVariant::fromValue(instance_));
+        }
+    }
     return instance_;
 }
 
 void ClipboardManager::setInstance(ClipboardManager* manager) {
+    if (instance_ && instance_ != manager) {
+        // Remove old instance from QApplication properties
+        QObject* appParent = QCoreApplication::instance();
+        if (appParent) {
+            appParent->setProperty("ClipboardManager", QVariant());
+        }
+        delete instance_;
+    }
+
     instance_ = manager;
+
+    // Store new instance in QApplication properties
+    if (manager) {
+        QObject* appParent = QCoreApplication::instance();
+        if (appParent) {
+            appParent->setProperty("ClipboardManager", QVariant::fromValue(manager));
+        }
+    }
 }
 
 // Clipboard operations
@@ -197,4 +224,4 @@ QString ClipboardManager::getOperationStatusMessage(const QString& operation, in
     return QString("%1 completed: %2").arg(operation, itemInfo);
 }
 
-#include "ClipboardManager.moc"
+

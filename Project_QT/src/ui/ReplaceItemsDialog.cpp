@@ -1,7 +1,11 @@
 // ReplaceItemsDialog.cpp - Enhanced Find and Replace Items Dialog for Task 50
 
 #include "ReplaceItemsDialog.h"
+#include "ItemFinder.h"
+#include "ItemManager.h"
+#include "Map.h"
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QPushButton>
@@ -220,31 +224,85 @@ void ReplaceItemsDialog::setupFindCriteriaTab() {
     mainLayout->addStretch();
 }
 
-// Placeholder implementations for slots (to be created in Step 3)
+// Task 019: Improved backend logic for replace items dialog
 void ReplaceItemsDialog::onFindClicked() {
+    if (!m_map) {
+        QMessageBox::warning(this, "Warning", "No map available for search.");
+        return;
+    }
+
     QString findItemId = m_findItemIdLineEdit->text().trimmed();
     QString findName = m_findNameLineEdit->text().trimmed();
     bool findIsMoveable = m_findIsMoveableCheckBox->isChecked();
     bool findIsBlocking = m_findIsBlockingCheckBox->isChecked();
     QString findItemType = m_findItemTypeComboBox->currentText();
-    QVariant findItemTypeData = m_findItemTypeComboBox->currentData();
 
     qDebug() << "Find Button Clicked:";
     qDebug() << "  Find Item ID:" << findItemId;
     qDebug() << "  Find Name Contains:" << findName;
     qDebug() << "  Is Moveable:" << findIsMoveable;
     qDebug() << "  Is Blocking:" << findIsBlocking;
-    qDebug() << "  Item Type:" << findItemType << "(Data:" << findItemTypeData << ")";
+    qDebug() << "  Item Type:" << findItemType;
 
-    // Simulate finding items: show results group, enable replace buttons, add dummy result
-    if (m_resultsGroup) m_resultsGroup->setVisible(true);
-    if (m_resultsListWidget) {
-        m_resultsListWidget->clear(); // Clear previous dummy results
-        m_resultsListWidget->addItem(QString("Found: Placeholder Item 1 (ID: %1) at (10,10,7)").arg(findItemId.isEmpty() ? "Any" : findItemId));
-        m_resultsListWidget->addItem(QString("Found: Placeholder Item 2 (Name: %1) at (20,20,7)").arg(findName.isEmpty() ? "Any" : findName));
+    // Build search criteria
+    ItemFinder::SearchCriteria criteria;
+
+    // Add item ID criteria
+    if (!findItemId.isEmpty()) {
+        bool ok;
+        quint16 itemId = findItemId.toUShort(&ok);
+        if (ok) {
+            criteria.serverIds.insert(itemId);
+        }
     }
-    if (m_replaceSelectedButton) m_replaceSelectedButton->setEnabled(true);
-    if (m_replaceAllButton) m_replaceAllButton->setEnabled(true);
+
+    // Add name criteria (stored in typeNames for processing)
+    if (!findName.isEmpty()) {
+        criteria.typeNames.append(findName);
+    }
+
+    // Add property criteria
+    if (findIsMoveable) {
+        criteria.requiresMoveable = true;
+    }
+    if (findIsBlocking) {
+        criteria.requiresBlocking = true;
+    }
+
+    // Perform search using ItemFinder
+    try {
+        QList<ItemFinder::ItemResult> results = ItemFinder::findAllItemsInMap(m_map, criteria);
+
+        // Populate results
+        if (m_resultsGroup) m_resultsGroup->setVisible(true);
+        if (m_resultsListWidget) {
+            m_resultsListWidget->clear();
+
+            for (const auto& result : results) {
+                if (result.item) {
+                    QString itemName = getItemDisplayName(result.item->getServerId());
+                    QString resultText = QString("Found: %1 (ID: %2) at (%3,%4,%5)")
+                                        .arg(itemName)
+                                        .arg(result.item->getServerId())
+                                        .arg(result.position.x)
+                                        .arg(result.position.y)
+                                        .arg(result.position.z);
+                    m_resultsListWidget->addItem(resultText);
+                }
+            }
+
+            if (results.isEmpty()) {
+                m_resultsListWidget->addItem("No items found matching the criteria.");
+            }
+        }
+
+        bool hasResults = !results.isEmpty();
+        if (m_replaceSelectedButton) m_replaceSelectedButton->setEnabled(hasResults);
+        if (m_replaceAllButton) m_replaceAllButton->setEnabled(hasResults);
+
+    } catch (const std::exception& e) {
+        QMessageBox::critical(this, "Search Error", QString("Search failed: %1").arg(e.what()));
+    }
 }
 
 void ReplaceItemsDialog::onReplaceSelectedClicked() {
@@ -310,4 +368,16 @@ void ReplaceItemsDialog::onPickFindItemClicked() {
 
 void ReplaceItemsDialog::onPickReplaceItemClicked() {
     qDebug() << "Pick Replace Item button clicked. (ItemPropertyEditor integration placeholder)";
+}
+
+// Task 019: Helper method for getting item display names
+QString ReplaceItemsDialog::getItemDisplayName(quint16 itemId) {
+    if (m_itemManager) {
+        const ItemProperties& props = m_itemManager->getItemProperties(itemId);
+        if (!props.name.isEmpty()) {
+            return QString("%1").arg(props.name);
+        }
+    }
+
+    return QString("Item %1").arg(itemId);
 }

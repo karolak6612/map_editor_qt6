@@ -391,4 +391,4 @@ void DialogManager::handleHelpSystemResult(HelpSystem* helpSystem, int result)
     qDebug() << "HelpSystem closed";
 }
 
-#include "DialogManager.moc"
+

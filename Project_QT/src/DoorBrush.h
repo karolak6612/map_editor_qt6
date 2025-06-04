@@ -59,6 +59,7 @@ public:
     // DoorBrush specific methods
     DoorType getDoorType() const;
     void setDoorType(DoorType doorType);
+    quint16 getDoorItemId() const;
 
     // Static utility method (matching wxWidgets)
     static void switchDoor(void* door); // TODO: Replace void* with proper Item* when available

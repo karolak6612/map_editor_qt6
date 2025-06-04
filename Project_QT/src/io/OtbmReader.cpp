@@ -236,7 +236,7 @@ Item* OtbmReader::readItem(ItemManager* itemManager, quint32 mapOtbmFormatVersio
         }
     }
 
-    Item* item = itemManager->createItem(itemId);
+    // Task 015: Remove duplicate Item* item declaration - already declared at line 205
     if (!item) {
         qWarning() << "OtbmReader::readItem - ItemManager failed to create item with ID:" << itemId;
         // Need to skip attributes if item creation fails but stream is ok.

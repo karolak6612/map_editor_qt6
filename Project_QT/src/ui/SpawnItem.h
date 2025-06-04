@@ -15,15 +15,18 @@ class Spawn;
 class Map;
 
 /**
- * @brief Task 87: Enhanced SpawnItem - QGraphicsItem for visualizing creature spawns on the map
+ * @brief Task 92: Enhanced SpawnItem - Finalizing Spawn Visualization & Attribute Reflection
  *
- * Complete spawn visualization implementation:
- * - Visual representation of spawn areas and radius
- * - Interactive spawn editing and selection
+ * Complete spawn visualization implementation with full wxwidgets compatibility:
+ * - Visual representation of spawn areas and radius (purple flame marker)
+ * - Interactive spawn editing and selection with proper drawing flags
  * - Spawn markers and creature position indicators
  * - Context menu support for spawn operations
  * - Real-time updates when spawn attributes change
- * - 1:1 compatibility with wxwidgets spawn visualization
+ * - Integration with SpawnBrush application and map updates
+ * - Proper TileItem flag handling and borderization logic
+ * - Dynamic visual updates reflecting all spawn attributes
+ * - 1:1 compatibility with wxwidgets spawn visualization (SPRITE_SPAWN)
  */
 class SpawnItem : public QGraphicsObject {
     Q_OBJECT

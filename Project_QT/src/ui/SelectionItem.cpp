@@ -527,4 +527,4 @@ void SelectionRubberBandItem::updateRect() {
     }
 }
 
-#include "SelectionItem.moc"
+

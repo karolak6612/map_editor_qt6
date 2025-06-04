@@ -1,4 +1,7 @@
 #include "EraserBrush.h"
+#include "Map.h"
+#include "Tile.h"
+#include "EraseCommand.h"
 #include <QDebug>
 #include <QMouseEvent>
 #include <QUndoCommand>
@@ -61,21 +64,42 @@ bool EraserBrush::canDraw(Map* map, const QPointF& tilePos, QObject* drawingCont
 }
 
 QUndoCommand* EraserBrush::applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
-    Q_UNUSED(map)
-    Q_UNUSED(tilePos)
-    Q_UNUSED(drawingContext)
-    Q_UNUSED(parentCommand)
-    qDebug() << "EraserBrush::applyBrush at" << tilePos << "(stub implementation)";
-    return nullptr; // TODO: Implement actual erasing command
+    Q_UNUSED(drawingContext);
+
+    if (!map) {
+        return nullptr;
+    }
+
+    // Check if there's a tile at this position
+    Tile* tile = map->getTile(tilePos);
+    if (!tile || tile->isEmpty()) {
+        qDebug() << "EraserBrush::applyBrush - No tile or empty tile at" << tilePos;
+        return nullptr;
+    }
+
+    // Create and return erase command
+    EraseCommand* command = new EraseCommand(
+        map,
+        tilePos,
+        EraseCommand::EraseAll, // Default to erasing all items
+        parentCommand
+    );
+
+    qDebug() << "EraserBrush::applyBrush creating EraseCommand at" << tilePos;
+    return command;
 }
 
 QUndoCommand* EraserBrush::removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
-    Q_UNUSED(map)
-    Q_UNUSED(tilePos)
-    Q_UNUSED(drawingContext)
-    Q_UNUSED(parentCommand)
-    qDebug() << "EraserBrush::removeBrush at" << tilePos << "(stub implementation)";
-    return nullptr; // TODO: Implement undo erasing command
+    Q_UNUSED(map);
+    Q_UNUSED(tilePos);
+    Q_UNUSED(drawingContext);
+    Q_UNUSED(parentCommand);
+
+    // For EraserBrush, removeBrush doesn't make much sense conceptually
+    // since erasing is the primary action. We could implement selective undo
+    // or just return nullptr to indicate no action.
+    qDebug() << "EraserBrush::removeBrush at" << tilePos << "- no action (eraser doesn't 'remove')";
+    return nullptr;
 }
 
 // Mouse event handlers with proper signatures

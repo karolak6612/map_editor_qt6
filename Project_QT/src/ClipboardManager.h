@@ -3,6 +3,8 @@
 
 #include <QObject>
 #include <QSet>
+#include <QCoreApplication>
+#include <QVariant>
 #include "ClipboardData.h"
 #include "Map.h"
 #include "PasteCommand.h"

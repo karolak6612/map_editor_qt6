@@ -72,6 +72,11 @@ private:
     const QPixmap* getBestFitPixmap(SpriteSize requestedSize) const;
     const QPixmap* getBestFitPixmap(const QSize& targetSize) const;
     QPixmap getScaledPixmap(SpriteSize targetSize, SpriteSize sourceSize) const;
+
+    // Task 014: Missing validation and fallback methods
+    bool validateDrawingParameters(QPainter* painter, const QPoint& targetPos) const;
+    QPixmap createFallbackPixmap(SpriteSize size) const;
+    void drawFallbackPlaceholder(QPainter* painter, const QRect& targetRect) const;
 };
 
 #endif // QT_EDITORSPRITE_H

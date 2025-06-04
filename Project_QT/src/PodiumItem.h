@@ -39,6 +39,10 @@ private:
     Outfit outfit_;
     bool hasOutfit_;
     bool isVisible_;
+
+    // Podium outfit serialization helpers (Task 24, Task 55)
+    QByteArray serializePodiumOutfit() const;
+    bool deserializePodiumOutfit(const QByteArray& data);
 };
 
 #endif // PODIUMITEM_H

@@ -9,7 +9,7 @@ ItemPropertyEditor::ItemPropertyEditor(QWidget *parent)
     : ItemPropertyEditorBase(parent), m_placeholderLabel(nullptr) {
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
-    m_placeholderLabel = new QLabel("Item Property Editor Stub");
+    m_placeholderLabel = new QLabel("Item Property Editor Stub", this);
     m_placeholderLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(m_placeholderLabel);
     setLayout(mainLayout);

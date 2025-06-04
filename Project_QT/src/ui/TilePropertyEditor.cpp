@@ -68,48 +68,48 @@ void TilePropertyEditor::setupBasicPropertiesGroup() {
     formLayout->setSpacing(8);
 
     // Position
-    m_positionLineEdit = new QLineEdit();
+    m_positionLineEdit = new QLineEdit(m_basicTab);
     m_positionLineEdit->setReadOnly(true);
     formLayout->addRow(tr("Position:"), m_positionLineEdit);
 
     // House ID
-    m_houseIdLineEdit = new QLineEdit();
+    m_houseIdLineEdit = new QLineEdit(m_basicTab);
     m_houseIdLineEdit->setReadOnly(true);
     formLayout->addRow(tr("House ID:"), m_houseIdLineEdit);
 
     // Zone IDs
-    m_zoneIdsLineEdit = new QLineEdit();
+    m_zoneIdsLineEdit = new QLineEdit(m_basicTab);
     m_zoneIdsLineEdit->setReadOnly(true);
     formLayout->addRow(tr("Zone IDs:"), m_zoneIdsLineEdit);
 
     // Counts
-    m_itemCountLineEdit = new QLineEdit();
+    m_itemCountLineEdit = new QLineEdit(m_basicTab);
     m_itemCountLineEdit->setReadOnly(true);
     formLayout->addRow(tr("Item Count:"), m_itemCountLineEdit);
 
-    m_creatureCountLineEdit = new QLineEdit();
+    m_creatureCountLineEdit = new QLineEdit(m_basicTab);
     m_creatureCountLineEdit->setReadOnly(true);
     formLayout->addRow(tr("Creature Count:"), m_creatureCountLineEdit);
 
     // Memory usage
-    m_memoryUsageLineEdit = new QLineEdit();
+    m_memoryUsageLineEdit = new QLineEdit(m_basicTab);
     m_memoryUsageLineEdit->setReadOnly(true);
     formLayout->addRow(tr("Memory Usage:"), m_memoryUsageLineEdit);
 
     // State checkboxes
-    m_isEmptyCheckBox = new QCheckBox();
+    m_isEmptyCheckBox = new QCheckBox(m_basicTab);
     m_isEmptyCheckBox->setEnabled(false);
     formLayout->addRow(tr("Is Empty:"), m_isEmptyCheckBox);
 
-    m_isModifiedCheckBox = new QCheckBox();
+    m_isModifiedCheckBox = new QCheckBox(m_basicTab);
     m_isModifiedCheckBox->setEnabled(false);
     formLayout->addRow(tr("Is Modified:"), m_isModifiedCheckBox);
 
-    m_isSelectedCheckBox = new QCheckBox();
+    m_isSelectedCheckBox = new QCheckBox(m_basicTab);
     m_isSelectedCheckBox->setEnabled(false);
     formLayout->addRow(tr("Is Selected:"), m_isSelectedCheckBox);
 
-    m_isBlockingCheckBox = new QCheckBox();
+    m_isBlockingCheckBox = new QCheckBox(m_basicTab);
     m_isBlockingCheckBox->setEnabled(false);
     formLayout->addRow(tr("Is Blocking:"), m_isBlockingCheckBox);
 }
@@ -563,4 +563,4 @@ void TilePropertyEditor::onTileSelectionChanged() {
     }
 }
 
-#include "TilePropertyEditor.moc"
+

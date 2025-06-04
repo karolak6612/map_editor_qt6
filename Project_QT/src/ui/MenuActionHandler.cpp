@@ -554,4 +554,4 @@ void MenuActionHandler::handleShowHotkeys()
     // TODO: Implement hotkeys dialog
 }
 
-#include "MenuActionHandler.moc"
+

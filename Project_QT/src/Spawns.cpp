@@ -122,4 +122,4 @@ quint32 Spawns::memsize() const {
     return size;
 }
 
-#include "Spawns.moc"
+

@@ -520,4 +520,4 @@ void FlagBrushCommand::restorePreviousState() {
     }
 }
 
-#include "FlagBrush.moc"
+

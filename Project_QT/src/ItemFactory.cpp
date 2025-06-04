@@ -142,4 +142,4 @@ Item* ItemFactory::createSpecializedItem(quint16 serverId, QObject* parent) {
     }
 }
 
-#include "ItemFactory.moc"
+

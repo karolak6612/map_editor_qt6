@@ -25,7 +25,16 @@ const quint8 QT_TILE_SOUTH = 1 << 6;     // 64
 const quint8 QT_TILE_SOUTHEAST = 1 << 7; // 128
 
 
-TableBrush::TableBrush() : m_look_id(0) {
+TableBrush::TableBrush() : Brush(nullptr), m_look_id(0) {
+    // Initialize m_table_items to have 7 default-constructed QtTableNode elements
+    m_table_items.resize(7);
+    // It's good practice to ensure the lookup table is initialized.
+    if (s_table_types_lookup.isEmpty()) {
+        initLookupTable();
+    }
+}
+
+TableBrush::TableBrush(QObject* parent) : Brush(parent), m_look_id(0) {
     // Initialize m_table_items to have 7 default-constructed QtTableNode elements
     m_table_items.resize(7);
     // It's good practice to ensure the lookup table is initialized.
@@ -307,13 +316,14 @@ bool TableBrush::load(const QDomElement& element, QString& warnings) {
                 continue;
             }
 
-            ItemType* it = ItemManager::getInstance().getItemType(id);
-            if (!it) {
-                warnings += QString("ItemType with ID %1 not found for brush %2\n").arg(id).arg(m_name);
+            // Task 013: Use ItemManager::registerItemBrush instead of direct property modification
+            if (!ItemManager::getInstance().itemTypeExists(id)) {
+                warnings += QString("Item with ID %1 not found for brush %2\n").arg(id).arg(m_name);
                 continue;
             }
-            it->isTable = true;
-            it->brush = this;
+
+            // Register this brush with the item
+            ItemManager::getInstance().registerItemBrush(id, this, true, false); // isTable=true, isCarpet=false
 
             QtTableVariation variation;
             variation.item_id = id;
@@ -529,6 +539,90 @@ public:
     }
 };
 #endif
+
+// Missing method implementations for Brush interface
+QUndoCommand* TableBrush::mousePressEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand) {
+    Q_UNUSED(event); Q_UNUSED(mapView); Q_UNUSED(undoStack);
+    Q_UNUSED(shiftPressed); Q_UNUSED(altPressed);
+
+    if (!canDraw(map, mapPos, nullptr)) {
+        return nullptr;
+    }
+
+    if (ctrlPressed) {
+        return removeBrush(map, mapPos, nullptr, parentCommand);
+    } else {
+        return applyBrush(map, mapPos, nullptr, parentCommand);
+    }
+}
+
+QUndoCommand* TableBrush::mouseMoveEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand) {
+    Q_UNUSED(mapView); Q_UNUSED(undoStack);
+    Q_UNUSED(shiftPressed); Q_UNUSED(altPressed);
+
+    if (event->buttons() & Qt::LeftButton) {
+        if (!canDraw(map, mapPos, nullptr)) {
+            return nullptr;
+        }
+        if (ctrlPressed) {
+            return removeBrush(map, mapPos, nullptr, parentCommand);
+        } else {
+            return applyBrush(map, mapPos, nullptr, parentCommand);
+        }
+    }
+    return nullptr;
+}
+
+QUndoCommand* TableBrush::mouseReleaseEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand) {
+    Q_UNUSED(mapPos); Q_UNUSED(event); Q_UNUSED(mapView); Q_UNUSED(map); Q_UNUSED(undoStack);
+    Q_UNUSED(shiftPressed); Q_UNUSED(ctrlPressed); Q_UNUSED(altPressed); Q_UNUSED(parentCommand);
+    return nullptr;
+}
+
+void TableBrush::cancel() {
+    // No specific state to reset for table brush
+}
+
+bool TableBrush::canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext) const {
+    Q_UNUSED(drawingContext);
+    if (!map) return false;
+
+    int x = static_cast<int>(tilePos.x());
+    int y = static_cast<int>(tilePos.y());
+    int z = map->getCurrentFloor();
+
+    return map->getTile(x, y, z) != nullptr;
+}
+
+QUndoCommand* TableBrush::applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
+    Q_UNUSED(drawingContext); Q_UNUSED(parentCommand);
+    if (!map) return nullptr;
+
+    int x = static_cast<int>(tilePos.x());
+    int y = static_cast<int>(tilePos.y());
+    int z = map->getCurrentFloor();
+
+    Tile* tile = map->getTile(x, y, z);
+    if (!tile) return nullptr;
+
+    draw(map, tile, nullptr);
+    return nullptr; // TODO: Return proper undo command
+}
+
+QUndoCommand* TableBrush::removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
+    Q_UNUSED(drawingContext); Q_UNUSED(parentCommand);
+    if (!map) return nullptr;
+
+    int x = static_cast<int>(tilePos.x());
+    int y = static_cast<int>(tilePos.y());
+    int z = map->getCurrentFloor();
+
+    Tile* tile = map->getTile(x, y, z);
+    if (!tile) return nullptr;
+
+    undraw(map, tile);
+    return nullptr; // TODO: Return proper undo command
+}
 
 // Placeholders for missing methods often found in Tile or Map
 // (These are illustrative and depend on your actual class definitions)

@@ -758,4 +758,4 @@ void WaypointItem::cancelDrag() {
     updatePosition();
 }
 
-#include "WaypointItem.moc"
+

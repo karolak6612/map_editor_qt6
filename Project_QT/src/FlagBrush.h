@@ -3,10 +3,10 @@
 
 #include "Brush.h"
 #include "Tile.h"
+#include <QUndoCommand>
 
 // Forward declarations
 class Map;
-class QUndoCommand;
 
 class FlagBrush : public Brush {
     Q_OBJECT

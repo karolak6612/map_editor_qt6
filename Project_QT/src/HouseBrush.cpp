@@ -3,8 +3,11 @@
 #include "Map.h"
 #include "Tile.h"
 #include "Item.h"
+#include "MapView.h"           // For MapView* parameter in mouse events
 #include <QDebug>
 #include <QUndoCommand>
+#include <QUndoStack>          // For QUndoStack* parameter in mouse events
+#include <QMouseEvent>         // For QMouseEvent* parameter in mouse events
 #include <QDomElement>
 
 // HouseBrush implementation
@@ -170,6 +173,70 @@ bool HouseBrush::load(const QDomElement& element, QStringList& warnings) {
     autoAssignDoorId_ = element.attribute("auto_assign_door_id", "true").toLower() == "true";
     
     return true;
+}
+
+// Mouse event handlers (required by base Brush class)
+QUndoCommand* HouseBrush::mousePressEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView,
+                                         Map* map, QUndoStack* undoStack,
+                                         bool shiftPressed, bool ctrlPressed, bool altPressed,
+                                         QUndoCommand* parentCommand) {
+    Q_UNUSED(event);
+    Q_UNUSED(mapView);
+    Q_UNUSED(undoStack);
+    Q_UNUSED(shiftPressed);
+    Q_UNUSED(altPressed);
+
+    if (!canDraw(map, mapPos)) {
+        return nullptr;
+    }
+
+    if (ctrlPressed) {
+        return removeBrush(map, mapPos, nullptr, parentCommand);
+    } else {
+        return applyBrush(map, mapPos, nullptr, parentCommand);
+    }
+}
+
+QUndoCommand* HouseBrush::mouseMoveEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView,
+                                        Map* map, QUndoStack* undoStack,
+                                        bool shiftPressed, bool ctrlPressed, bool altPressed,
+                                        QUndoCommand* parentCommand) {
+    Q_UNUSED(mapView);
+    Q_UNUSED(undoStack);
+    Q_UNUSED(shiftPressed);
+    Q_UNUSED(altPressed);
+
+    if (event->buttons() & Qt::LeftButton) {
+        if (!canDraw(map, mapPos)) {
+            return nullptr;
+        }
+        if (ctrlPressed) {
+            return removeBrush(map, mapPos, nullptr, parentCommand);
+        } else {
+            return applyBrush(map, mapPos, nullptr, parentCommand);
+        }
+    }
+    return nullptr;
+}
+
+QUndoCommand* HouseBrush::mouseReleaseEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView,
+                                           Map* map, QUndoStack* undoStack,
+                                           bool shiftPressed, bool ctrlPressed, bool altPressed,
+                                           QUndoCommand* parentCommand) {
+    Q_UNUSED(mapPos);
+    Q_UNUSED(event);
+    Q_UNUSED(mapView);
+    Q_UNUSED(map);
+    Q_UNUSED(undoStack);
+    Q_UNUSED(shiftPressed);
+    Q_UNUSED(ctrlPressed);
+    Q_UNUSED(altPressed);
+    Q_UNUSED(parentCommand);
+    return nullptr;
+}
+
+void HouseBrush::cancel() {
+    qDebug() << "HouseBrush::cancel called";
 }
 
 // Helper methods
@@ -1010,4 +1077,4 @@ QStringList HouseManager::getHouseValidationReport(Map* map) {
     return report;
 }
 
-#include "HouseBrush.moc"
+

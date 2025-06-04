@@ -52,6 +52,9 @@ public:
     void setCurrentGroundItemId(quint16 itemId);
     quint16 getCurrentGroundItemId() const;
 
+    // Task 016: Override getLookID to use currentGroundItemId_ as primary storage
+    int getLookID() const override;
+
     // Optional border support (Task 38 requirement)
     virtual bool hasOptionalBorder() const;
     virtual bool useSoloOptionalBorder() const;

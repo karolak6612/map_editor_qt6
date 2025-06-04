@@ -31,6 +31,7 @@ private:
 
     quint16 oldGroundItemId_ = 0; // ID of the ground item that was there before
     bool    hadOldGround_ = false;  // True if there was any ground item before this command
+    bool    firstRedo_ = true;      // Task 016: Flag to capture old state only once
     // Item* oldGroundItem_ = nullptr; // Alternative: store the Item pointer. Simpler to store ID for now.
 };
 

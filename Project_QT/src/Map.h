@@ -5,7 +5,7 @@
 #include <QString>
 #include <QVector>
 #include <QList> // For QList members
-#include <QPoint> // For QPoint3D, though QPoint itself is 2D. QPoint3D is not standard Qt.
+#include <QVector3D> // For 3D coordinates
                  // Let's use a simple struct or a custom class for 3D points if needed,
                  // or separate x,y,z. For now, will use a QPoint for x,y and int z for pos.
                  // Re-evaluating: QPoint3D is not in Qt Core. Will use a simple Position struct or individual coords.
@@ -33,28 +33,11 @@
 class MapIterator;
 class ConstMapIterator;
 
-struct MapPos {
-    int x = 0;
-    int y = 0;
-    int z = 0;
-    MapPos(int x_ = 0, int y_ = 0, int z_ = 0) : x(x_), y(y_), z(z_) {}
-
-    bool operator==(const MapPos& other) const {
-        return x == other.x && y == other.y && z == other.z;
-    }
-};
-
-// Task 52: QPoint3D typedef for BorderSystem compatibility
-using QPoint3D = MapPos;
+#include "MapPos.h" // Use MapPos typedef from Position.h
 
 #include <QtGlobal> // For qHash
 
-// qHash function for MapPos
-inline uint qHash(const MapPos& pos, uint seed = 0) {
-    return qHash(pos.x, seed) ^ qHash(pos.y, seed << 1) ^ qHash(pos.z, seed << 2);
-}
-// And include QVector3D as a common Qt type for 3D points if QPoint3D is a placeholder.
-#include <QVector3D> // As a more standard Qt 3D point, can be used if QPoint3D is not defined.
+// Note: qHash for MapPos is provided by Position.h since MapPos is a typedef for Position
 
 
 // Forward declarations
@@ -68,6 +51,8 @@ class Waypoint;
 class Waypoints;
 class Selection; // Forward-declare Selection
 class MapIterator; // Forward-declare MapIterator
+class MapIO; // Forward-declare MapIO for I/O operations
+class MapEntityManager; // Task 011: Extracted entity management
 // Add any other classes that Map might store by pointer and need forward declaration
 
 class Map : public QObject {
@@ -100,6 +85,10 @@ public:
     int floors() const; // Number of Z-layers
     QString description() const;
     void setDescription(const QString& description);
+
+    // FIXED: Current floor tracking for brush operations
+    int getCurrentFloor() const;
+    void setCurrentFloor(int floor);
 
     // Tile Access and Manipulation
     Tile* getTile(int x, int y, int z) const;
@@ -287,8 +276,8 @@ signals:
     void waypointCenterRequested(Waypoint* waypoint);
 
     // Task 52: Enhanced signals for Qt rendering integration
-    void tilesChanged(const QList<QPoint3D>& updatedTileCoords);
-    void borderUpdateRequested(const QList<QPoint3D>& affectedTiles);
+    void tilesChanged(const QList<QVector3D>& updatedTileCoords);
+    void borderUpdateRequested(const QList<QVector3D>& affectedTiles);
     void visualUpdateNeeded(const QRect& area);
 
 private:
@@ -299,6 +288,7 @@ private:
     int width_ = 0;
     int height_ = 0;
     int floors_ = 0;
+    int currentFloor_ = 7;  // FIXED: Default to ground level (7 is standard ground floor)
     QVector<Tile*> tiles_; // Flat list of all tiles, Map owns these Tile objects
 
     // Placeholder containers for map-wide entities
@@ -310,6 +300,10 @@ private:
     QList<House*> houses_;
     Selection* selection_ = nullptr;
     Waypoints* waypoints_ = nullptr; // Waypoints collection
+    MapIO* mapIO_ = nullptr; // I/O operations handler
+
+    // Task 011: Extracted entity management for mandate M6 compliance
+    MapEntityManager* entityManager_ = nullptr;
 
     QList<Town*> m_towns;
     QList<Waypoint*> m_waypoints; // Legacy waypoint list for OTBM compatibility

@@ -5,7 +5,7 @@
 Animator::Animator(QObject *parent)
     : QObject(parent), m_frameCount(0), m_startFrame(-1), m_loopCount(0), m_isAsync(false),
       m_currentFrameIndex(0), m_currentLoopIteration(0), m_timeToNextFrame(0),
-      m_totalAnimationTimeNonAsync(0), m_direction(AnimationDirection::Forward), m_isComplete(false) {
+      m_totalAnimationTimeNonAsync(0), m_direction(ANIMATION_FORWARD), m_isComplete(false) {
 }
 
 Animator::Animator(int frameCount, int startFrame, int loopCount, bool isAsync, QObject *parent)
@@ -38,7 +38,7 @@ void Animator::setup(int frameCount, int startFrame, int loopCount, bool isAsync
 
 void Animator::reset() {
     m_currentLoopIteration = 0;
-    m_direction = AnimationDirection::Forward;
+    m_direction = ANIMATION_FORWARD;
     m_isComplete = (m_frameCount == 0); // Animation is complete if there are no frames
 
     if (m_frameCount > 0) {
@@ -146,11 +146,11 @@ void Animator::calculateSynchronousAnimation(qint64 totalElapsedTimeMs) {
 
 int Animator::calculateNextFramePingPong() {
     int nextFrame = m_currentFrameIndex;
-    if (m_direction == AnimationDirection::Forward) {
+    if (m_direction == ANIMATION_FORWARD) {
         nextFrame++;
         if (nextFrame >= m_frameCount) {
             nextFrame = m_frameCount - 2; // Move to second to last
-            m_direction = AnimationDirection::Backward;
+            m_direction = ANIMATION_BACKWARD;
             if (m_frameCount <= 1) { // For 1 frame, it just stays
                  nextFrame = 0;
                  m_isComplete = true; // Or loop if loopCount == 0
@@ -160,7 +160,7 @@ int Animator::calculateNextFramePingPong() {
         nextFrame--;
         if (nextFrame < 0) {
             nextFrame = 1; // Move to second frame
-            m_direction = AnimationDirection::Forward;
+            m_direction = ANIMATION_FORWARD;
             if (m_frameCount <= 1) { // For 1 frame
                 nextFrame = 0;
                 m_isComplete = true;

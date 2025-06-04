@@ -6,6 +6,7 @@
 #include <QMap>
 #include <QVariant> // For potential future use in ItemProperties if some attributes are generic
 #include <QtGlobal> // For quint16, qint8, etc.
+#include <QCoreApplication>
 
 // Forward declarations
 class Item;
@@ -91,8 +92,10 @@ struct ItemProperties {
     bool isBrushDoor = false;     // If it's a door type for brush placement
     bool isOpen = false;          // For doors/windows, usually runtime state but can be default
     bool isLocked = false;        // For doors, usually runtime state
-    bool isTable = false;         // For rendering order/behavior
-    bool isCarpet = false;        // For rendering order/behavior
+
+    // Task 013: Brush-related properties
+    bool isTable = false;         // Item is a table type
+    bool isCarpet = false;        // Item is a carpet type
     bool isBorder = false;        // For border items (automagic bordering)
     bool isMetaItem = false;      // Special editor items not for game
     bool floorChangeDown = false;
@@ -131,7 +134,7 @@ struct ItemProperties {
     bool canWriteText = false;    // Can write text (separate from readable)
 
     // Brush system integration
-    Brush* brush = nullptr;       // Added Brush pointer
+    Brush* brush = nullptr;       // Task 013: Associated brush for this item type (table/carpet/etc)
     Brush* doodadBrush = nullptr; // Doodad brush pointer
     Brush* collectionBrush = nullptr; // Collection brush pointer
     Brush* rawBrush = nullptr;    // Raw brush pointer
@@ -156,6 +159,10 @@ public:
     void clearDefinitions();
     bool isLoaded() const;
     quint16 getMaxServerId() const;
+
+    // Task 013: Brush registration methods
+    void registerItemBrush(quint16 serverId, class Brush* brush, bool isTable = false, bool isCarpet = false);
+    void unregisterItemBrush(quint16 serverId);
 
     // Enhanced lookup methods
     quint16 getItemIdByClientID(quint16 clientId) const;

@@ -12,6 +12,7 @@
 #include <QFocusEvent> // Added for focusOutEvent
 #include <QDebug>
 #include <QTimer>   // Added for double-click detection
+#include <QToolTip> // For QToolTip* waypointTooltip_
 
 // Forward declarations
 class MapViewInputHandler;
@@ -19,16 +20,20 @@ class Brush; // Added forward declaration
 class BrushManager;
 class Map;
 class QUndoStack;
+
+// Include Map.h for MapPos definition
+#include "Map.h"
 class MapDrawingPrimitives; // Task 65: Drawing primitives
 class MapOverlayRenderer;   // Task 65: Overlay rendering
 class WaypointBrush;        // Task 74: Waypoint brush
 class Waypoint;             // Task 74: Waypoint
 class WaypointItem;         // Task 74: Waypoint item
-struct DrawingOptions;      // Task 75: Drawing options
+#include "DrawingOptions.h" // Task 75: Drawing options
 class MapViewZoomSystem;    // Task 80: Enhanced zoom system
 class MapViewGridSystem;    // Task 80: Enhanced grid system
 class MapViewMouseTracker;  // Task 80: Enhanced mouse tracking
 class MapViewDrawingFeedback; // Task 80: Enhanced drawing feedback
+class MapViewZoomHandler;     // Task 011: Extracted zoom handling
 
 // Constants
 const int GROUND_LAYER = 7;
@@ -78,7 +83,8 @@ public:
     bool isDrawing() const { return isDrawing_; }
 
     QPointF screenToMap(const QPoint& screenPos) const;
-    QPoint mapToScreen(const QPointF& mapTilePos) const;
+    QPointF mapToScreen(const QPointF& mapTilePos) const;
+    MapPos mapToTilePos(const QPointF& mapPos) const;
 
     // Public interface for MapViewInputHandler
     void pan(int dx, int dy);
@@ -123,10 +129,8 @@ public:
     // Task 65: Drawing primitives integration
     MapDrawingPrimitives* getDrawingPrimitives() const { return drawingPrimitives_; }
     MapOverlayRenderer* getOverlayRenderer() const { return overlayRenderer_; }
-    void setShowGrid(bool show);
     void setShowBrushPreview(bool show);
     void setBrushPreviewState(const QPointF& position, Brush* brush, int size, bool isValid = true);
-    void clearBrushPreview();
     void updateBrushPreview(const QPointF& mousePos);
 
     // Placeholder methods (many are called by MapViewInputHandler via mapView_ pointer)
@@ -192,9 +196,6 @@ public:
     void highlightWaypoint(Waypoint* waypoint, bool highlight = true);
 
     // Task 74: Helper methods for coordinate conversion
-    MapPos mapToTilePos(const QPointF& mapPos) const;
-    QPointF screenToMap(const QPoint& screenPos) const;
-    QPointF mapToScreen(const QPointF& mapPos) const;
 
     // Task 75: View settings management
     void setDrawingOptions(const DrawingOptions& options);
@@ -353,12 +354,14 @@ private:
     MapViewMouseTracker* mouseTracker_;
     MapViewDrawingFeedback* drawingFeedback_;
 
+    // Task 011: Extracted zoom handling for mandate M6 compliance
+    MapViewZoomHandler* zoomHandler_;
+
     // Task 85: Tile locking visual system
     bool showLockedTiles_;
     QColor lockedTileOverlayColor_;
 
     // Helper methods for selection (Task 61)
-    MapPos mapToTilePos(const QPointF& mapPos) const;
     void updateSelectionVisuals();
 };
 

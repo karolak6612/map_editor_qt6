@@ -89,4 +89,4 @@ bool DepotItem::isDepotType(quint16 serverId) {
     return props.type == ITEM_TYPE_DEPOT;
 }
 
-#include "DepotItem.moc"
+

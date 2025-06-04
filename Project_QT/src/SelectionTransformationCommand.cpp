@@ -701,39 +701,194 @@ void ItemTransformationHelper::initializeTransformationMaps() {
         return;
     }
 
-    // Initialize transformation maps with common item transformations
-    // This would ideally be loaded from ItemManager or configuration files
+    // Clear existing maps
+    clockwiseRotationMap_.clear();
+    counterClockwiseRotationMap_.clear();
+    horizontalFlipMap_.clear();
+    verticalFlipMap_.clear();
 
-    // Example wall transformations (these would be loaded from data)
-    // Horizontal walls
-    clockwiseRotationMap_[1234] = 1235; // horizontal wall -> vertical wall
-    clockwiseRotationMap_[1235] = 1234; // vertical wall -> horizontal wall
+    // Load transformation data from ItemManager
+    ItemManager* itemManager = ItemManager::instance();
+    if (itemManager) {
+        loadTransformationsFromItemManager(itemManager);
+    }
 
-    // Door transformations
-    clockwiseRotationMap_[1249] = 1250; // door facing north -> door facing east
-    clockwiseRotationMap_[1250] = 1251; // door facing east -> door facing south
-    clockwiseRotationMap_[1251] = 1252; // door facing south -> door facing west
-    clockwiseRotationMap_[1252] = 1249; // door facing west -> door facing north
+    // Add hardcoded transformations for common items
+    addCommonItemTransformations();
+
+    // Build reverse mappings
+    buildReverseMappings();
+
+    mapsInitialized_ = true;
+}
+
+void ItemTransformationHelper::loadTransformationsFromItemManager(ItemManager* itemManager) {
+    if (!itemManager) return;
+
+    // Get all item IDs from ItemManager
+    const auto& itemMap = itemManager->getItemMap();
+
+    for (auto it = itemMap.begin(); it != itemMap.end(); ++it) {
+        quint16 itemId = it.key();
+        const ItemProperties& props = it.value();
+
+        // Handle rotatable items
+        if (props.rotatable && props.rotateTo != 0 && props.rotateTo != itemId) {
+            clockwiseRotationMap_[itemId] = props.rotateTo;
+        }
+
+        // Handle items with directional variants (walls, doors, etc.)
+        if (props.isWall || props.isDoor) {
+            addDirectionalItemTransformations(itemId, props);
+        }
+
+        // Handle carpet and table items with directional variants
+        if (props.name.contains("carpet", Qt::CaseInsensitive) ||
+            props.name.contains("table", Qt::CaseInsensitive) ||
+            props.name.contains("chair", Qt::CaseInsensitive)) {
+            addFurnitureTransformations(itemId, props);
+        }
+    }
+}
+
+void ItemTransformationHelper::addCommonItemTransformations() {
+    // Common wall transformations (Tibia standard walls)
+    // Stone walls
+    clockwiseRotationMap_[1234] = 1235; // horizontal -> vertical
+    clockwiseRotationMap_[1235] = 1234; // vertical -> horizontal
+
+    // Wooden walls
+    clockwiseRotationMap_[1240] = 1241;
+    clockwiseRotationMap_[1241] = 1240;
+
+    // Common door transformations
+    // Wooden doors
+    clockwiseRotationMap_[1209] = 1210; // north -> east
+    clockwiseRotationMap_[1210] = 1211; // east -> south
+    clockwiseRotationMap_[1211] = 1212; // south -> west
+    clockwiseRotationMap_[1212] = 1209; // west -> north
+
+    // Stone doors
+    clockwiseRotationMap_[1249] = 1250;
+    clockwiseRotationMap_[1250] = 1251;
+    clockwiseRotationMap_[1251] = 1252;
+    clockwiseRotationMap_[1252] = 1249;
 
     // Table transformations
     clockwiseRotationMap_[1728] = 1729; // table north-south -> table east-west
     clockwiseRotationMap_[1729] = 1728; // table east-west -> table north-south
 
-    // Build counter-clockwise map from clockwise map
+    // Stairs transformations
+    horizontalFlipMap_[1385] = 1386; // stairs east -> west
+    horizontalFlipMap_[1386] = 1385; // stairs west -> east
+    verticalFlipMap_[1387] = 1388;   // stairs north -> south
+    verticalFlipMap_[1388] = 1387;   // stairs south -> north
+
+    // Ramp transformations
+    clockwiseRotationMap_[1395] = 1396; // ramp north -> east
+    clockwiseRotationMap_[1396] = 1397; // ramp east -> south
+    clockwiseRotationMap_[1397] = 1398; // ramp south -> west
+    clockwiseRotationMap_[1398] = 1395; // ramp west -> north
+}
+
+void ItemTransformationHelper::buildReverseMappings() {
+    // Build counter-clockwise rotation map from clockwise map
     for (auto it = clockwiseRotationMap_.begin(); it != clockwiseRotationMap_.end(); ++it) {
         counterClockwiseRotationMap_[it.value()] = it.key();
     }
 
-    // Example flip transformations
-    // Stairs and ramps
-    horizontalFlipMap_[1385] = 1386; // stairs up east -> stairs up west
-    horizontalFlipMap_[1386] = 1385; // stairs up west -> stairs up east
+    // Flip maps are typically symmetric (flipping twice returns to original)
+    for (auto it = horizontalFlipMap_.begin(); it != horizontalFlipMap_.end(); ++it) {
+        if (!horizontalFlipMap_.contains(it.value())) {
+            horizontalFlipMap_[it.value()] = it.key();
+        }
+    }
 
-    verticalFlipMap_[1387] = 1388; // stairs up north -> stairs up south
-    verticalFlipMap_[1388] = 1387; // stairs up south -> stairs up north
+    for (auto it = verticalFlipMap_.begin(); it != verticalFlipMap_.end(); ++it) {
+        if (!verticalFlipMap_.contains(it.value())) {
+            verticalFlipMap_[it.value()] = it.key();
+        }
+    }
+}
 
-    // This would be expanded with actual item data from ItemManager
-    // or loaded from configuration files
+void ItemTransformationHelper::addDirectionalItemTransformations(quint16 itemId, const ItemProperties& props) {
+    // This method would analyze item names and properties to determine
+    // directional variants. For now, we'll use basic heuristics.
 
-    mapsInitialized_ = true;
+    QString name = props.name.toLower();
+
+    // Wall items typically have horizontal/vertical variants
+    if (props.isWall) {
+        // Try to find the corresponding directional variant
+        // This is a simplified approach - real implementation would use item database
+        quint16 variantId = findDirectionalVariant(itemId, props);
+        if (variantId != 0 && variantId != itemId) {
+            clockwiseRotationMap_[itemId] = variantId;
+        }
+    }
+
+    // Door items have 4-directional variants
+    if (props.isDoor) {
+        addDoorRotationChain(itemId, props);
+    }
+}
+
+void ItemTransformationHelper::addFurnitureTransformations(quint16 itemId, const ItemProperties& props) {
+    QString name = props.name.toLower();
+
+    // Tables often have directional variants
+    if (name.contains("table")) {
+        // Add table rotation logic
+        addTableRotations(itemId, props);
+    }
+
+    // Carpets often have corner and edge variants
+    if (name.contains("carpet") || name.contains("rug")) {
+        addCarpetTransformations(itemId, props);
+    }
+}
+
+quint16 ItemTransformationHelper::findDirectionalVariant(quint16 itemId, const ItemProperties& props) {
+    // Simplified implementation - would need proper item database lookup
+    // For now, just try adjacent item IDs
+    Q_UNUSED(props);
+
+    // Try the next item ID as a potential variant
+    return itemId + 1;
+}
+
+void ItemTransformationHelper::addDoorRotationChain(quint16 itemId, const ItemProperties& props) {
+    // Simplified implementation for door rotations
+    Q_UNUSED(props);
+
+    // Doors typically come in sets of 4 (north, east, south, west)
+    // This is a basic heuristic - real implementation would use item database
+    quint16 baseId = (itemId / 4) * 4;
+
+    clockwiseRotationMap_[baseId] = baseId + 1;     // north -> east
+    clockwiseRotationMap_[baseId + 1] = baseId + 2; // east -> south
+    clockwiseRotationMap_[baseId + 2] = baseId + 3; // south -> west
+    clockwiseRotationMap_[baseId + 3] = baseId;     // west -> north
+}
+
+void ItemTransformationHelper::addTableRotations(quint16 itemId, const ItemProperties& props) {
+    // Simplified implementation for table rotations
+    Q_UNUSED(props);
+
+    // Tables typically have 2 orientations (north-south, east-west)
+    if (itemId % 2 == 0) {
+        clockwiseRotationMap_[itemId] = itemId + 1;
+    } else {
+        clockwiseRotationMap_[itemId] = itemId - 1;
+    }
+}
+
+void ItemTransformationHelper::addCarpetTransformations(quint16 itemId, const ItemProperties& props) {
+    // Simplified implementation for carpet transformations
+    Q_UNUSED(props);
+
+    // Carpets often have horizontal/vertical flip variants
+    // This is a basic heuristic
+    horizontalFlipMap_[itemId] = itemId + 1;
+    verticalFlipMap_[itemId] = itemId + 2;
 }

@@ -36,25 +36,25 @@ ClipboardTileData ClipboardData::tileToClipboardTileData(const Tile* tile, const
 
     // Relative Position
     ctd.relativePosition = MapPos(
-        tile->getPosition().x - selectionOrigin.x,
-        tile->getPosition().y - selectionOrigin.y,
-        tile->getPosition().z - selectionOrigin.z
+        tile->x() - selectionOrigin.x,
+        tile->y() - selectionOrigin.y,
+        tile->z() - selectionOrigin.z
     );
 
     // Ground Item
     const Item* groundItem = tile->getGround(); // Assuming Tile::getGround() returns Item*
     if (groundItem) {
-        ctd.ground.id = groundItem->getID(); // Assuming Item::getID()
+        ctd.ground.id = groundItem->getServerId(); // Corrected method name
         // ctd.ground.countOrSubType = groundItem->getCountOrSubType(); // Example
         // Populate ctd.ground.properties if needed
         ctd.hasGround = true;
     }
 
     // Top Items
-    for (const Item* item : tile->getItems()) { // Assuming Tile::getItems() returns QList<Item*> or similar
+    for (const Item* item : tile->items()) { // Corrected method name
         if (item) {
             ClipboardItemData cid;
-            cid.id = item->getID();
+            cid.id = item->getServerId(); // Corrected method name
             // cid.countOrSubType = item->getCountOrSubType(); // Example
             // Populate cid.properties if needed
             ctd.items.append(cid);
@@ -62,16 +62,16 @@ ClipboardTileData ClipboardData::tileToClipboardTileData(const Tile* tile, const
     }
     
     // Creature
-    const Creature* creature = tile->getCreature(); // Assuming Tile::getCreature() returns Creature*
+    const Creature* creature = tile->creature(); // Corrected method name
     if (creature) {
-        ctd.creature.name = creature->getName(); // Assuming Creature::getName()
+        ctd.creature.name = creature->name(); // Corrected method name
         // ctd.creature.offset = ...; // If creatures have sub-tile offsets
         // Populate ctd.creature.properties if needed
         ctd.hasCreature = true;
     }
 
     // Spawn
-    const Spawn* spawn = tile->getSpawn(); // Assuming Tile::getSpawn() returns Spawn*
+    const Spawn* spawn = tile->spawn(); // Corrected method name
     if (spawn) {
         ctd.spawn.radius = spawn->radius();
         ctd.spawn.interval = spawn->interval();
@@ -82,7 +82,7 @@ ClipboardTileData ClipboardData::tileToClipboardTileData(const Tile* tile, const
     }
 
     // Tile Flags
-    ctd.tileFlags = tile->getFlags(); // Assuming Tile::getFlags() or similar
+    ctd.tileFlags = tile->getMapFlags(); // Corrected method name
 
     return ctd;
 }

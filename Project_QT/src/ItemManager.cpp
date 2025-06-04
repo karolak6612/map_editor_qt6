@@ -5,6 +5,8 @@
 #include <QDataStream>
 #include <QXmlStreamReader> // For optional XML parsing
 #include <QDebug>
+#include <QCoreApplication> // For QCoreApplication::instance()
+#include <QVariant> // For QVariant::fromValue()
 
 // Static member initialization
 ItemManager* ItemManager::s_instance = nullptr;
@@ -93,7 +95,14 @@ enum ItemFlags_OTB : quint32 {
 // Singleton Implementation
 ItemManager* ItemManager::instance() {
     if (!s_instance) {
-        s_instance = new ItemManager();
+        // Parent to QApplication for automatic cleanup
+        QObject* appParent = QCoreApplication::instance();
+        s_instance = new ItemManager(appParent);
+
+        // Store reference in QApplication for easy access
+        if (appParent) {
+            appParent->setProperty("ItemManager", QVariant::fromValue(s_instance));
+        }
     }
     return s_instance;
 }
@@ -104,8 +113,11 @@ ItemManager::ItemManager(QObject *parent) : QObject(parent) {
 }
 
 ItemManager::~ItemManager() {
-    clearDefinitions(); 
-    // s_instance should be managed by application lifetime, or explicitly deleted if needed
+    clearDefinitions();
+    // Clear static instance pointer when destroyed
+    if (s_instance == this) {
+        s_instance = nullptr;
+    }
 }
 
 void ItemManager::clearDefinitions() {
@@ -750,4 +762,43 @@ void ItemManager::applyCorePropertiesToItem(quint16 serverId, quint16 clientId) 
     if (coreProps->isSplash) {
         props.group = ITEM_GROUP_SPLASH;
     }
+}
+
+// Task 013: Brush registration methods implementation
+void ItemManager::registerItemBrush(quint16 serverId, Brush* brush, bool isTable, bool isCarpet)
+{
+    if (!brush) {
+        qWarning() << "ItemManager::registerItemBrush: Cannot register null brush for item" << serverId;
+        return;
+    }
+
+    auto it = itemPropertiesMap_.find(serverId);
+    if (it == itemPropertiesMap_.end()) {
+        qWarning() << "ItemManager::registerItemBrush: Item" << serverId << "not found in properties map";
+        return;
+    }
+
+    // Update the item properties
+    it->brush = brush;
+    it->isTable = isTable;
+    it->isCarpet = isCarpet;
+
+    qDebug() << "ItemManager::registerItemBrush: Registered brush for item" << serverId
+             << "isTable:" << isTable << "isCarpet:" << isCarpet;
+}
+
+void ItemManager::unregisterItemBrush(quint16 serverId)
+{
+    auto it = itemPropertiesMap_.find(serverId);
+    if (it == itemPropertiesMap_.end()) {
+        qWarning() << "ItemManager::unregisterItemBrush: Item" << serverId << "not found in properties map";
+        return;
+    }
+
+    // Clear the brush association
+    it->brush = nullptr;
+    it->isTable = false;
+    it->isCarpet = false;
+
+    qDebug() << "ItemManager::unregisterItemBrush: Unregistered brush for item" << serverId;
 }

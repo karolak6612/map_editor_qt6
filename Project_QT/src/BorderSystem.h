@@ -5,20 +5,14 @@
 #include <QRect>
 #include <QPoint>
 #include <QList>
+#include <QVector3D>
+#include <QCoreApplication>
+#include <QVariant>
 
 // Forward declarations
-class Map;
+#include "Map.h"
 class Tile;
 class SettingsManager;
-
-// Task 52: Additional includes for Qt integration
-struct QPoint3D {
-    int x, y, z;
-    QPoint3D(int x = 0, int y = 0, int z = 0) : x(x), y(y), z(z) {}
-    bool operator==(const QPoint3D& other) const {
-        return x == other.x && y == other.y && z == other.z;
-    }
-};
 
 // Task 52: Border type enum (from AutoBorder.h)
 enum class BorderType;
@@ -44,7 +38,7 @@ public:
     // Task 52: Area-based border processing for efficiency
     void processBorderArea(Map* map, const QRect& area);
     void processBorderArea(Map* map, const QList<QPoint>& tilePositions);
-    void processBorderUpdates(Map* map, const QList<QPoint3D>& affectedTiles);
+    void processBorderUpdates(Map* map, const QList<QVector3D>& affectedTiles);
 
     // Task 52: Neighbor analysis for border determination
     QList<Tile*> getNeighborTiles(Map* map, Tile* centerTile) const;
@@ -78,8 +72,8 @@ signals:
     void borderingProgress(int percentage);
 
     // Task 52: Visual update signals for MapView integration
-    void tilesNeedVisualUpdate(const QList<QPoint3D>& tileCoordinates);
-    void borderItemsChanged(Map* map, const QList<QPoint3D>& affectedTiles);
+    void tilesNeedVisualUpdate(const QList<QVector3D>& tileCoordinates);
+    void borderItemsChanged(Map* map, const QList<QVector3D>& affectedTiles);
     void borderProcessingComplete(Map* map, const QRect& processedArea);
 
 private:

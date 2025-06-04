@@ -18,7 +18,7 @@ SpriteButton::SpriteButton(QWidget *parent)
     init();
 }
 
-SpriteButton::SpriteButton(QWidget* parent, SpriteButtonType type, SpriteRenderSize size, int spriteId)
+SpriteButton::SpriteButton(QWidget* parent, SpriteButtonType type, SpriteSize size, int spriteId)  // FIXED: Use SpriteSize instead of SpriteRenderSize
     : QPushButton(parent),
       buttonType_(type),
       renderSize_(size),
@@ -73,10 +73,23 @@ void SpriteButton::init() {
 // Sprite management methods
 void SpriteButton::setSprite(int spriteId) {
     spriteId_ = spriteId;
-    // TODO: Load sprite from SpriteManager when available
-    // For now, clear the current sprite
-    sprite_ = nullptr;
+    // Load sprite from SpriteManager and convert to QPixmap
+    SpriteManager* sm = SpriteManager::getInstance();
+    if (sm) {
+        QImage image = sm->getSpriteImage(spriteId);
+        if (!image.isNull()) {
+            currentPixmap_ = QPixmap::fromImage(image);
+            sprite_ = nullptr; // Ensure sprite_ is null when using pixmap_
+        } else {
+            currentPixmap_ = QPixmap(); // Clear pixmap if sprite not found
+            qWarning() << "SpriteButton: Could not load sprite image for ID" << spriteId;
+        }
+    } else {
+        qWarning() << "SpriteButton: SpriteManager instance not available.";
+        currentPixmap_ = QPixmap();
+    }
     update();
+    updateGeometry(); // Update size hint if content size changes
 }
 
 void SpriteButton::setSprite(Sprite* sprite) {
@@ -154,7 +167,7 @@ void SpriteButton::connectSignals() {
     // For normal buttons, the standard clicked signal is sufficient
 }
 
-QSize SpriteButton::getSizeForRenderSize(SpriteRenderSize size) const {
+QSize SpriteButton::getSizeForRenderSize(SpriteSize size) const {  // FIXED: Use SpriteSize instead of SpriteRenderSize
     // Sizes matching original DCButton with 2px padding on each side
     switch (size) {
         case SPRITE_SIZE_16x16:
@@ -259,17 +272,22 @@ void SpriteButton::drawSprite(QPainter& painter, const QRect& rect) {
     // Content area with 2px padding (matching original DCButton)
     QRect contentRect = rect.adjusted(2, 2, -2, -2);
 
-    if (sprite_) {
-        // TODO: Implement sprite drawing when Sprite interface is available
-        // For now, draw a placeholder
+    if (!currentPixmap_.isNull()) {
+        // Draw pixmap scaled to fit content area, maintaining aspect ratio
+        QPixmap scaledPixmap = currentPixmap_.scaled(contentRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        QRect pixmapRect = scaledPixmap.rect();
+        pixmapRect.moveCenter(contentRect.center());
+        painter.drawPixmap(pixmapRect.topLeft(), scaledPixmap);
+    } else if (sprite_) {
+        // If a raw Sprite* is set (e.g., for custom drawing logic), use its drawTo method
+        // This path is less common for simple buttons, but kept for flexibility.
+        // The Sprite::drawTo method should handle its own scaling/positioning.
+        sprite_->drawTo(&painter, contentRect.topLeft(), renderSize_);
+    } else {
+        // Draw a placeholder if no pixmap or sprite is available
         painter.fillRect(contentRect, QColor(100, 100, 100, 128));
         painter.setPen(Qt::white);
-        painter.drawText(contentRect, Qt::AlignCenter, QString("S%1").arg(spriteId_));
-    } else if (!currentPixmap_.isNull()) {
-        // Draw pixmap centered in content area
-        QRect pixmapRect = currentPixmap_.rect();
-        pixmapRect.moveCenter(contentRect.center());
-        painter.drawPixmap(pixmapRect.topLeft(), currentPixmap_);
+        painter.drawText(contentRect, Qt::AlignCenter, QString("N/A"));
     }
 }
 
@@ -284,3 +302,4 @@ void SpriteButton::drawOverlay(QPainter& painter, const QRect& rect) {
     painter.setPen(QPen(Qt::yellow, 2));
     painter.drawRect(contentRect);
 }
+

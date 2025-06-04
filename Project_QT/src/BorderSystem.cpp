@@ -5,23 +5,40 @@
 #include "Item.h"
 #include "AutoBorder.h"
 #include "ItemManager.h"
+#include "ItemFactory.h"
 #include <QDebug>
 #include <QRect>
 #include <QPoint>
 #include <QList>
+#include <QVector3D>
 
 BorderSystem* BorderSystem::instance_ = nullptr;
 
 BorderSystem* BorderSystem::getInstance() {
     if (!instance_) {
-        instance_ = new BorderSystem();
+        // Parent to QApplication for automatic cleanup
+        QObject* appParent = QCoreApplication::instance();
+        instance_ = new BorderSystem(appParent);
+
+        // Store reference in QApplication for easy access
+        if (appParent) {
+            appParent->setProperty("BorderSystem", QVariant::fromValue(instance_));
+        }
     }
     return instance_;
 }
 
 void BorderSystem::destroyInstance() {
-    delete instance_;
-    instance_ = nullptr;
+    if (instance_) {
+        // Remove from QApplication properties
+        QObject* appParent = QCoreApplication::instance();
+        if (appParent) {
+            appParent->setProperty("BorderSystem", QVariant());
+        }
+
+        delete instance_;
+        instance_ = nullptr;
+    }
 }
 
 BorderSystem::BorderSystem(QObject* parent)
@@ -37,7 +54,10 @@ BorderSystem::BorderSystem(QObject* parent)
 }
 
 BorderSystem::~BorderSystem() {
-    // Cleanup
+    // Clear static instance pointer when destroyed
+    if (instance_ == this) {
+        instance_ = nullptr;
+    }
 }
 
 void BorderSystem::initializeFromSettings() {
@@ -60,7 +80,7 @@ void BorderSystem::applyAutomagicBorders(Map* map, Tile* tile) {
 
     emit borderingStarted();
 
-    QList<QPoint3D> affectedTiles;
+    QList<QVector3D> affectedTiles;
 
     // Get tile position
     int x = tile->x();
@@ -82,7 +102,7 @@ void BorderSystem::applyAutomagicBorders(Map* map, Tile* tile) {
             if (borderType != BorderType::BORDER_NONE) {
                 // Apply border item to tile
                 applyBorderItem(map, tile, borderType);
-                affectedTiles.append(QPoint3D(x, y, z));
+                affectedTiles.append(QVector3D(x, y, z));
             }
         }
     }
@@ -90,7 +110,7 @@ void BorderSystem::applyAutomagicBorders(Map* map, Tile* tile) {
     // Apply custom borders if enabled
     if (customBorderEnabled_) {
         applyCustomBorders(map, tile, customBorderId_);
-        affectedTiles.append(QPoint3D(x, y, z));
+        affectedTiles.append(QVector3D(x, y, z));
     }
 
     // Emit signals for Qt rendering system integration
@@ -172,7 +192,7 @@ bool BorderSystem::isValidBorderPosition(Map* map, int x, int y, int z) const {
 
     // Check map boundaries
     if (x < 0 || y < 0 || z < 0 ||
-        x >= map->getWidth() || y >= map->getHeight() || z >= map->getFloors()) {
+        x >= map->width() || y >= map->height() || z >= map->floors()) {
         return false;
     }
 
@@ -198,18 +218,18 @@ void BorderSystem::processBorderArea(Map* map, const QRect& area) {
 
     emit borderingStarted();
 
-    QList<QPoint3D> affectedTiles;
+    QList<QVector3D> affectedTiles;
     int totalTiles = area.width() * area.height();
     int processedTiles = 0;
 
     // Process all tiles in the area
     for (int x = area.left(); x <= area.right(); ++x) {
         for (int y = area.top(); y <= area.bottom(); ++y) {
-            for (int z = 0; z < map->getFloors(); ++z) {
+            for (int z = 0; z < map->floors(); ++z) {
                 Tile* tile = map->getTile(x, y, z);
                 if (tile && shouldApplyBorders(map, tile)) {
                     applyAutomagicBorders(map, tile);
-                    affectedTiles.append(QPoint3D(x, y, z));
+                    affectedTiles.append(QVector3D(x, y, z));
                 }
 
                 processedTiles++;
@@ -238,17 +258,17 @@ void BorderSystem::processBorderArea(Map* map, const QList<QPoint>& tilePosition
 
     emit borderingStarted();
 
-    QList<QPoint3D> affectedTiles;
+    QList<QVector3D> affectedTiles;
     int totalTiles = tilePositions.size();
     int processedTiles = 0;
 
     // Process specified tile positions
     for (const QPoint& pos : tilePositions) {
-        for (int z = 0; z < map->getFloors(); ++z) {
+        for (int z = 0; z < map->floors(); ++z) {
             Tile* tile = map->getTile(pos.x(), pos.y(), z);
             if (tile && shouldApplyBorders(map, tile)) {
                 applyAutomagicBorders(map, tile);
-                affectedTiles.append(QPoint3D(pos.x(), pos.y(), z));
+                affectedTiles.append(QVector3D(pos.x(), pos.y(), z));
             }
         }
 
@@ -268,18 +288,18 @@ void BorderSystem::processBorderArea(Map* map, const QList<QPoint>& tilePosition
     emit borderingFinished();
 }
 
-void BorderSystem::processBorderUpdates(Map* map, const QList<QPoint3D>& affectedTiles) {
+void BorderSystem::processBorderUpdates(Map* map, const QList<QVector3D>& affectedTiles) {
     if (!map || !automagicEnabled_ || affectedTiles.isEmpty()) {
         return;
     }
 
     emit borderingStarted();
 
-    QList<QPoint3D> updatedTiles;
+    QList<QVector3D> updatedTiles;
 
     // Process each affected tile and its neighbors
-    for (const QPoint3D& tilePos : affectedTiles) {
-        Tile* tile = map->getTile(tilePos.x, tilePos.y, tilePos.z);
+    for (const QVector3D& tilePos : affectedTiles) {
+        Tile* tile = map->getTile(tilePos.x(), tilePos.y(), tilePos.z());
         if (tile) {
             // Process the tile itself
             if (shouldApplyBorders(map, tile)) {
@@ -292,7 +312,7 @@ void BorderSystem::processBorderUpdates(Map* map, const QList<QPoint3D>& affecte
             for (Tile* neighbor : neighbors) {
                 if (neighbor && shouldApplyBorders(map, neighbor)) {
                     reborderizeTile(map, neighbor);
-                    updatedTiles.append(QPoint3D(neighbor->x(), neighbor->y(), neighbor->z()));
+                    updatedTiles.append(QVector3D(neighbor->x(), neighbor->y(), neighbor->z()));
                 }
             }
         }
@@ -366,8 +386,8 @@ bool BorderSystem::analyzeGroundCompatibility(Tile* tile1, Tile* tile2) const {
     }
 
     // Get ground items from both tiles
-    Item* ground1 = tile1->getGroundItem();
-    Item* ground2 = tile2->getGroundItem();
+    Item* ground1 = tile1->getGround();
+    Item* ground2 = tile2->getGround();
 
     // If either tile has no ground, no border needed
     if (!ground1 || !ground2) {
@@ -433,7 +453,7 @@ void BorderSystem::applyBorderItem(Map* map, Tile* tile, BorderType borderType) 
 
     // TODO: Get appropriate border item ID from AutoBorder system
     // For now, use placeholder logic
-    ItemManager* itemManager = ItemManager::getInstancePtr();
+    ItemManager* itemManager = ItemManager::instance();
     if (!itemManager) {
         return;
     }
@@ -471,7 +491,7 @@ void BorderSystem::applyBorderItem(Map* map, Tile* tile, BorderType borderType) 
     }
 
     if (borderItemId > 0) {
-        Item* borderItem = itemManager->createItem(borderItemId);
+        Item* borderItem = ItemFactory::createItem(borderItemId);
         if (borderItem) {
             tile->addItem(borderItem);
             qDebug() << "BorderSystem: Applied border item" << borderItemId << "to tile at"
@@ -542,4 +562,4 @@ void BorderSystem::logBorderAction(const QString& action, Map* map, Tile* tile) 
     }
 }
 
-#include "BorderSystem.moc"
+

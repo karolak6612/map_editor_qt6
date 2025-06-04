@@ -15,11 +15,14 @@
 #include <QImage> // For sprite images
 #include <QDateTime> // For animation timing
 #include "DrawingOptions.h" // For draw method options
-#include "ItemManager.h" // For ItemGroup_t, ItemTypes_t
+
+// Task 015: Include ItemManager.h to get enum definitions
+#include "ItemManager.h"
 
 // Forward declarations
 struct GameSpriteData;
 class SpriteManager;
+class ItemManager;
 
 // ITEMPROPERTY enum for wxWidgets compatibility
 enum ITEMPROPERTY {
@@ -171,9 +174,10 @@ public:
     bool blocksPathfind() const;  
     bool isStackable() const;
     bool isGroundTile() const;
-    bool isAlwaysOnTop() const;   
-    int getTopOrder() const;      
-    bool isTeleport() const;      
+    bool isAlwaysOnTop() const;
+    int getTopOrder() const;
+    int getStackPos() const;      // Z-ordering position within tile
+    bool isTeleport() const;
     bool isContainer() const;     
     bool isReadable() const;      
     bool canWriteText() const;    
@@ -196,6 +200,7 @@ public:
     bool isSelected() const;
     void select();
     void deselect();
+    void setSelected(bool selected);
 
     // Memory and utility methods
     quint32 memsize() const;
@@ -250,6 +255,12 @@ public:
     void calculatePatternCoordinates(int& patternX, int& patternY, int& patternZ,
                                    const DrawingOptions& options) const;
 
+    // Animation helper methods
+    int calculatePingPongFrame(qint64 elapsedTime, int frameSpeed, int frameCount) const;
+    int getAnimationSpeed() const;
+    bool getAnimationAsync() const;
+    int getAnimationLoopCount() const;
+
     // Task 76: Special item flag rendering
     void drawSpecialFlags(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
     void drawSelectionHighlight(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
@@ -264,8 +275,6 @@ public:
     void drawTypeIndicator(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const;
 
     // Task 76: Helper methods for special flag detection
-    bool isSelected() const { return hasAttribute("selected"); }
-    void setSelected(bool selected) { setAttribute("selected", selected); }
     bool isDoor() const { return hasAttribute(AttrDoorId) || hasAttribute(AttrDoorType); }
     bool isLocked() const { return isDoorLocked(); }
     bool isWallHook() const { return hasHookSouth() || hasHookEast(); }
@@ -290,6 +299,10 @@ public:
     quint16 classification() const;
 
     class Brush* getBrush() const; // Returns the brush associated with this item's type
+
+    // Task 013: Specific brush type getters
+    class TableBrush* getTableBrush() const;   // Returns TableBrush if isTable(), otherwise nullptr
+    class CarpetBrush* getCarpetBrush() const; // Returns CarpetBrush if isCarpet(), otherwise nullptr
 
     // New dedicated property setters
     void setDescriptionText(const QString& description); // Renamed
@@ -328,18 +341,18 @@ public:
     std::pair<int, int> getDrawOffset() const;
 
     // Enhanced weight calculation
-    double getWeight() const; // Dynamic weight calculation for stackable items
+    virtual double getWeight() const; // Dynamic weight calculation for stackable items
 
     // Returns true if successful, false on error (e.g., stream error)
     // Stream should be positioned at the start of the item's attribute block.
     // This method will read all attributes for this item.
     // TODO (Task51): Consider if client version is needed for attribute interpretation.
     // If so, this method might need access to Map's version information.
-    bool unserializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion); // Signature from previous step, no change here.
+    virtual bool unserializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion); // Signature from previous step, no change here.
 
     // Returns true if successful, false on stream error.
     // TODO (Task51): Consider if client version affects how attributes are written.
-    bool serializeOtbmAttributes(QDataStream& stream, quint32 mapOtbmFormatVersion, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const; // UPDATED
+    virtual bool serializeOtbmAttributes(QDataStream& stream, quint32 mapOtbmFormatVersion, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const; // UPDATED
     bool serializeOtbmNode(QDataStream& stream, quint32 mapOtbmFormatVersion, quint32 otbItemsMajorVersion, quint32 otbItemsMinorVersion) const; // UPDATED
 
     // Task 48: Complex data handling
@@ -446,16 +459,16 @@ private:
     bool isSelected_ = false; // Selection state
 
     // New dedicated members
-    QString description_; // For the item's look description
+    // Task 017: Removed description_ - now using AttrDescription in attributes_ map only
     QString editorSuffix_;
     ItemGroup_t itemGroup_ = ITEM_GROUP_NONE;
-    ItemTypes_t itemType_ = ITEM_TYPE_NONE; 
-    
+    ItemTypes_t itemType_ = ITEM_TYPE_NONE;
+
     float weight_ = 0.0f;
     qint16 attack_ = 0;
     qint16 defense_ = 0;
     qint16 armor_ = 0;
-    quint16 charges_ = 0; 
+    // Task 017: Removed charges_ - now using AttrCharges in attributes_ map only
     quint16 maxTextLen_ = 0;
     quint16 rotateTo_ = 0; 
     quint16 volume_ = 0;   
@@ -469,6 +482,9 @@ private:
     int height_ = 0;
     int drawOffsetX_ = 0;
     int drawOffsetY_ = 0;
+
+    // Animation timing
+    qint64 creationTime_ = 0; // For asynchronous animation timing
 
     mutable bool m_modified = false;
 };

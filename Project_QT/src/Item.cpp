@@ -3,14 +3,19 @@
 #include <QPainter> // For drawText and draw
 #include <QRectF>   // For drawText and draw
 #include <QColor>   // For draw method placeholder
+#include <QDateTime> // For animation timing
 #include "ItemManager.h" // Required for ItemTypeData access
 #include "Brush.h"       // Required for Brush* return type and itemTypeData->brush
+#include "TableBrush.h"  // Task 013: For getTableBrush()
+#include "CarpetBrush.h" // Task 013: For getCarpetBrush()
 #include "SpriteManager.h" // Task 54: For sprite integration
 #include "GameSprite.h"    // Task 54: For GameSpriteData
 #include <QDataStream>  // For unserializeOtbmAttributes
 #include <QByteArray>   // For unserializeOtbmAttributes
 #include <QIODevice>    // For QDataStream operations (usually included by QDataStream)
 #include "Tile.h"        // For qobject_cast<Tile*> in setModified
+#include "ItemRenderer.h" // Task 011: Extracted rendering logic
+#include <QMetaType>     // For Qt6 QMetaType constants
 
 #include "OtbmTypes.h" // For OTBM attribute enums
 
@@ -112,7 +117,7 @@ Item::Item(quint16 serverId, QObject *parent) : QObject(parent),
     hasHookEast_(false),
     hasHeight_(false),
     // Initialize new dedicated members
-    description_(""),
+    // Task 017: Removed description_ and charges_ - now using attributes_ map only
     editorSuffix_(""),
     itemGroup_(ITEM_GROUP_NONE),
     itemType_(ITEM_TYPE_NONE),
@@ -120,7 +125,6 @@ Item::Item(quint16 serverId, QObject *parent) : QObject(parent),
     attack_(0),
     defense_(0),
     armor_(0),
-    charges_(0),
     maxTextLen_(0),
     rotateTo_(0),
     volume_(0),
@@ -131,7 +135,8 @@ Item::Item(quint16 serverId, QObject *parent) : QObject(parent),
     classification_(0),
     height_(0),
     drawOffsetX_(0),
-    drawOffsetY_(0)
+    drawOffsetY_(0),
+    creationTime_(QDateTime::currentMSecsSinceEpoch())
 {
     // Name, ClientID, and flags are often set by an ItemManager after creation
     // based on the serverId by reading an items.xml or similar definition file.
@@ -323,6 +328,36 @@ void Item::setBlocksPathfind(bool on) { if (blocksPathfind_ != on) { blocksPathf
 int Item::getTopOrder() const { return topOrder_; }
 void Item::setTopOrder(int order) { if (topOrder_ != order) { topOrder_ = order; setModified(true); emit propertyChanged(); } }
 
+int Item::getStackPos() const {
+    // Calculate stack position based on Tibia's layering rules
+    // Lower values are drawn first (bottom), higher values drawn last (top)
+
+    // Get item properties for additional flags
+    const ItemProperties& props = ItemManager::getInstance().getItemProperties(serverId_);
+
+    // Base stack position calculation:
+    // 0-99: Ground items (always on bottom)
+    // 100-199: Always on bottom items (borders, etc.)
+    // 200-299: Normal items (sorted by topOrder)
+    // 300-399: Creatures and top items
+    // 400+: Always on top items
+
+    if (isGroundTile()) {
+        return 0; // Ground is always at the bottom
+    }
+
+    if (props.alwaysOnBottom) {
+        return 100 + topOrder_; // Always on bottom items
+    }
+
+    if (isAlwaysOnTop()) {
+        return 400 + topOrder_; // Always on top items
+    }
+
+    // Normal items use topOrder for positioning
+    return 200 + topOrder_;
+}
+
 // Renamed setters for macro compatibility in Item.h, now implementing them directly for clarity
 void Item::setIsTeleport(bool on) { setTeleport(on); }
 void Item::setIsContainer(bool on) { setContainer(on); }
@@ -346,6 +381,24 @@ Brush* Item::getBrush() const {
     return itemProps.brush;
 }
 
+// Task 013: Specific brush type getters
+TableBrush* Item::getTableBrush() const {
+    if (!isTable()) {
+        return nullptr;
+    }
+
+    Brush* brush = getBrush();
+    return dynamic_cast<TableBrush*>(brush);
+}
+
+CarpetBrush* Item::getCarpetBrush() const {
+    if (!isCarpet()) {
+        return nullptr;
+    }
+
+    Brush* brush = getBrush();
+    return dynamic_cast<CarpetBrush*>(brush);
+}
 
 // Other methods
 QString Item::getDescription() const {
@@ -394,7 +447,7 @@ QString Item::getDescription() const {
     }
 
     // Append additional description from AttrDescription if available
-    // This is different from the primary item look description stored in member description_
+    // Task 017: Description is now stored only in attributes_ map
     if (hasAttribute(Item::AttrDescription)) {
         desc += "\n" + getAttribute(Item::AttrDescription).toString();
     }
@@ -411,18 +464,8 @@ QString Item::getDescription() const {
 }
 
 void Item::drawText(QPainter* painter, const QRectF& targetRect, const QMap<QString, QVariant>& options) {
-    if (painter && isStackable_ && getCount() > 1) {
-        QString countStr = QString::number(getCount());
-        painter->save();
-        QFont font = painter->font();
-        font.setPointSize(font.pointSize() - 2 > 0 ? font.pointSize() - 2 : 6);
-        painter->setFont(font);
-        painter->setPen(Qt::red); 
-        QRectF textRect = painter->fontMetrics().boundingRect(countStr);
-        textRect.moveBottomRight(targetRect.bottomRight() - QPointF(1,1));
-        painter->drawText(textRect, countStr);
-        painter->restore();
-    }
+    // Task 011: Delegate to ItemRenderer for mandate M6 compliance
+    ItemRenderer::drawText(this, painter, targetRect, options);
 }
 
 Item* Item::deepCopy() const {
@@ -452,7 +495,7 @@ Item* Item::deepCopy() const {
     newItem->hasHookEast_ = this->hasHookEast_;
     newItem->hasHeight_ = this->hasHeight_;
     
-    newItem->description_ = this->description_;
+    // Task 017: Removed description_ direct member - now handled by attributes_ map copy above
     newItem->editorSuffix_ = this->editorSuffix_;
     newItem->itemGroup_ = this->itemGroup_;
     newItem->itemType_ = this->itemType_;
@@ -460,7 +503,7 @@ Item* Item::deepCopy() const {
     newItem->attack_ = this->attack_;
     newItem->defense_ = this->defense_;
     newItem->armor_ = this->armor_;
-    newItem->charges_ = this->charges_;
+    // Task 017: Removed charges_ direct member - now handled by attributes_ map copy above
     newItem->maxTextLen_ = this->maxTextLen_;
     newItem->rotateTo_ = this->rotateTo_;
     newItem->volume_ = this->volume_;
@@ -472,180 +515,102 @@ Item* Item::deepCopy() const {
     newItem->height_ = this->height_;
     newItem->drawOffsetX_ = this->drawOffsetX_;
     newItem->drawOffsetY_ = this->drawOffsetY_;
+    newItem->creationTime_ = this->creationTime_;
 
     return newItem;
 }
 
 void Item::draw(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
-    if (!painter) return;
-
-    painter->save();
-
-    // Task 54: Full sprite integration for production-quality rendering
-    if (options.useSprites && clientId_ > 0) {
-        drawWithSprites(painter, targetRect, options);
-    } else {
-        // Fallback to placeholder rendering
-        drawPlaceholder(painter, targetRect, options);
-    }
-
-    // Task 76: Draw special item flags
-    drawSpecialFlags(painter, targetRect, options);
-
-    // Draw debug information if enabled
-    if (options.drawDebugInfo) {
-        drawDebugInfo(painter, targetRect, options);
-    }
-
-    // Draw bounding box if debug mode is enabled
-    if (options.drawDebugInfo) {
-        drawBoundingBox(painter, targetRect, options);
-    }
-
-    painter->restore();
+    // Task 011: Delegate to ItemRenderer for mandate M6 compliance
+    ItemRenderer::draw(this, painter, targetRect, options);
 }
 
-// Task 54: Full sprite integration implementation
-void Item::drawWithSprites(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
-    if (!painter || clientId_ == 0) {
-        return;
-    }
+// Task 011: Rendering methods moved to ItemRenderer for mandate M6 compliance
 
-    // Get SpriteManager instance
-    SpriteManager* spriteManager = SpriteManager::getInstance();
-    if (!spriteManager) {
-        qWarning() << "Item::drawWithSprites: SpriteManager not available";
-        drawPlaceholder(painter, targetRect, options);
-        return;
-    }
+// drawSpriteLayer moved to ItemRenderer
 
-    // Get GameSprite data for this item
-    QSharedPointer<const GameSpriteData> spriteData = spriteManager->getGameSpriteData(clientId_);
-    if (!spriteData) {
-        qWarning() << "Item::drawWithSprites: No sprite data for client ID" << clientId_;
-        drawPlaceholder(painter, targetRect, options);
-        return;
-    }
-
-    // Apply item opacity
-    qreal opacity = painter->opacity();
-    painter->setOpacity(opacity * options.itemOpacity);
-
-    // Apply transparency for items if enabled
-    if (options.transparentItems && !isGroundTile()) {
-        painter->setOpacity(painter->opacity() * 0.7f);
-    }
-
-    // Calculate animation frame
-    int currentFrame = calculateCurrentFrame(options);
-
-    // Calculate pattern coordinates based on item state
-    int patternX = 0, patternY = 0, patternZ = 0;
-    calculatePatternCoordinates(patternX, patternY, patternZ, options);
-
-    // Draw all sprite layers
-    for (int layer = 0; layer < spriteData->layers; ++layer) {
-        drawSpriteLayer(painter, targetRect, spriteData, currentFrame,
-                       patternX, patternY, patternZ, layer, options);
-    }
-
-    // Restore opacity
-    painter->setOpacity(opacity);
-}
-
-void Item::drawSpriteLayer(QPainter* painter, const QRectF& targetRect,
-                          QSharedPointer<const GameSpriteData> spriteData,
-                          int frame, int patternX, int patternY, int patternZ,
-                          int layer, const DrawingOptions& options) const {
-    if (!painter || !spriteData) {
-        return;
-    }
-
-    SpriteManager* spriteManager = SpriteManager::getInstance();
-    if (!spriteManager) {
-        return;
-    }
-
-    // Get the frame image for this layer
-    QImage frameImage = spriteManager->getFrameImage(clientId_, frame,
-                                                    patternX, patternY, patternZ, layer);
-
-    if (frameImage.isNull()) {
-        return;
-    }
-
-    // Calculate target position with offsets
-    QRectF drawRect = targetRect;
-
-    // Apply draw offsets from sprite data or item properties
-    drawRect.translate(drawOffsetX_, drawOffsetY_);
-
-    // Apply sprite-specific offsets if available
-    if (spriteData->drawOffsetX != 0 || spriteData->drawOffsetY != 0) {
-        drawRect.translate(spriteData->drawOffsetX, spriteData->drawOffsetY);
-    }
-
-    // Handle multi-tile sprites (width > 1 or height > 1)
-    if (spriteData->width > 1 || spriteData->height > 1) {
-        drawMultiTileSprite(painter, drawRect, frameImage, spriteData, options);
-    } else {
-        // Single tile sprite - direct draw
-        painter->drawImage(drawRect, frameImage);
-    }
-}
-
-void Item::drawMultiTileSprite(QPainter* painter, const QRectF& baseRect,
-                              const QImage& frameImage,
-                              QSharedPointer<const GameSpriteData> spriteData,
-                              const DrawingOptions& options) const {
-    Q_UNUSED(options);
-
-    if (!painter || frameImage.isNull() || !spriteData) {
-        return;
-    }
-
-    // Calculate tile size
-    int tileSize = static_cast<int>(baseRect.width());
-
-    // Draw each tile part of the multi-tile sprite
-    for (int cx = 0; cx < spriteData->width; ++cx) {
-        for (int cy = 0; cy < spriteData->height; ++cy) {
-            // Calculate source rectangle for this tile part
-            QRect sourceRect(cx * tileSize, cy * tileSize, tileSize, tileSize);
-
-            // Calculate target rectangle for this tile part
-            QRectF targetRect(baseRect.x() - cx * tileSize,
-                             baseRect.y() - cy * tileSize,
-                             tileSize, tileSize);
-
-            // Draw this part of the sprite
-            painter->drawImage(targetRect, frameImage, sourceRect);
-        }
-    }
-}
+// drawMultiTileSprite moved to ItemRenderer
 
 int Item::calculateCurrentFrame(const DrawingOptions& options) const {
     // For animated items, calculate current frame based on time
-    if (isAnimated()) {
-        // Use global animation time or item-specific animation state
-        qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
-
-        // Default animation speed (can be customized per item type)
-        int animationSpeed = 500; // milliseconds per frame
-
-        // Get frame count from sprite data
+    if (isAnimated() && options.enableAnimations) {
         SpriteManager* spriteManager = SpriteManager::getInstance();
         if (spriteManager) {
             QSharedPointer<const GameSpriteData> spriteData = spriteManager->getGameSpriteData(clientId_);
             if (spriteData && spriteData->frames > 1) {
-                int frameIndex = (currentTime / animationSpeed) % spriteData->frames;
-                return frameIndex;
+
+                // Use synchronized animation timing for consistent behavior
+                qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+
+                // Get animation properties from item type or use defaults
+                int animationSpeed = getAnimationSpeed(); // milliseconds per frame
+                bool isAsync = getAnimationAsync();
+                int loopCount = getAnimationLoopCount();
+
+                if (isAsync) {
+                    // Asynchronous animation - each item animates independently
+                    qint64 itemStartTime = creationTime_; // Use item creation time as start
+                    qint64 elapsedTime = currentTime - itemStartTime;
+
+                    // Calculate frame based on elapsed time and animation properties
+                    if (loopCount == -1) {
+                        // Ping-pong animation
+                        return calculatePingPongFrame(elapsedTime, animationSpeed, spriteData->frames);
+                    } else {
+                        // Normal loop animation
+                        qint64 totalAnimationTime = spriteData->frames * animationSpeed;
+                        if (loopCount > 0) {
+                            qint64 totalLoopTime = totalAnimationTime * loopCount;
+                            if (elapsedTime >= totalLoopTime) {
+                                return spriteData->frames - 1; // Stay on last frame
+                            }
+                        }
+                        qint64 cycleTime = elapsedTime % totalAnimationTime;
+                        return static_cast<int>(cycleTime / animationSpeed);
+                    }
+                } else {
+                    // Synchronous animation - all items of this type animate together
+                    qint64 totalAnimationTime = spriteData->frames * animationSpeed;
+                    qint64 cycleTime = currentTime % totalAnimationTime;
+                    return static_cast<int>(cycleTime / animationSpeed);
+                }
             }
         }
     }
 
     // For non-animated items or if animation is disabled
     return 0;
+}
+
+int Item::calculatePingPongFrame(qint64 elapsedTime, int frameSpeed, int frameCount) const {
+    if (frameCount <= 1) return 0;
+
+    qint64 totalCycleTime = (frameCount * 2 - 2) * frameSpeed; // Time for one complete ping-pong cycle
+    qint64 cycleTime = elapsedTime % totalCycleTime;
+    int frameInCycle = static_cast<int>(cycleTime / frameSpeed);
+
+    if (frameInCycle < frameCount) {
+        return frameInCycle; // Forward direction
+    } else {
+        return (frameCount * 2 - 2) - frameInCycle; // Backward direction
+    }
+}
+
+int Item::getAnimationSpeed() const {
+    // Get animation speed from item properties or use default
+    // This could be loaded from ItemManager or item attributes
+    return attributes_.value("animationSpeed", 500).toInt();
+}
+
+bool Item::getAnimationAsync() const {
+    // Get async animation setting from item properties
+    return attributes_.value("animationAsync", false).toBool();
+}
+
+int Item::getAnimationLoopCount() const {
+    // Get loop count from item properties
+    // -1 = ping-pong, 0 = infinite, >0 = specific count
+    return attributes_.value("animationLoopCount", 0).toInt();
 }
 
 void Item::calculatePatternCoordinates(int& patternX, int& patternY, int& patternZ,
@@ -942,219 +907,24 @@ void Item::setSpawnMaxCreatures(int maxCreatures) {
 
 // --- Enhanced Placeholder Rendering Methods ---
 
-void Item::drawPlaceholder(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
-    if (!painter) return;
+// drawPlaceholder moved to ItemRenderer
 
-    painter->save();
+// drawDebugInfo moved to ItemRenderer
 
-    // Generate color based on item type and ID for visual distinction
-    QColor itemColor = getPlaceholderColor();
+// drawBoundingBox moved to ItemRenderer
 
-    // Draw filled rectangle with transparency
-    QColor fillColor = itemColor;
-    fillColor.setAlpha(options.transparentItems ? 100 : 180);
-    painter->fillRect(targetRect, fillColor);
-
-    // Draw border
-    QPen borderPen(itemColor.darker(150), 1);
-    painter->setPen(borderPen);
-    painter->drawRect(targetRect);
-
-    // Draw item ID text if there's enough space
-    if (targetRect.width() > 20 && targetRect.height() > 15) {
-        drawItemIdText(painter, targetRect, options);
-    }
-
-    // Draw type indicator if there's space
-    if (targetRect.width() > 30 && targetRect.height() > 25) {
-        drawTypeIndicator(painter, targetRect, options);
-    }
-
-    painter->restore();
-}
-
-void Item::drawDebugInfo(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
-    if (!painter || !options.drawDebugInfo) return;
-
-    painter->save();
-
-    QFont debugFont = painter->font();
-    debugFont.setPointSize(qMax(6, debugFont.pointSize() - 2));
-    painter->setFont(debugFont);
-    painter->setPen(Qt::cyan);
-
-    QStringList debugInfo;
-    debugInfo << QString("ID:%1").arg(serverId_);
-
-    if (isStackable() && getCount() > 1) {
-        debugInfo << QString("x%1").arg(getCount());
-    }
-
-    if (getCharges() > 0) {
-        debugInfo << QString("C:%1").arg(getCharges());
-    }
-
-    if (getActionId() > 0) {
-        debugInfo << QString("AID:%1").arg(getActionId());
-    }
-
-    if (getUniqueId() > 0) {
-        debugInfo << QString("UID:%1").arg(getUniqueId());
-    }
-
-    QString debugText = debugInfo.join(" ");
-    QRectF textRect = targetRect.adjusted(1, 1, -1, -1);
-    painter->drawText(textRect, Qt::AlignTop | Qt::AlignLeft | Qt::TextWordWrap, debugText);
-
-    painter->restore();
-}
-
-void Item::drawBoundingBox(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
-    if (!painter || !options.drawDebugInfo) return;
-
-    painter->save();
-
-    QPen boundingPen(Qt::magenta, 1, Qt::DotLine);
-    painter->setPen(boundingPen);
-    painter->setBrush(Qt::NoBrush);
-    painter->drawRect(targetRect);
-
-    // Draw corner markers for better visibility
-    const qreal markerSize = 3.0;
-    QRectF topLeft(targetRect.topLeft(), QSizeF(markerSize, markerSize));
-    QRectF topRight(targetRect.topRight() - QPointF(markerSize, 0), QSizeF(markerSize, markerSize));
-    QRectF bottomLeft(targetRect.bottomLeft() - QPointF(0, markerSize), QSizeF(markerSize, markerSize));
-    QRectF bottomRight(targetRect.bottomRight() - QPointF(markerSize, markerSize), QSizeF(markerSize, markerSize));
-
-    painter->fillRect(topLeft, Qt::magenta);
-    painter->fillRect(topRight, Qt::magenta);
-    painter->fillRect(bottomLeft, Qt::magenta);
-    painter->fillRect(bottomRight, Qt::magenta);
-
-    painter->restore();
-}
-
-// --- Helper Methods for Placeholder Rendering ---
-
-QColor Item::getPlaceholderColor() const {
-    // Generate color based on item properties for visual distinction
-    QColor baseColor;
-
-    // Color by item type/group
-    const ItemProperties& props = ItemManager::instance()->getItemProperties(getServerId());
-
-    switch (props.group) {
-        case ITEM_GROUP_GROUND:
-            baseColor = QColor(139, 69, 19);  // Brown for ground
-            break;
-        case ITEM_GROUP_CONTAINER:
-            baseColor = QColor(160, 82, 45);  // Saddle brown for containers
-            break;
-        case ITEM_GROUP_WEAPON:
-            baseColor = QColor(220, 20, 60);  // Crimson for weapons
-            break;
-        case ITEM_GROUP_AMMUNITION:
-            baseColor = QColor(255, 140, 0);  // Dark orange for ammo
-            break;
-        case ITEM_GROUP_ARMOR:
-            baseColor = QColor(70, 130, 180); // Steel blue for armor
-            break;
-        case ITEM_GROUP_CHARGES:
-            baseColor = QColor(138, 43, 226); // Blue violet for charged items
-            break;
-        case ITEM_GROUP_TELEPORT:
-            baseColor = QColor(255, 20, 147); // Deep pink for teleports
-            break;
-        case ITEM_GROUP_MAGICFIELD:
-            baseColor = QColor(50, 205, 50);  // Lime green for magic fields
-            break;
-        case ITEM_GROUP_WRITEABLE:
-            baseColor = QColor(255, 255, 224); // Light yellow for writeable
-            break;
-        case ITEM_GROUP_KEY:
-            baseColor = QColor(255, 215, 0);  // Gold for keys
-            break;
-        case ITEM_GROUP_SPLASH:
-            baseColor = QColor(0, 191, 255);  // Deep sky blue for splash
-            break;
-        case ITEM_GROUP_FLUID:
-            baseColor = QColor(30, 144, 255); // Dodger blue for fluids
-            break;
-        case ITEM_GROUP_DOOR:
-            baseColor = QColor(165, 42, 42);  // Brown for doors
-            break;
-        default:
-            // Use HSV color based on server ID for consistent but varied colors
-            baseColor.setHsv((serverId_ * 37) % 360, 200, 220);
-            break;
-    }
-
-    return baseColor;
-}
-
-void Item::drawItemIdText(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
-    Q_UNUSED(options);
-
-    QString idText = QString::number(serverId_);
-    QFont font = painter->font();
-    font.setPointSize(qMax(6, font.pointSize() - 1));
-    font.setBold(true);
-    painter->setFont(font);
-
-    // Use contrasting color
-    QColor textColor = getPlaceholderColor().lightness() > 128 ? Qt::black : Qt::white;
-    painter->setPen(textColor);
-
-    QRectF textRect = targetRect.adjusted(2, 2, -2, -2);
-    painter->drawText(textRect, Qt::AlignCenter, idText);
-}
-
-void Item::drawTypeIndicator(QPainter* painter, const QRectF& targetRect, const DrawingOptions& options) const {
-    Q_UNUSED(options);
-
-    const ItemProperties& props = ItemManager::instance()->getItemProperties(getServerId());
-    QString typeIndicator;
-
-    // Short type indicators
-    switch (props.group) {
-        case ITEM_GROUP_GROUND: typeIndicator = "G"; break;
-        case ITEM_GROUP_CONTAINER: typeIndicator = "C"; break;
-        case ITEM_GROUP_WEAPON: typeIndicator = "W"; break;
-        case ITEM_GROUP_AMMUNITION: typeIndicator = "A"; break;
-        case ITEM_GROUP_ARMOR: typeIndicator = "R"; break;
-        case ITEM_GROUP_CHARGES: typeIndicator = "H"; break;
-        case ITEM_GROUP_TELEPORT: typeIndicator = "T"; break;
-        case ITEM_GROUP_MAGICFIELD: typeIndicator = "M"; break;
-        case ITEM_GROUP_WRITEABLE: typeIndicator = "N"; break;
-        case ITEM_GROUP_KEY: typeIndicator = "K"; break;
-        case ITEM_GROUP_SPLASH: typeIndicator = "S"; break;
-        case ITEM_GROUP_FLUID: typeIndicator = "F"; break;
-        case ITEM_GROUP_DOOR: typeIndicator = "D"; break;
-        default: typeIndicator = "?"; break;
-    }
-
-    if (!typeIndicator.isEmpty()) {
-        QFont font = painter->font();
-        font.setPointSize(qMax(8, font.pointSize()));
-        font.setBold(true);
-        painter->setFont(font);
-
-        QColor textColor = getPlaceholderColor().darker(200);
-        painter->setPen(textColor);
-
-        QRectF typeRect = QRectF(targetRect.right() - 12, targetRect.bottom() - 12, 10, 10);
-        painter->drawText(typeRect, Qt::AlignCenter, typeIndicator);
-    }
-}
+// Helper methods moved to ItemRenderer for mandate M6 compliance
 
 // --- New Dedicated Property Getters and Setters ---
-QString Item::descriptionText() const { return description_; }
+// Task 017: Read description from attributes map only
+QString Item::descriptionText() const {
+    return getAttribute(Item::AttrDescription).toString();
+}
+// Task 017: Write description to attributes map only
 void Item::setDescriptionText(const QString& description) {
-    if (description_ != description) {
-        description_ = description;
-        setModified(true); // Also sets modified if direct member changes
-        setAttribute(Item::AttrDescription, description_); // Keep attributes_ in sync
-        emit propertyChanged();
+    QString currentDescription = getAttribute(Item::AttrDescription).toString();
+    if (currentDescription != description) {
+        setAttribute(Item::AttrDescription, description); // This calls setModified() and emits signals
     }
 }
 
@@ -1221,13 +991,15 @@ void Item::setArmor(qint16 armor) {
     }
 }
 
-quint16 Item::charges() const { return charges_; }
+// Task 017: Read charges from attributes map only
+quint16 Item::charges() const {
+    return getAttribute(Item::AttrCharges).toUInt();
+}
+// Task 017: Write charges to attributes map only
 void Item::setCharges(quint16 charges) {
-    if (charges_ != charges) {
-        charges_ = charges;
-        setModified(true); // Also sets modified if direct member changes
-        setAttribute(Item::AttrCharges, charges_); // Keep attributes_ in sync
-        emit propertyChanged();
+    quint16 currentCharges = getAttribute(Item::AttrCharges).toUInt();
+    if (currentCharges != charges) {
+        setAttribute(Item::AttrCharges, charges); // This calls setModified() and emits signals
     }
 }
 
@@ -1397,10 +1169,18 @@ bool Item::unserializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorV
                 }
                 break;
             }
-            case OTBM_ATTR_RUNE_CHARGES: { // Typically quint8
-                if (dataLength < sizeof(quint8)) { qWarning("ATTR_RUNE_CHARGES data too short"); break; }
-                quint8 val; attributeValueStream >> val;
-                setCharges(val); // Map to general charges
+            case OTBM_ATTR_RUNE_CHARGES: { // Task 015: Version-dependent handling
+                // For older OTBM versions (< 7.8), this is quint8
+                // For newer versions, this is quint16 (handled in Task 48 section below)
+                if (otbItemsMajorVersion < 7 || (otbItemsMajorVersion == 7 && otbItemsMinorVersion < 8)) {
+                    if (dataLength < sizeof(quint8)) { qWarning("ATTR_RUNE_CHARGES data too short for old version"); break; }
+                    quint8 val; attributeValueStream >> val;
+                    setCharges(val); // Map to general charges for old versions
+                } else {
+                    if (dataLength < sizeof(quint16)) { qWarning("ATTR_RUNE_CHARGES data too short for new version"); break; }
+                    quint16 val; attributeValueStream >> val;
+                    setAttribute(Item::AttrRuneCharges, val); // Use dedicated attribute for new versions
+                }
                 break;
             }
             case OTBM_ATTR_CHARGES: { // Typically quint16
@@ -1472,12 +1252,7 @@ bool Item::unserializeOtbmAttributes(QDataStream& stream, quint32 otbItemsMajorV
             }
 
             // Task 48: Additional OTBM attributes
-            case OTBM_ATTR_RUNE_CHARGES: { // quint16 - Rune charges
-                if (dataLength < sizeof(quint16)) { qWarning("ATTR_RUNE_CHARGES data too short"); break; }
-                quint16 val; attributeValueStream >> val;
-                setAttribute(Item::AttrRuneCharges, val);
-                break;
-            }
+            // Task 015: OTBM_ATTR_RUNE_CHARGES now handled above with version-dependent logic
             case OTBM_ATTR_WRITTENDATE: { // quint32 - Written date timestamp
                 if (dataLength < sizeof(quint32)) { qWarning("ATTR_WRITTENDATE data too short"); break; }
                 quint32 val; attributeValueStream >> val;
@@ -1587,10 +1362,10 @@ bool Item::serializeOtbmAttributes(QDataStream& stream, quint32 mapOtbmFormatVer
     // and writing a subtype/count if the item is stackable, fluid, or splash.
 
     // Write known attributes
-    // For description, use the direct member description_ if available, otherwise from attributes map
-    QString currentDescription = descriptionText(); // This getter accesses description_
-    if (!currentDescription.isEmpty() || hasAttribute(Item::AttrDescription)) { // Check direct member or if it was set via generic attributes
-         writeStringAttribute(OTBM_ATTR_DESC, currentDescription.isEmpty() ? getAttribute(Item::AttrDescription).toString() : currentDescription);
+    // Task 017: Description now comes from attributes map only
+    QString currentDescription = descriptionText(); // This getter now accesses attributes_ map
+    if (!currentDescription.isEmpty()) {
+         writeStringAttribute(OTBM_ATTR_DESC, currentDescription);
     }
 
     if (hasAttribute(Item::AttrText)) { // Text is purely from attributes map via getText()
@@ -1771,7 +1546,7 @@ quint32 Item::memsize() const {
     // Add size of string members
     size += name_.size() * sizeof(QChar);
     size += itemTypeName_.size() * sizeof(QChar);
-    size += description_.size() * sizeof(QChar);
+    // Task 017: Removed description_ - now stored in attributes_ map (counted below)
     size += editorSuffix_.size() * sizeof(QChar);
 
     // Add size of attributes map
@@ -1992,13 +1767,13 @@ QByteArray Item::serializeCustomAttributeMap() const
         stream << originalKey;
 
         // Determine and write attribute type, then value
-        if (value.type() == QVariant::String) {
+        if (value.typeId() == QMetaType::QString) {
             stream << static_cast<quint8>(1); // String type
             stream << value.toString();
-        } else if (value.type() == QVariant::Int || value.type() == QVariant::LongLong) {
+        } else if (value.typeId() == QMetaType::Int || value.typeId() == QMetaType::LongLong) {
             stream << static_cast<quint8>(2); // Integer type
             stream << value.toInt();
-        } else if (value.type() == QVariant::Double) {
+        } else if (value.typeId() == QMetaType::Double) {
             double doubleVal = value.toDouble();
             if (doubleVal == static_cast<float>(doubleVal)) {
                 stream << static_cast<quint8>(3); // Float type
@@ -2007,7 +1782,7 @@ QByteArray Item::serializeCustomAttributeMap() const
                 stream << static_cast<quint8>(5); // Double type
                 stream << doubleVal;
             }
-        } else if (value.type() == QVariant::Bool) {
+        } else if (value.typeId() == QMetaType::Bool) {
             stream << static_cast<quint8>(4); // Boolean type
             stream << static_cast<quint8>(value.toBool() ? 1 : 0);
         } else {

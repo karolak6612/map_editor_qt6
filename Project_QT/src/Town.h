@@ -13,8 +13,7 @@
 #include <QDomElement>   // Task 66: XML support
 #include <QXmlStreamReader>  // Task 86: Enhanced XML I/O
 #include <QXmlStreamWriter>  // Task 86: Enhanced XML I/O
-// MapPos is defined in Map.h, so including Map.h
-#include "Map.h" // For MapPos
+#include "MapPos.h" // Direct include for MapPos typedef
 
 // Forward declarations
 class Map;

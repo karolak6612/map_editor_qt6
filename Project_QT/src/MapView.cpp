@@ -1,5 +1,6 @@
 #include "MapView.h"
 #include "MapViewInputHandler.h" // Ensure this is the correct new handler
+#include "MapViewZoomHandler.h"  // Task 011: Extracted zoom handling
 #include "Brush.h" // Include Brush.h for Brush type
 #include "BrushManager.h" // Added
 #include "Map.h"          // Added
@@ -153,9 +154,9 @@ void MapView::finalizeSelectionRect(const QPointF& startMapPos, const QPointF& e
 
     // Ensure proper bounds
     int minX = qMax(0, qMin(startTile.x, endTile.x));
-    int maxX = qMin(map_->getWidth() - 1, qMax(startTile.x, endTile.x));
+    int maxX = qMin(map_->width() - 1, qMax(startTile.x, endTile.x));
     int minY = qMax(0, qMin(startTile.y, endTile.y));
-    int maxY = qMin(map_->getHeight() - 1, qMax(startTile.y, endTile.y));
+    int maxY = qMin(map_->height() - 1, qMax(startTile.y, endTile.y));
 
     // Select tiles in the rectangle
     for (int x = minX; x <= maxX; ++x) {
@@ -306,6 +307,9 @@ MapView::MapView(BrushManager* brushManager, Map* map, QUndoStack* undoStack, QW
     mouseTracker_ = new MapViewMouseTracker(this, this);
     drawingFeedback_ = new MapViewDrawingFeedback(this, this);
 
+    // Task 011: Initialize zoom handler for mandate M6 compliance
+    zoomHandler_ = new MapViewZoomHandler(this, this);
+
     // Connect enhancement system signals
     connect(zoomSystem_, &MapViewZoomSystem::zoomChanged, this, &MapView::updateZoomStatus);
     connect(mouseTracker_, &MapViewMouseTracker::mousePositionChanged,
@@ -338,6 +342,10 @@ MapView::~MapView() {
     mouseTracker_ = nullptr;
     drawingFeedback_ = nullptr;
 
+    // Task 011: Clean up zoom handler
+    delete zoomHandler_;
+    zoomHandler_ = nullptr;
+
     // currentBrush_ is not owned by MapView.
 }
 
@@ -349,68 +357,49 @@ void MapView::pan(int dx, int dy) {
 }
 
 void MapView::zoom(qreal factor, const QPointF& centerScreenPos) {
-    QPointF sceneCenterPos = mapToScene(centerScreenPos.toPoint());
-
-    double oldZoom = zoomLevel_;
-    double newZoomLevel = oldZoom * factor;
-    newZoomLevel = qBound(MIN_ZOOM, newZoomLevel, MAX_ZOOM); // Assuming MIN_ZOOM and MAX_ZOOM are defined
-
-    double actualScaleFactor = newZoomLevel / oldZoom;
-
-    if (qFuzzyCompare(actualScaleFactor, 1.0)) {
-        return;
+    // Task 011: Delegate to zoom handler for mandate M6 compliance
+    if (zoomHandler_) {
+        zoomHandler_->zoom(factor, centerScreenPos);
+        // Update local zoom level for backward compatibility
+        zoomLevel_ = zoomHandler_->getCurrentZoom();
     }
-
-    zoomLevel_ = newZoomLevel;
-
-    // Scale the view
-    scale(actualScaleFactor, actualScaleFactor);
-
-    // Adjust scrollbars to keep the centerScreenPos fixed
-    QPointF scenePosAfterScale = mapToScene(centerScreenPos.toPoint());
-    QPointF viewScrollDelta = scenePosAfterScale - sceneCenterPos;
-
-    horizontalScrollBar()->setValue(horizontalScrollBar()->value() + qRound(viewScrollDelta.x()));
-    verticalScrollBar()->setValue(verticalScrollBar()->value() + qRound(viewScrollDelta.y()));
-
-    updateZoomStatus(); // Update any UI displaying zoom level
-    viewport()->update(); // Refresh the viewport
 }
 
 void MapView::zoomIn() {
-    if (zoomSystem_) {
+    // Task 011: Delegate to zoom handler for mandate M6 compliance
+    if (zoomHandler_) {
+        zoomHandler_->zoomIn();
+        zoomLevel_ = zoomHandler_->getCurrentZoom();
+    } else if (zoomSystem_) {
         zoomSystem_->zoomIn();
-    } else {
-        // Fallback to original implementation
-        QPointF centerPos = mapToScene(viewport()->rect().center());
-        zoom(1.25, centerPos); // 25% zoom in
     }
 }
 
 void MapView::zoomOut() {
-    if (zoomSystem_) {
+    // Task 011: Delegate to zoom handler for mandate M6 compliance
+    if (zoomHandler_) {
+        zoomHandler_->zoomOut();
+        zoomLevel_ = zoomHandler_->getCurrentZoom();
+    } else if (zoomSystem_) {
         zoomSystem_->zoomOut();
-    } else {
-        // Fallback to original implementation
-        QPointF centerPos = mapToScene(viewport()->rect().center());
-        zoom(0.8, centerPos); // 20% zoom out
     }
 }
 
 void MapView::resetZoom() {
-    if (zoomSystem_) {
+    // Task 011: Delegate to zoom handler for mandate M6 compliance
+    if (zoomHandler_) {
+        zoomHandler_->resetZoom();
+        zoomLevel_ = zoomHandler_->getCurrentZoom();
+    } else if (zoomSystem_) {
         zoomSystem_->resetZoom();
-    } else {
-        // Fallback to original implementation
-        QPointF centerPos = mapToScene(viewport()->rect().center());
-        double currentZoom = zoomLevel_;
-        double targetZoom = 1.0;
-        zoom(targetZoom / currentZoom, centerPos);
     }
 }
 
 void MapView::centerOnMap() {
-    if (scene()) {
+    // Task 011: Delegate to zoom handler for mandate M6 compliance
+    if (zoomHandler_) {
+        zoomHandler_->centerOnMap();
+    } else if (scene()) {
         QRectF sceneRect = scene()->sceneRect();
         centerOn(sceneRect.center());
     }
@@ -418,19 +407,31 @@ void MapView::centerOnMap() {
 
 // Task 80: Enhanced zoom operations
 void MapView::zoomToLevel(double level, const QPointF& centerPoint) {
-    if (zoomSystem_) {
+    // Task 011: Delegate to zoom handler for mandate M6 compliance
+    if (zoomHandler_) {
+        zoomHandler_->zoomToLevel(level, centerPoint);
+        zoomLevel_ = zoomHandler_->getCurrentZoom();
+    } else if (zoomSystem_) {
         zoomSystem_->zoomToLevel(level, centerPoint);
     }
 }
 
 void MapView::zoomToFit(const QRectF& rect) {
-    if (zoomSystem_) {
+    // Task 011: Delegate to zoom handler for mandate M6 compliance
+    if (zoomHandler_) {
+        zoomHandler_->zoomToFit(rect);
+        zoomLevel_ = zoomHandler_->getCurrentZoom();
+    } else if (zoomSystem_) {
         zoomSystem_->zoomToFit(rect);
     }
 }
 
 void MapView::handleWheelZoom(QWheelEvent* event) {
-    if (zoomSystem_) {
+    // Task 011: Delegate to zoom handler for mandate M6 compliance
+    if (zoomHandler_) {
+        zoomHandler_->handleWheelZoom(event);
+        zoomLevel_ = zoomHandler_->getCurrentZoom();
+    } else if (zoomSystem_) {
         zoomSystem_->handleWheelEvent(event);
     }
 }
@@ -486,11 +487,7 @@ void MapView::setBrushPreview(const QPointF& position, int size, const QColor& c
     }
 }
 
-void MapView::clearBrushPreview() {
-    if (drawingFeedback_) {
-        drawingFeedback_->clearBrushPreview();
-    }
-}
+// clearBrushPreview implementation moved to avoid duplicates
 
 void MapView::setDrawingIndicator(const QPointF& position, const QString& text) {
     if (drawingFeedback_) {
@@ -918,13 +915,7 @@ void MapView::drawForeground(QPainter *painter, const QRectF &rect) {
     }
 }
 
-// Task 65: Drawing primitives integration methods
-void MapView::setShowGrid(bool show) {
-    if (overlayRenderer_) {
-        overlayRenderer_->setShowGrid(show);
-        viewport()->update();
-    }
-}
+// Task 65: Drawing primitives integration methods - setShowGrid moved to avoid duplicates
 
 void MapView::setShowBrushPreview(bool show) {
     if (overlayRenderer_) {
@@ -944,6 +935,10 @@ void MapView::setBrushPreviewState(const QPointF& position, Brush* brush, int si
 }
 
 void MapView::clearBrushPreview() {
+    // Handle both drawing feedback and overlay renderer systems
+    if (drawingFeedback_) {
+        drawingFeedback_->clearBrushPreview();
+    }
     if (overlayRenderer_) {
         overlayRenderer_->clearBrushPreview();
         viewport()->update();
@@ -1266,27 +1261,7 @@ void MapView::highlightWaypoint(Waypoint* waypoint, bool highlight) {
     qDebug() << "MapView::highlightWaypoint:" << waypoint->getName() << "highlighted:" << highlight;
 }
 
-// Task 74: Helper methods for waypoint system
-MapPos MapView::mapToTilePos(const QPointF& mapPos) const {
-    return MapPos(static_cast<int>(mapPos.x()), static_cast<int>(mapPos.y()), currentFloor_);
-}
-
-QPointF MapView::screenToMap(const QPoint& screenPos) const {
-    // Convert screen coordinates to scene coordinates
-    QPointF scenePos = mapToScene(screenPos);
-
-    // Convert scene coordinates to map coordinates
-    // This assumes 1:1 mapping between scene and map coordinates
-    return scenePos;
-}
-
-QPointF MapView::mapToScreen(const QPointF& mapPos) const {
-    // Convert map coordinates to scene coordinates
-    QPointF scenePos = mapPos;
-
-    // Convert scene coordinates to screen coordinates
-    return mapFromScene(scenePos);
-}
+// Task 74: Helper methods for waypoint system - implementations moved to avoid duplicates
 
 // Task 75: View settings management implementation
 void MapView::setDrawingOptions(const DrawingOptions& options) {
@@ -1305,6 +1280,12 @@ void MapView::setDrawingOptions(const DrawingOptions& options) {
 void MapView::setShowGrid(bool show) {
     if (drawingOptions_.showGrid != show) {
         drawingOptions_.showGrid = show;
+
+        // Update overlay renderer if available
+        if (overlayRenderer_) {
+            overlayRenderer_->setShowGrid(show);
+        }
+
         viewport()->update();
         qDebug() << "MapView::setShowGrid:" << show;
     }
@@ -1612,10 +1593,10 @@ void MapView::updateAllTileItems() {
     qDebug() << "MapView::updateAllTileItems: Updated" << items.size() << "items";
 }
 
-// Task 85: Tile locking visual indication implementation
+// Task 012: Tile locking visual indication implementation (updated to use DrawingOptions)
 void MapView::setShowLockedTiles(bool show) {
-    if (showLockedTiles_ != show) {
-        showLockedTiles_ = show;
+    if (drawingOptions_.showLockedTiles != show) {
+        drawingOptions_.showLockedTiles = show;
         updateLockedTileVisuals();
         viewport()->update();
         qDebug() << "MapView::setShowLockedTiles:" << show;
@@ -1623,13 +1604,13 @@ void MapView::setShowLockedTiles(bool show) {
 }
 
 bool MapView::isShowLockedTiles() const {
-    return showLockedTiles_;
+    return drawingOptions_.showLockedTiles;
 }
 
 void MapView::setLockedTileOverlayColor(const QColor& color) {
-    if (lockedTileOverlayColor_ != color) {
-        lockedTileOverlayColor_ = color;
-        if (showLockedTiles_) {
+    if (drawingOptions_.lockedTileOverlayColor != color) {
+        drawingOptions_.lockedTileOverlayColor = color;
+        if (drawingOptions_.showLockedTiles) {
             updateLockedTileVisuals();
             viewport()->update();
         }
@@ -1638,7 +1619,7 @@ void MapView::setLockedTileOverlayColor(const QColor& color) {
 }
 
 QColor MapView::getLockedTileOverlayColor() const {
-    return lockedTileOverlayColor_;
+    return drawingOptions_.lockedTileOverlayColor;
 }
 
 void MapView::updateLockedTileVisuals() {

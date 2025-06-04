@@ -467,7 +467,7 @@ quint32 Creature::memsize() const {
     quint32 size = sizeof(Creature);
 
     // Add size of string member
-    size += name_.size() * sizeof(QChar);
+    size += static_cast<quint32>(name_.size()) * sizeof(QChar);
 
     return size;
 }

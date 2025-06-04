@@ -38,4 +38,4 @@ QRect Sprite::calculateSourceRect(int sourceX, int sourceY, int sourceWidth, int
     return QRect(finalX, finalY, finalWidth, finalHeight);
 }
 
-#include "Sprite.moc"
+

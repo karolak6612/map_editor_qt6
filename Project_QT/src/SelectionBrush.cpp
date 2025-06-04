@@ -82,8 +82,13 @@ QUndoCommand* SelectionBrush::applyBrush(Map* map, const QPointF& tilePos, QObje
             break;
             
         case POLYGON_SELECT:
+            // Polygon selection is handled by mouse events
+            // Points are collected and selection is finalized on double-click or right-click
+            break;
+
         case LASSO_SELECT:
-            // Future implementation
+            // Lasso selection is handled by mouse events
+            // Path is traced and selection is finalized on mouse release
             break;
     }
     
@@ -128,6 +133,24 @@ void SelectionBrush::selectRectangle(Map* map, const MapPos& startPos, const Map
     
     SelectRectangleCommand* command = new SelectRectangleCommand(map, selection_, startPos, endPos, addToSelection);
     executeSelectionCommand(command, "Select Rectangle");
+}
+
+void SelectionBrush::selectPolygon(Map* map, const QList<MapPos>& polygonPoints, bool addToSelection) {
+    if (!map || !selection_ || !undoStack_ || polygonPoints.size() < 3) {
+        return;
+    }
+
+    SelectPolygonCommand* command = new SelectPolygonCommand(map, selection_, polygonPoints, addToSelection);
+    executeSelectionCommand(command, "Select Polygon");
+}
+
+void SelectionBrush::selectLasso(Map* map, const QList<MapPos>& lassoPath, bool addToSelection) {
+    if (!map || !selection_ || !undoStack_ || lassoPath.size() < 2) {
+        return;
+    }
+
+    SelectLassoCommand* command = new SelectLassoCommand(map, selection_, lassoPath, addToSelection);
+    executeSelectionCommand(command, "Select Lasso");
 }
 
 void SelectionBrush::clearSelection() {

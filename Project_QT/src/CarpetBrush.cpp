@@ -3,13 +3,15 @@
 #include "Tile.h"
 #include "Item.h"
 #include "ItemManager.h" // For ItemTypeData and g_itemManager or equivalent
-#include "Randomizer.h"  // For Randomizer::getRandom
+#include "ItemFactory.h"  // FIXED: Added for createItem method
+// #include "Randomizer.h"  // For Randomizer::getRandom - REPLACED WITH QRandomGenerator
 // #include "GlobalSettings.h" // For g_settings->getBoolean(Config::LAYER_CARPETS) - Assuming this will be available
 
 #include <QDomElement>
 #include <QString>
 #include <QDebug>
 #include <QMutableVectorIterator> // For undraw method
+#include <QRandomGenerator>       // For random number generation
 
 
 // Placeholder for GlobalSettings if not available
@@ -64,7 +66,14 @@ enum QtBorderType {
 };
 
 
-CarpetBrush::CarpetBrush() : m_look_id(0) {
+CarpetBrush::CarpetBrush() : Brush(nullptr), m_look_id(0) {
+    m_carpet_items.resize(MAX_CARPET_ALIGNMENTS);
+    if (s_carpet_types_lookup.isEmpty()) {
+        initLookupTable();
+    }
+}
+
+CarpetBrush::CarpetBrush(QObject* parent) : Brush(parent), m_look_id(0) {
     m_carpet_items.resize(MAX_CARPET_ALIGNMENTS);
     if (s_carpet_types_lookup.isEmpty()) {
         initLookupTable();
@@ -321,7 +330,7 @@ void CarpetBrush::initLookupTable() {
 }
 
 
-quint8 carpetAlignStringToIdx(const QString& alignString, QString& warnings) {
+quint8 carpetAlignStringToIdx(const QString& alignString, QStringList& warnings) {
     QString lowerAlign = alignString.toLower();
     if (lowerAlign == "center") return CARPET_CENTER_ALIGNMENT_INDEX;
     if (lowerAlign == "northwest_corner" || lowerAlign == "nw_corner") return NORTHWEST_CORNER;
@@ -337,11 +346,11 @@ quint8 carpetAlignStringToIdx(const QString& alignString, QString& warnings) {
     if (lowerAlign == "southwest_diagonal" || lowerAlign == "sw_diag") return SOUTHWEST_DIAGONAL;
     if (lowerAlign == "southeast_diagonal" || lowerAlign == "se_diag") return SOUTHEAST_DIAGONAL;
 
-    warnings += "CarpetBrush: Unknown alignment string: " + alignString + ". Defaulting to Center.\n";
+    warnings.append("CarpetBrush: Unknown alignment string: " + alignString + ". Defaulting to Center.");
     return CARPET_CENTER_ALIGNMENT_INDEX;
 }
 
-bool CarpetBrush::load(const QDomElement& element, QString& warnings) {
+bool CarpetBrush::load(const QDomElement& element, QStringList& warnings) {
     m_name = element.attribute("name");
 
     QString serverLookIdStr = element.attribute("server_lookid");
@@ -359,7 +368,7 @@ bool CarpetBrush::load(const QDomElement& element, QString& warnings) {
 
         QString alignStr = carpetNodeEl.attribute("align");
         if (alignStr.isEmpty()) {
-            warnings += "CarpetBrush: Carpet node missing 'align' attribute for brush " + m_name + "\n";
+            warnings.append("CarpetBrush: Carpet node missing 'align' attribute for brush " + m_name);
             continue;
         }
         quint8 alignment_idx = carpetAlignStringToIdx(alignStr, warnings);
@@ -378,13 +387,17 @@ bool CarpetBrush::load(const QDomElement& element, QString& warnings) {
                 quint16 id = itemNodeEl.attribute("id").toUShort(&ok_id);
                 int chance = itemNodeEl.attribute("chance").toInt(&ok_chance);
 
-                if (!ok_id || id == 0) { warnings += "CarpetBrush: Invalid item ID for brush " + m_name + "\n"; continue; }
+                if (!ok_id || id == 0) { warnings.append("CarpetBrush: Invalid item ID for brush " + m_name); continue; }
                 if (!ok_chance || chance <= 0) chance = 1;
 
-                const ItemProperties& itProps = ItemManager::instance()->getItemProperties(id);
-                if (itProps.serverId == 0) { warnings += "CarpetBrush: Item ID " + QString::number(id) + " not found in ItemManager for brush " + m_name + "\n"; continue; }
-                // Conceptual: itProps.isCarpet = true; itProps.brush = this;
-                // This requires ItemManager to allow modification or a registration step.
+                // Task 013: Use ItemManager::registerItemBrush instead of direct property modification
+                if (!ItemManager::instance()->itemTypeExists(id)) {
+                    warnings.append("CarpetBrush: Item ID " + QString::number(id) + " not found in ItemManager for brush " + m_name);
+                    continue;
+                }
+
+                // Register this brush with the item
+                ItemManager::instance()->registerItemBrush(id, this, false, true); // isTable=false, isCarpet=true
 
                 QtCarpetVariation var;
                 var.item_id = id;
@@ -396,12 +409,17 @@ bool CarpetBrush::load(const QDomElement& element, QString& warnings) {
             bool ok_id;
             quint16 id = carpetNodeEl.attribute("id").toUShort(&ok_id);
             if (!ok_id || id == 0) {
-                warnings += "CarpetBrush: Carpet node for align '" + alignStr + "' missing child <item> nodes and valid 'id' attribute for brush " + m_name + "\n";
+                warnings.append("CarpetBrush: Carpet node for align '" + alignStr + "' missing child <item> nodes and valid 'id' attribute for brush " + m_name);
                 continue;
             }
-            const ItemProperties& itProps = ItemManager::instance()->getItemProperties(id);
-            if (itProps.serverId == 0) { warnings += "CarpetBrush: Item ID " + QString::number(id) + " not found for brush " + m_name + "\n"; continue; }
-            // Conceptual: itProps.isCarpet = true; itProps.brush = this;
+            // Task 013: Use ItemManager::registerItemBrush instead of direct property modification
+            if (!ItemManager::instance()->itemTypeExists(id)) {
+                warnings.append("CarpetBrush: Item ID " + QString::number(id) + " not found for brush " + m_name);
+                continue;
+            }
+
+            // Register this brush with the item
+            ItemManager::instance()->registerItemBrush(id, this, false, true); // isTable=false, isCarpet=true
 
             QtCarpetVariation var;
             var.item_id = id;
@@ -415,11 +433,15 @@ bool CarpetBrush::load(const QDomElement& element, QString& warnings) {
 
 
 quint16 CarpetBrush::getRandomCarpetIdByAlignment(quint8 alignment_idx) const {
-    if (alignment_idx >= MAX_CARPET_ALIGNMENTS) return 0;
+    // Task 018: Enhanced bounds checking with warning
+    if (alignment_idx >= MAX_CARPET_ALIGNMENTS) {
+        qWarning() << "CarpetBrush::getRandomCarpetIdByAlignment: Invalid alignment_idx" << alignment_idx << "- using center";
+        alignment_idx = CARPET_CENTER_ALIGNMENT_INDEX;
+    }
 
     const QtCarpetNode& node = m_carpet_items[alignment_idx];
     if (node.total_chance > 0 && !node.items.isEmpty()) {
-        int randomRoll = Randomizer::getRandom(1, node.total_chance);
+        int randomRoll = QRandomGenerator::global()->bounded(1, node.total_chance + 1);
         for (const QtCarpetVariation& var : node.items) {
             if (randomRoll <= var.chance) return var.item_id;
             randomRoll -= var.chance;
@@ -430,7 +452,7 @@ quint16 CarpetBrush::getRandomCarpetIdByAlignment(quint8 alignment_idx) const {
     if (alignment_idx != CARPET_CENTER_ALIGNMENT_INDEX) {
         const QtCarpetNode& centerNode = m_carpet_items[CARPET_CENTER_ALIGNMENT_INDEX];
         if (centerNode.total_chance > 0 && !centerNode.items.isEmpty()) {
-            int randomRoll = Randomizer::getRandom(1, centerNode.total_chance);
+            int randomRoll = QRandomGenerator::global()->bounded(1, centerNode.total_chance + 1);
             for (const QtCarpetVariation& var : centerNode.items) {
                 if (randomRoll <= var.chance) return var.item_id;
                 randomRoll -= var.chance;
@@ -442,7 +464,7 @@ quint16 CarpetBrush::getRandomCarpetIdByAlignment(quint8 alignment_idx) const {
     for(quint8 i = 0; i < MAX_CARPET_ALIGNMENTS; ++i) {
         const QtCarpetNode& anyNode = m_carpet_items[i];
         if (anyNode.total_chance > 0 && !anyNode.items.isEmpty()) {
-             int randomRoll = Randomizer::getRandom(1, anyNode.total_chance);
+             int randomRoll = QRandomGenerator::global()->bounded(1, anyNode.total_chance + 1);
             for (const QtCarpetVariation& var : anyNode.items) {
                 if (randomRoll <= var.chance) return var.item_id;
                 randomRoll -= var.chance;
@@ -456,7 +478,7 @@ quint16 CarpetBrush::getRandomCarpetIdByAlignment(quint8 alignment_idx) const {
 // Direct migration from wxwidgets CarpetBrush::getRandomCarpet
 quint16 CarpetBrush::getRandomCarpet(BorderType alignment) {
     auto findRandomCarpet = [](const QtCarpetNode& node) -> quint16 {
-        int chance = Randomizer::getRandom(1, node.total_chance);
+        int chance = QRandomGenerator::global()->bounded(1, node.total_chance + 1);
         for (const QtCarpetVariation& carpetType : node.items) {
             if (chance <= carpetType.chance) {
                 return carpetType.item_id;
@@ -466,13 +488,20 @@ quint16 CarpetBrush::getRandomCarpet(BorderType alignment) {
         return 0;
     };
 
-    QtCarpetNode node = m_carpet_items[alignment];
+    // Task 018: Add bounds checking for array access
+    int alignmentIndex = static_cast<int>(alignment);
+    if (alignmentIndex < 0 || alignmentIndex >= MAX_CARPET_ALIGNMENTS) {
+        qWarning() << "CarpetBrush::getRandomCarpet: Invalid alignment" << alignmentIndex << "- using center";
+        alignmentIndex = CARPET_CENTER_ALIGNMENT_INDEX;
+    }
+
+    QtCarpetNode node = m_carpet_items[alignmentIndex];
     if (node.total_chance > 0) {
         return findRandomCarpet(node);
     }
 
     node = m_carpet_items[CARPET_CENTER_ALIGNMENT_INDEX];
-    if (alignment != CARPET_CENTER_ALIGNMENT_INDEX && node.total_chance > 0) {
+    if (alignmentIndex != CARPET_CENTER_ALIGNMENT_INDEX && node.total_chance > 0) {
         quint16 id = findRandomCarpet(node);
         if (id != 0) {
             return id;
@@ -508,10 +537,10 @@ void CarpetBrush::draw(Map* map, Tile* tile, void* parameter) {
     quint16 itemIdToPlace = getRandomCarpetIdByAlignment(CARPET_CENTER_ALIGNMENT_INDEX);
 
     if (itemIdToPlace != 0) {
-        Item* newItem = ItemManager::instance()->createItem(itemIdToPlace);
+        Item* newItem = ItemFactory::createItem(itemIdToPlace);  // FIXED: Use ItemFactory instead of ItemManager
         if (newItem) {
             tile->addItem(newItem);
-            map->markModified();
+            map->setModified(true);  // FIXED: Use setModified instead of markModified
         }
     }
 }
@@ -520,31 +549,25 @@ void CarpetBrush::undraw(Map* map, Tile* tile) {
     // Direct migration from wxwidgets CarpetBrush::undraw
     if (!map || !tile) return;
 
-    // Migrate wxwidgets iterator logic
-    auto items = tile->getItems(); // Get copy for safe iteration
-    for (auto it = items.begin(); it != items.end(); ) {
-        Item* item = *it;
+    // FIXED: Use proper Qt iteration with QMutableVectorIterator for safe removal
+    QVector<Item*>& items = tile->items(); // Get non-const reference for modification
+    QMutableVectorIterator<Item*> it(items);
+    while (it.hasNext()) {
+        Item* item = it.next();
         if (item && item->isCarpet()) {
             CarpetBrush* carpetBrush = item->getCarpetBrush();
             if (carpetBrush == this) {
-                tile->removeItem(item);
                 delete item;
-                it = items.erase(it);
-                map->markModified();
-            } else {
-                ++it;
+                it.remove(); // Correct way to remove with iterator
+                map->setModified(true);  // FIXED: Use setModified instead of markModified
             }
-        } else {
-            ++it;
         }
     }
 }
 
-bool CarpetBrush::canDraw(Map* map, const QPoint& position) const {
-    return map && map->getTile(position.x(), position.y(), map->getCurrentFloor()) != nullptr;
-}
+// REMOVED: Old canDraw method with QPoint parameter - replaced by QPointF version below
 
-QString CarpetBrush::getName() const { return m_name; }
+QString CarpetBrush::name() const { return m_name; }
 void CarpetBrush::setName(const QString& newName) { m_name = newName; }
 int CarpetBrush::getLookID() const { return m_look_id; }
 bool CarpetBrush::needBorders() const { return true; }
@@ -571,12 +594,12 @@ void CarpetBrush::doCarpets(Map* map, Tile* tile) {
     }
 
 
-    const Position& position = tile->getPosition();
+    const MapPos& position = tile->mapPos();  // FIXED: Use mapPos() instead of getPosition()
     quint32 x = position.x;
     quint32 y = position.y;
     quint32 z = position.z;
 
-    for (Item* item : tile->getItems()) {
+    for (Item* item : tile->items()) {  // FIXED: Use items() instead of getItems()
         if (!item || !item->isCarpet()) continue;
 
         CarpetBrush* carpetBrush = item->getCarpetBrush();
@@ -601,11 +624,100 @@ void CarpetBrush::doCarpets(Map* map, Tile* tile) {
             }
         }
 
-        // Get border type from lookup table (migrated from wxwidgets)
-        BorderType bt = static_cast<BorderType>(carpet_types[tileData]);
-        quint16 id = carpetBrush->getRandomCarpet(bt);
+        // Task 018: Fix undefined carpet_types reference - use s_carpet_types_lookup
+        // Get alignment index from lookup table (migrated from wxwidgets)
+        if (tileData > 255) {
+            qWarning() << "CarpetBrush::doCarpets: tileData overflow" << tileData << "- using center";
+            tileData = 0;
+        }
+        quint8 alignmentIdx = s_carpet_types_lookup.value(static_cast<quint8>(tileData), CARPET_CENTER_ALIGNMENT_INDEX);
+        quint16 id = carpetBrush->getRandomCarpetIdByAlignment(alignmentIdx);
         if (id != 0) {
-            item->setID(id);
+            item->setServerId(id);  // FIXED: Use setServerId instead of setID
         }
     }
+}
+
+// Missing method implementations for Brush interface
+QUndoCommand* CarpetBrush::mousePressEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand) {
+    Q_UNUSED(event); Q_UNUSED(mapView); Q_UNUSED(undoStack);
+    Q_UNUSED(shiftPressed); Q_UNUSED(altPressed);
+
+    if (!canDraw(map, mapPos, nullptr)) {
+        return nullptr;
+    }
+
+    if (ctrlPressed) {
+        return removeBrush(map, mapPos, nullptr, parentCommand);
+    } else {
+        return applyBrush(map, mapPos, nullptr, parentCommand);
+    }
+}
+
+QUndoCommand* CarpetBrush::mouseMoveEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand) {
+    Q_UNUSED(mapView); Q_UNUSED(undoStack);
+    Q_UNUSED(shiftPressed); Q_UNUSED(altPressed);
+
+    if (event->buttons() & Qt::LeftButton) {
+        if (!canDraw(map, mapPos, nullptr)) {
+            return nullptr;
+        }
+        if (ctrlPressed) {
+            return removeBrush(map, mapPos, nullptr, parentCommand);
+        } else {
+            return applyBrush(map, mapPos, nullptr, parentCommand);
+        }
+    }
+    return nullptr;
+}
+
+QUndoCommand* CarpetBrush::mouseReleaseEvent(const QPointF& mapPos, QMouseEvent* event, MapView* mapView, Map* map, QUndoStack* undoStack, bool shiftPressed, bool ctrlPressed, bool altPressed, QUndoCommand* parentCommand) {
+    Q_UNUSED(mapPos); Q_UNUSED(event); Q_UNUSED(mapView); Q_UNUSED(map); Q_UNUSED(undoStack);
+    Q_UNUSED(shiftPressed); Q_UNUSED(ctrlPressed); Q_UNUSED(altPressed); Q_UNUSED(parentCommand);
+    return nullptr;
+}
+
+void CarpetBrush::cancel() {
+    // No specific state to reset for carpet brush
+}
+
+bool CarpetBrush::canDraw(Map* map, const QPointF& tilePos, QObject* drawingContext) const {
+    Q_UNUSED(drawingContext);
+    if (!map) return false;
+
+    int x = static_cast<int>(tilePos.x());
+    int y = static_cast<int>(tilePos.y());
+    int z = map->getCurrentFloor();
+
+    return map->getTile(x, y, z) != nullptr;
+}
+
+QUndoCommand* CarpetBrush::applyBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
+    Q_UNUSED(drawingContext); Q_UNUSED(parentCommand);
+    if (!map) return nullptr;
+
+    int x = static_cast<int>(tilePos.x());
+    int y = static_cast<int>(tilePos.y());
+    int z = map->getCurrentFloor();
+
+    Tile* tile = map->getTile(x, y, z);
+    if (!tile) return nullptr;
+
+    draw(map, tile, nullptr);
+    return nullptr; // TODO: Return proper undo command
+}
+
+QUndoCommand* CarpetBrush::removeBrush(Map* map, const QPointF& tilePos, QObject* drawingContext, QUndoCommand* parentCommand) {
+    Q_UNUSED(drawingContext); Q_UNUSED(parentCommand);
+    if (!map) return nullptr;
+
+    int x = static_cast<int>(tilePos.x());
+    int y = static_cast<int>(tilePos.y());
+    int z = map->getCurrentFloor();
+
+    Tile* tile = map->getTile(x, y, z);
+    if (!tile) return nullptr;
+
+    undraw(map, tile);
+    return nullptr; // TODO: Return proper undo command
 }

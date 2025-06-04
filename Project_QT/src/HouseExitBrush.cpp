@@ -441,4 +441,4 @@ void HouseExitBrushCommand::restorePreviousState() {
     }
 }
 
-#include "HouseExitBrush.moc"
+

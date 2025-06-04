@@ -4,7 +4,7 @@
 #include <QObject>
 #include <QSet>
 #include <QList>
-#include "Map.h" // For MapPos
+#include "MapPos.h" // Direct include for MapPos typedef
 
 // Forward declarations
 class Tile;

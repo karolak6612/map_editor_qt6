@@ -29,6 +29,7 @@
 #include <QHeaderView>
 #include <QFileDialog>
 #include <QMessageBox>
+#include "../MapPos.h" // For MapPos struct definition
 
 // Forward declarations
 class Map;
@@ -73,6 +74,7 @@ signals:
     // Waypoint management signals
     void waypointSelected(Waypoint* waypoint);
     void waypointDoubleClicked(Waypoint* waypoint);
+    void waypointModified(Waypoint* waypoint);  // Task 019: Added missing signal
     void newWaypointRequested();
     void waypointDeleteRequested(Waypoint* waypoint);
     void waypointEditRequested(Waypoint* waypoint);

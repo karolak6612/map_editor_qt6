@@ -207,11 +207,16 @@ void LockSelectionCommand::extractSelectionPositions(Selection* selection)
 {
     selectedPositions_.clear();
     if (!selection) return;
-    
-    // Extract positions from selection
-    // This would depend on the Selection class implementation
-    // For now, we'll assume a method to get selected tile positions
-    // selectedPositions_ = selection->getSelectedTilePositions();
+
+    // Extract positions from selection using the Selection class interface
+    QSet<MapPos> selectedTiles = selection->getSelectedTiles();
+    selectedPositions_.reserve(selectedTiles.size());
+
+    for (const MapPos& pos : selectedTiles) {
+        selectedPositions_.append(pos);
+    }
+
+    qDebug() << "LockSelectionCommand: Extracted" << selectedPositions_.size() << "tile positions from selection";
 }
 
 void LockSelectionCommand::storePreviousStates()
@@ -1038,4 +1043,4 @@ void TileLockManager::onMapCleared()
     emit statisticsChanged();
 }
 
-#include "TileLockCommands.moc"
+

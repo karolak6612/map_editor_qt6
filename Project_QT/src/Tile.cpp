@@ -45,12 +45,14 @@ void Tile::addItem(Item* item) {
         return;
     }
     
-    if (item->isGroundTile()) { 
+    if (item->isGroundTile()) {
         setGround(item);
     } else {
-        items_.append(item);
+        // Insert item in correct Z-order position based on Tibia's layering rules
+        insertItemInZOrder(item);
+
         if (item->parent() != this) {
-           item->setParent(this); 
+           item->setParent(this);
         }
         if (item && item->isTable()) {
             setStateFlag(TileStateFlag::HasTable, true);
@@ -62,6 +64,29 @@ void Tile::addItem(Item* item) {
         emit tileChanged(x_, y_, z_);
         // visualChanged is handled by setStateFlag if the flag causes a visual change
     }
+}
+
+void Tile::insertItemInZOrder(Item* item) {
+    if (!item) return;
+
+    // Get item properties for Z-ordering
+    const ItemProperties& props = ItemManager::getInstance().getItemProperties(item->getServerId());
+
+    // Find correct insertion position based on Tibia's layering rules
+    // Items are sorted by stack position (lower values drawn first)
+    int insertPos = 0;
+    int itemStackPos = item->getStackPos();
+
+    for (int i = 0; i < items_.size(); ++i) {
+        Item* existingItem = items_[i];
+        if (existingItem && existingItem->getStackPos() > itemStackPos) {
+            insertPos = i;
+            break;
+        }
+        insertPos = i + 1;
+    }
+
+    items_.insert(insertPos, item);
 }
 
 bool Tile::removeItem(Item* item) {
@@ -300,6 +325,15 @@ QList<Item*> Tile::getWallItems() const {
     return wallItems;
 }
 
+bool Tile::hasWall() const {
+    for (Item* item : items_) {
+        if (item && item->isWall()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void Tile::clearWalls() {
     bool changed = false;
     for (int i = items_.size() - 1; i >= 0; --i) {
@@ -364,11 +398,18 @@ void Tile::setGroundById(quint16 groundItemId) {
 // --- Advanced Item Access Methods ---
 
 Item* Tile::getTopItem() const {
-    // Return the topmost item (last in items vector, or ground if no items)
-    if (!items_.isEmpty()) {
-        return items_.last();
+    // Return the topmost item based on Z-ordering (highest stack position)
+    Item* topItem = ground_;
+    int highestStackPos = ground_ ? ground_->getStackPos() : -1;
+
+    for (Item* item : items_) {
+        if (item && item->getStackPos() > highestStackPos) {
+            topItem = item;
+            highestStackPos = item->getStackPos();
+        }
     }
-    return ground_;
+
+    return topItem;
 }
 
 Item* Tile::getItemAt(int index) const {
@@ -895,8 +936,8 @@ void Tile::addBorderItem(Item* item) {
         return;
     }
 
-    // Add border items at the beginning of the items vector (bottom of stack)
-    items_.prepend(item);
+    // Use proper Z-ordering for border items (they should be at bottom)
+    insertItemInZOrder(item);
     if (item->parent() != this) {
         item->setParent(this);
     }
@@ -1125,6 +1166,33 @@ void Tile::setMiniMapColor(quint8 color) {
 void Tile::draw(QPainter* painter, const QRectF& targetScreenRect, const DrawingOptions& options) const {
     // Delegate to TileRenderer for all drawing operations
     TileRenderer::draw(this, painter, targetScreenRect, options);
+}
+
+QStringList Tile::getItemZOrderDebugInfo() const {
+    QStringList debugInfo;
+
+    if (ground_) {
+        debugInfo << QString("Ground: ID=%1, StackPos=%2, TopOrder=%3")
+                     .arg(ground_->getServerId())
+                     .arg(ground_->getStackPos())
+                     .arg(ground_->getTopOrder());
+    }
+
+    for (int i = 0; i < items_.size(); ++i) {
+        Item* item = items_[i];
+        if (item) {
+            const ItemProperties& props = ItemManager::getInstance().getItemProperties(item->getServerId());
+            debugInfo << QString("Item[%1]: ID=%2, StackPos=%3, TopOrder=%4, AlwaysOnBottom=%5, AlwaysOnTop=%6")
+                         .arg(i)
+                         .arg(item->getServerId())
+                         .arg(item->getStackPos())
+                         .arg(item->getTopOrder())
+                         .arg(props.alwaysOnBottom ? "true" : "false")
+                         .arg(item->isAlwaysOnTop() ? "true" : "false");
+        }
+    }
+
+    return debugInfo;
 }
 
 

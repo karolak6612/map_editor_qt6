@@ -525,4 +525,4 @@ void WaypointBrushCommand::restorePreviousState() {
     }
 }
 
-#include "WaypointBrush.moc"
+
